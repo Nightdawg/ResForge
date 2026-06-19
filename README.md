@@ -32,6 +32,7 @@ equals the original payload, so `pack` can always rebuild the exact bytes.
 |-------------------|------------------------------|--------------------------|
 | `image`           | `*.imghdr` + `*.png`         | swap the PNG texture     |
 | `tex`             | `*.pre.bin` + image + `*.post.bin` | swap a 3D model's texture (JPEG/PNG) |
+| `props`           | `*.json`                     | edit typed properties as JSON |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |
 
@@ -43,6 +44,12 @@ mod (re-skinning). The PNG may be any size; the layer length is recomputed.
 JPEG or PNG after a short header). The texture is exposed as a normal image file
 between two verbatim `.bin` parts; on repack its length is recomputed, so you can
 drop in a replacement of any size.
+
+`props` layers hold typed key/value properties (a `tto` stream). They are
+exposed as editable `*.json`, but **only when the round-trip is provably
+lossless** — the tool decodes, re-serializes to JSON, re-encodes, and checks it
+reproduces the original bytes before offering JSON; otherwise the layer stays a
+raw `.bin`. So editing props can never silently corrupt a resource.
 
 ## Usage
 
@@ -92,6 +99,6 @@ package mirrors `haven.Message` primitives for decoding payloads.
 ## Status / scope
 
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
-for 2D images (`image`), 3D model textures (`tex`), and text. Deeper typed
-editing (props, meshes, animations) can be layered on incrementally using the
-same parts model.
+for 2D images (`image`), 3D model textures (`tex`), typed properties (`props`,
+as JSON), and text. Deeper typed editing (meshes, animations, collision
+geometry) can be layered on incrementally using the same parts model.

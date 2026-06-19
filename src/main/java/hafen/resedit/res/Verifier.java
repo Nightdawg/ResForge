@@ -1,6 +1,7 @@
 package hafen.resedit.res;
 
 import hafen.resedit.layers.ImageInfo;
+import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
 
 import javax.imageio.ImageIO;
@@ -37,6 +38,7 @@ public class Verifier {
         public final Map<String, Integer> layerHist = new TreeMap<>();
         public final Map<String, Integer> imageHeaderHist = new TreeMap<>();
         public final Map<String, Integer> texHist = new TreeMap<>();
+        public final Map<String, Integer> propsHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -85,6 +87,7 @@ public class Verifier {
         printHist(out, "Layer histogram", sum.layerHist);
         printHist(out, "Image-header histogram", sum.imageHeaderHist);
         printHist(out, "Tex histogram", sum.texHist);
+        printHist(out, "Props histogram", sum.propsHist);
         return sum;
     }
 
@@ -127,6 +130,9 @@ public class Verifier {
                 verifyImage(l, i, r, sum);
             else if(l.name.equals("tex"))
                 verifyTex(l, i, r, sum);
+            else if(l.name.equals("props"))
+                sum.propsHist.merge(PropsCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
         }
         return r;
     }

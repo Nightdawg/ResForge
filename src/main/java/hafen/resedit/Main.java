@@ -76,6 +76,16 @@ public class Main {
                 System.out.print(extra);
             } else if(l.name.equals("tooltip") || l.name.equals("pagina")) {
                 System.out.printf("  \"%s\"", Unpacker.previewText(l.data, 40));
+            } else if(l.name.equals("props")) {
+                try {
+                    java.util.Map<String, Object> m = hafen.resedit.layers.PropsCodec.decode(l.data);
+                    @SuppressWarnings("unchecked")
+                    java.util.Map<String, Object> p = (java.util.Map<String, Object>) m.get("props");
+                    boolean editable = hafen.resedit.layers.PropsCodec.toJsonIfLossless(l.data) != null;
+                    System.out.printf("  %d props%s", p.size(), editable ? " (editable JSON)" : "");
+                } catch(RuntimeException e) {
+                    /* opaque props: leave as-is */
+                }
             }
             System.out.println();
         }

@@ -1,9 +1,14 @@
 package hafen.resedit.res;
 
+import hafen.resedit.io.Json;
+import hafen.resedit.layers.PropsCodec;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * Repacks an unpacked folder back into a .res file. Most layers use the "raw"
@@ -34,6 +39,19 @@ public class Packer {
             payload.writeBytes(image);
             payload.writeBytes(post);
             return payload.toByteArray();
+        }
+        if(e.codec.equals("props")) {
+            if(e.parts.size() != 1)
+                throw new IOException("props codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return PropsCodec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode props layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
         }
         ByteArrayOutputStream payload = new ByteArrayOutputStream();
         for(String part : e.parts)

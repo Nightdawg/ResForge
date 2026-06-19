@@ -104,6 +104,7 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 |--------------------|-------------------------|-----------------------|
 | `image`            | `*.imghdr` + `*.png`    | swap the PNG texture  |
 | `tex`              | `*.pre.bin` + image + `*.post.bin` | swap a 3D model texture |
+| `props`            | `*.json`                | edit typed props as JSON |
 | `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
@@ -141,6 +142,27 @@ files repack byte-identically; a swapped texture of any size repacks correctly.
 Only the first inline color image (the common form) is exposed; anything exotic
 (length-prefixed parts, no inline image) falls back to a raw `.bin`.
 
+### The `props` layer — typed editing with a lossless safety net
+
+`props` (from `haven.Resource.Props`) is a `uint8` version (must be `1`) followed
+by a `tto` list of alternating string keys and values (see `Message.tto0`). It is
+exposed as editable `*.json` via the `props` codec, but with a strict guard
+against the type ambiguities of `tto` (e.g. the same integer can be encoded as
+`u8`/`u16`/`i32`; a float can be `float32`/`float64`). On unpack the tool:
+
+1. decodes the payload into a JSON value model,
+2. serializes it to JSON, re-parses, and re-encodes it, and
+3. **only** writes the `.json` part (codec `props`) if the re-encoded bytes
+   equal the original; otherwise it falls back to a raw `.bin`.
+
+Re-encoding mirrors `Message.addtto`'s canonical rules (smallest integer type,
+`float64` for reals, `T_END`-terminated nested lists/maps, no terminator on the
+top-level list). Consequently a props layer is offered as JSON only when that is
+guaranteed reversible, and editing it can never corrupt a resource. Only
+JSON-native `tto` types are handled (string, integer, float64, nested list/map,
+nil); coords, colors, byte blobs, `float32`, norm numbers, resource specs, etc.
+keep the layer raw. (Real example — `knarr.res`: `{ "place": ["surface", "map"] }`.)
+
 `manifest.txt` example:
 
 ```
@@ -151,11 +173,13 @@ layer	image	layers/000_image.imghdr,layers/000_image.png
 layer	tooltip	layers/001_tooltip.txt
 layer	neg	layers/002_neg.bin
 layer	tex	layers/003_tex.pre.bin,layers/003_tex.jpg,layers/003_tex.post.bin	tex
+layer	props	layers/004_props.json	props
 ```
 
 Each `layer` line is `layer⇥<name>⇥<part1,part2,…>` with an optional fourth
 tab-separated **codec** field (omitted means `raw` = concatenate parts). The
-`tex` codec recomputes the embedded image length on repack (see §3).
+`tex` codec recomputes the embedded image length on repack; the `props` codec
+re-encodes JSON to a `tto` stream (see §3).
 
 ---
 
@@ -169,17 +193,20 @@ hafen-resedit/
     Main.java                        # CLI: info | unpack | pack | verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
+    io/Json.java                     # tiny dependency-free JSON reader/writer
     res/ResContainer.java            # parse/serialize container + Layer list
     res/Layer.java                   # (name, byte[] payload)
-    res/Manifest.java                # read/write manifest.txt
+    res/Manifest.java                # read/write manifest.txt (+ per-layer codec)
     res/Unpacker.java                # .res -> folder (parts model)
-    res/Packer.java                  # folder -> .res
+    res/Packer.java                  # folder -> .res (raw | tex | props codecs)
     res/Verifier.java                # batch round-trip + image/tex split validation
     layers/ImageInfo.java            # image header parse + PNG split point
     layers/TexInfo.java              # tex header parse + embedded-image split point
     layers/ImageMagic.java           # encoded-image magic-byte detection
+    layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
+    PropsJsonTest.java               # JSON + props codec tests
   README.md
   docs/DESIGN-notes.md               # this file
 ```
@@ -254,16 +281,23 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   JPEG (12368 → 1635 bytes), repacked (`verify` PASS, embedded length recomputed,
   file 69798 → 59065 bytes), and a re-unpack reproduced the new texture
   byte-for-byte. 3D re-skinning confirmed working on real assets.
+- **`props` codec validation (2026-06-19)** against the 8 files: **8/8 PASS**,
+  byte-identical. `knarr.res`'s `props` decoded to JSON
+  `{ "place": ["surface", "map"] }`; adding a key and repacking passed `verify`
+  (462841 → 462867 bytes) and survived a re-unpack. The lossless-or-raw guard
+  classifies each props layer as `json` or `raw` in the `verify` report.
 
 ---
 
 ## 8. Possible next steps
 
-- ~~Validate against real `.res` files~~ (done — see §7) and ~~`tex` 3D-texture
-  editing~~ (done — `tex` codec, §3).
-- Add typed editors: `props` (→ JSON-ish), `neg`/`obst` (collision/boundary
-  geometry), `action`/`pagina` metadata, and eventually `vbuf2`/`mesh`/`manim`
-  (port the relevant parts of the `mkres` Python encoder).
+- ~~Validate against real `.res` files~~ (§7), ~~`tex` 3D-texture editing~~ (§3),
+  and ~~typed `props` editing~~ (§3, as JSON) are all done.
+- Add typed editors for `neg`/`obst` (collision/boundary geometry; note `obst`
+  uses lossy `float16`, so preserve raw bits) and `action`/`pagina` metadata, and
+  eventually `vbuf2`/`mesh`/`manim` (port the relevant parts of `mkres`).
+- Broaden the `props` codec to more `tto` types (coord/color/bytes/float32) using
+  an explicit tagged JSON form, to expose props that currently stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
   uses it (none of the current samples do).
 - Optional: expose the `tex` alpha **mask** (part `t==4`) as a second editable
