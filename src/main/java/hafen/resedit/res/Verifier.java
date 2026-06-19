@@ -6,6 +6,7 @@ import hafen.resedit.layers.FontInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
+import hafen.resedit.layers.Vbuf2Info;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -45,6 +46,7 @@ public class Verifier {
         public final Map<String, Integer> audioHist = new TreeMap<>();
         public final Map<String, Integer> actionHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
+        public final Map<String, Integer> vbufHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -97,6 +99,7 @@ public class Verifier {
         printHist(out, "Audio histogram", sum.audioHist);
         printHist(out, "Action histogram", sum.actionHist);
         printHist(out, "Font histogram", sum.fontHist);
+        printHist(out, "Vbuf2 histogram", sum.vbufHist);
         return sum;
     }
 
@@ -152,6 +155,13 @@ public class Verifier {
             else if(l.name.equals("font")) {
                 FontInfo fi = FontInfo.parse(l.data);
                 sum.fontHist.merge(fi.format != null ? fi.format : "raw", 1, Integer::sum);
+            }
+            else if(l.name.equals("vbuf2")) {
+                Vbuf2Info vi = Vbuf2Info.parse(l.data);
+                String key = !vi.recognized ? "unrecognized"
+                        : vi.fullyWalked ? "walked"
+                        : (vi.stoppedAt != null ? "stopped@" + vi.stoppedAt : "partial");
+                sum.vbufHist.merge(key, 1, Integer::sum);
             }
         }
         return r;

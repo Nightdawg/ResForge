@@ -219,10 +219,12 @@ hafen-resedit/
     layers/ImageMagic.java           # encoded-image magic-byte detection
     layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
     layers/ActionCodec.java          # action <-> JSON (deterministic record)
+    layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
     ReplaceTest.java                 # one-shot replace tests
+    VbufInfoTest.java                # vbuf2 inspector tests
   README.md
   docs/DESIGN-notes.md               # this file
 ```
@@ -337,36 +339,79 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   untouched, `verify` PASS); and a cross-file sound swap putting
   `berserkerTheme`'s Ogg into `alchemistTheme.res` (`verify` PASS, length
   recomputed). Format checks reject a wrong file type before writing.
+- **`vbuf2` read-only inspector (2026-06-19)**: across the sample set's 11
+  `vbuf2` layers, **9 walk fully** (length-prefixed ver≥1) and **2** legacy
+  ver=0 layers walk their bare attributes up to the bone data (`verify` Vbuf2
+  histogram = `walked 9, stopped@bones 2`). `info` reports e.g. `knarr` → 12838
+  verts `[pos2(sn2), nrm2(uvec1), tan2(uvec1), bit2(uvec1), tex2(sn2),
+  otex2(sn2), bones2(un1)]`. Read-only; the layers stay lossless raw.
 
 ---
 
-## 8. The 3D geometry pipeline (plan, not yet built)
+## 8. The 3D geometry pipeline (reverse-engineered)
 
 Context from the game developer: the 3D models are authored in **Blender** and
 exported as **Ogre XML** (`.mesh.xml` / `.skeleton.xml`), then compiled by the
 dev's `mkres` tool into the binary `vbuf2` / `mesh` / `bones` / `skel` / `skan`
 layers. The shared `reference/mkres-fragment.py` *is* that Ogre-XML → binary
-encoder: `vertexbuf.parse()` reads `<vbuffer>` nodes and `vertexlay` writes each
-attribute in a chosen on-wire format (`f4`/`f2`, `sn4`/`sn2`/`sn1`,
-`un4`/`un2`/`un1`, `rn*`, `uvec*`), which matches `haven.Message`'s float/norm
-primitives and `NormNumber`.
+encoder.
 
-A full editable 3D round-trip therefore means two halves:
-1. **Decode** `vbuf2`/`mesh`/… → an editable form (ideally Ogre XML, so it can be
-   re-imported into Blender). This is the inverse of `mkres` and must read the
-   per-layer attribute table (names + element counts + formats) before the
-   vertex/index data.
-2. **Encode** Ogre XML → `vbuf2`/`mesh`/… by porting the relevant parts of
-   `mkres-fragment.py` to Java.
+### `vbuf2` binary format (from `haven.VertexBuf.VertexRes` + `mkres`)
 
-Risk/effort: high, and **hard to validate here** — there is no reference `mkres`
-binary to diff against, and the float/norm formats are lossy, so a faithful
-round-trip needs the exact per-attribute format the original used (recorded, not
-guessed). Recommended approach for a future session: start read-only — decode a
-`vbuf2` header + attribute table and report it (extending `info`/`verify`), diff
-the understanding against several real `mesh`/`vbuf2` layers, *then* attempt the
-XML emit and the `mkres` port behind the usual “lossless-or-raw” guard. Until
-then these layers remain lossless raw `.bin` (already safe to pass through).
+```
+uint8  fl              ver = fl & 0xf ; only 0 and 1 are valid; top nibble == 0
+if ver >= 1: int16 id
+uint16 num             vertex count
+attributes, repeated until end-of-message:
+    string name
+    if ver >= 1:        int32 sublen ; sublen bytes  (each attribute length-prefixed)
+    else (ver == 0):    inline, sized by the attribute (see below)
+```
+
+Each attribute name maps to an element count `eln` and a reader. `mkres` writes
+a **bare** layer as plain `float32 × num*eln` (client `loadbuf`), and a
+**formatted** layer — renamed with a trailing `2` (`mkres` `chformat(nm, nm+"2",
+fmt)`) — as `uint8(1) + string fmt + fmt-data` (client `loadbuf2`).
+
+| name (bare / formatted) | eln | meaning            |
+|-------------------------|-----|--------------------|
+| `pos`  / `pos2`         | 3   | position           |
+| `nrm`  / `nrm2`         | 3   | normal             |
+| `tan`  / `tan2`         | 3   | tangent            |
+| `bit`  / `bit2`         | 3   | bitangent          |
+| `tex`  / `tex2`         | 2   | texture coord      |
+| `otex` / `otex2`        | 2   | overlay tex coord  |
+| `col`  / `col2`         | 4   | vertex color       |
+| `bones` / `bones2`      | var | bone weights/idx   |
+
+On-wire formats and their byte size for `cap = num*eln` elements (header floats
+carry the de-quantisation scale): `f4`=4·cap, `f2`=2·cap, `f1`=cap; `snN`/`unN`
+= 4 + N-bytes·cap (N∈{4,2,1}); `rnN` = 8 + N-bytes·cap; `sf9995` = 4·(cap/3);
+`uvech` = cap/3, `uvec1` = 2·(cap/3), `uvec2` = 4·(cap/3). `mkres` defaults:
+`pos→sn2`, `nrm/tan/bit→uvec1`, `tex/otex→un2|sn2`. Bone data (`bones`/`bones2`)
+is variable-length: a per-bone list of name + run-length-coded per-vertex weight
+spans (see `PoseMorph` / `mkres.writebones`); the weight format is `f4`/`un2`/`un1`.
+
+### What is built (read-only inspector)
+
+`layers/Vbuf2Info.java` walks the float attributes exactly and reports the vertex
+count + each attribute's format, surfaced in `info` and the `verify` "Vbuf2
+histogram". Validated on real models: **9/11** vbuf2 layers walk fully (the
+length-prefixed ver≥1 form — e.g. `knarr`: 12838 verts `pos2(sn2) nrm2(uvec1)
+tan2(uvec1) bit2(uvec1) tex2(sn2) otex2(sn2) bones2(un1)`), and the **2** legacy
+ver=0 layers walk their bare `pos/nrm/tex` up to the variable-length bone data.
+This is the "read-only first" milestone; the layers remain lossless raw `.bin`.
+
+### Remaining for full 3D editing (future)
+
+1. Decode the bone data (`bones`/`bones2`) to finish walking ver=0 layers, and
+   decode the `mesh` index layer (triangle lists) and `skel`/`skan` (skeleton +
+   animations).
+2. Emit an editable form — ideally **Ogre XML**, so it re-imports into Blender —
+   and port `mkres-fragment.py` to Java for the XML → binary direction.
+3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
+   norm formats are lossy, so a faithful round-trip must preserve the exact
+   per-attribute format the original used (record it, don't re-derive).
 
 ## 9. Possible next steps
 

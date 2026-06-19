@@ -10,16 +10,18 @@ behaviour of the `.res` format.
 | `Message.java` | `hafen-client/src/haven/Message.java` | Primitive encodings (the binary "alphabet") |
 | `NormNumber.java` | `hafen-client/src/haven/NormNumber.java` | snorm/unorm/mnorm fixed-point primitives |
 | `TexR.java` | `hafen-client/src/haven/TexR.java` | `tex` layer decoder (3D-model textures) |
+| `VertexBuf.java` | `hafen-client/src/haven/VertexBuf.java` | `vbuf2` layer decoder (3D vertex data) |
 | `mkres-fragment.py` | shared by the game developer (`hjTpfMwy.py`) | Encoder side of `mkres` (mostly 3D meshes) |
 
 ## Licensing
 
-`Resource.java`, `Message.java`, `NormNumber.java`, and `TexR.java` are part of
-the Haven & Hearth client and are distributed under the **GNU Lesser General
-Public License, version 3** (see the header comment in each file). They are
-reproduced here under those terms for interoperability/reference. If you
-redistribute this project, keep these notices intact; consult the upstream
-`COPYING`/`doc/LPGL-3` in `hafen-client` for the full license text.
+`Resource.java`, `Message.java`, `NormNumber.java`, `TexR.java`, and
+`VertexBuf.java` are part of the Haven & Hearth client and are distributed under
+the **GNU Lesser General Public License, version 3** (see the header comment in
+each file). They are reproduced here under those terms for
+interoperability/reference. If you redistribute this project, keep these notices
+intact; consult the upstream `COPYING`/`doc/LPGL-3` in `hafen-client` for the
+full license text.
 
 `mkres-fragment.py` was provided by the game's developer as an example of how
 `.res` files are built. Treat its licensing as belonging to the upstream author;

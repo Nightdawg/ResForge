@@ -137,5 +137,7 @@ package mirrors `haven.Message` primitives for decoding payloads.
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
 for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`) and action/keybind metadata (`action`) as
-JSON, and text. Deeper typed editing (meshes, animations, collision geometry)
-can be layered on incrementally using the same parts model.
+JSON, and text. The 3D vertex buffers (`vbuf2`) are inspected read-only (vertex
+count + attribute formats shown by `info`/`verify`). Deeper typed editing
+(mesh/skeleton geometry, animations, collision) can be layered on incrementally
+using the same parts model.

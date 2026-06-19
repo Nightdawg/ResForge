@@ -109,6 +109,13 @@ public class Main {
                 hafen.resedit.layers.FontInfo fi = hafen.resedit.layers.FontInfo.parse(l.data);
                 if(fi.format != null)
                     System.out.printf("  %s @ +%d", fi.format, fi.fontOffset);
+            } else if(l.name.equals("vbuf2")) {
+                hafen.resedit.layers.Vbuf2Info vi = hafen.resedit.layers.Vbuf2Info.parse(l.data);
+                if(vi.recognized) {
+                    System.out.printf("  %d verts [%s]", vi.num, String.join(", ", vi.attribs));
+                    if(vi.stoppedAt != null)
+                        System.out.printf(" +%s", vi.stoppedAt);
+                }
             }
             System.out.println();
         }
