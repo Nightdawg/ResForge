@@ -31,6 +31,9 @@ resedit pack   horse.resdir         # -> horse.res
 
 # Look at a 3D model (opens in Blender / Windows 3D Viewer):
 resedit obj    horse.res horse.obj
+
+# Experimental write path: scale a model's geometry (then load in-game to check):
+resedit transform horse.res 2 2 2 horse-big.res
 ```
 
 `replace` is the easy path for re-skinning; `unpack`/`pack` is for editing text

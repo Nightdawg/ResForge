@@ -201,7 +201,7 @@ hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info | unpack | pack | replace | obj | catalog | verify
+    Main.java                        # CLI: info|unpack|pack|replace|obj|transform|catalog|verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -223,7 +223,8 @@ hafen-resedit/
     layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector (incl. bones)
     layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
     layers/TtoSkip.java              # generic tto value skipper
-    model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays
+    model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
+    model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit)
     model/ObjExport.java             # 3D geometry -> Wavefront OBJ
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
@@ -366,6 +367,13 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   z[-0.1,12.8] (humanoid); `knarr.res` → 12838 verts / 16952 tris / 21 submeshes,
   bbox x[-81,84] y[-42,42] z[-16,108] (ship). Counts match the decoders and the
   bounding boxes are geometrically plausible.
+- **Structure-preserving vbuf2 encoder + `transform` (2026-06-20)**: the
+  automated oracle — decode→encode of every real `vbuf2` is **byte-identical**
+  (`verify` → `Vbuf2 re-encode histogram: exact 11`). The `transform` command
+  scales a model's positions (re-quantising only `pos`); on `male.res` a z×2
+  stretch produced a file that `verify`s clean with the z bounding box exactly
+  doubled (`[-0.06,12.79]` → `[-0.13,25.58]`) and all other attributes preserved.
+  In-game rendering of the result is the user-side verification step.
 
 ---
 
@@ -444,6 +452,23 @@ layers remain lossless raw `.bin`.
 3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
+
+### What is built for the write path (`model/Vbuf2Codec.java`, `transform`)
+
+A **structure-preserving** `vbuf2` codec captures each attribute's exact data
+bytes, so an *unchanged* buffer re-encodes **byte-identically** — verified on all
+real layers (`verify` → `Vbuf2 re-encode histogram: exact 11`). A single
+attribute can then be re-quantised after an edit (into its original format/scale,
+i.e. the game's own precision) while every untouched attribute stays exact. The
+`transform <file.res> <sx> <sy> <sz>` command exercises this end to end by
+scaling a model's vertex positions. Self-checks pass at the byte level (output
+verifies, geometry scales correctly — e.g. `male.res` z×2 doubles the z bounding
+box, other attributes unchanged), but **a write path's final proof is loading the
+result in-game** — which is the one check that can't be automated here. (A
+non-uniform scale leaves normals untransformed; uniform scale is fully correct.)
+The remaining step to a Blender round-trip is importing *arbitrary* new topology
+(re-stripping the index buffer + a fresh `mkres`-style encode), which genuinely
+needs the in-game feedback loop.
 
 ## 9. Possible next steps
 

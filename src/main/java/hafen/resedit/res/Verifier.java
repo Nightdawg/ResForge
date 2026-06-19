@@ -8,6 +8,7 @@ import hafen.resedit.layers.MeshInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
 import hafen.resedit.layers.Vbuf2Info;
+import hafen.resedit.model.Vbuf2Codec;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -49,6 +50,7 @@ public class Verifier {
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
+        public final Map<String, Integer> vbufReencHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -103,6 +105,7 @@ public class Verifier {
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
+        printHist(out, "Vbuf2 re-encode histogram", sum.vbufReencHist);
         return sum;
     }
 
@@ -165,6 +168,12 @@ public class Verifier {
                         : vi.fullyWalked ? "walked"
                         : (vi.stoppedAt != null ? "stopped@" + vi.stoppedAt : "partial");
                 sum.vbufHist.merge(key, 1, Integer::sum);
+                try {
+                    boolean exact = java.util.Arrays.equals(l.data, Vbuf2Codec.parse(l.data).encode());
+                    sum.vbufReencHist.merge(exact ? "exact" : "differs", 1, Integer::sum);
+                } catch(RuntimeException e) {
+                    sum.vbufReencHist.merge("error", 1, Integer::sum);
+                }
             }
             else if(l.name.equals("mesh")) {
                 MeshInfo mi = MeshInfo.parse(l.data);
