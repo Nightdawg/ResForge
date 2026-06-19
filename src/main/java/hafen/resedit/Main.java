@@ -2,6 +2,7 @@ package hafen.resedit;
 
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.model.ObjExport;
+import hafen.resedit.res.Catalog;
 import hafen.resedit.res.Layer;
 import hafen.resedit.res.Manifest;
 import hafen.resedit.res.Packer;
@@ -47,6 +48,7 @@ public class Main {
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
             case "obj":    obj(args);    break;
+            case "catalog": catalog(args); break;
             case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
@@ -176,6 +178,12 @@ public class Main {
             System.exit(1);
     }
 
+    private static void catalog(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("catalog requires a .res file or directory");
+        Catalog.run(Path.of(args[1]), System.out);
+    }
+
     private static void obj(String[] args) throws IOException {
         if(args.length < 2)
             throw new UsageException("obj requires a .res file");
@@ -224,6 +232,7 @@ public class Main {
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  obj    <file.res> [out.obj]  Export 3D geometry to a Wavefront OBJ");
+        System.out.println("  catalog <file.res | dir>     List editable assets per file");
         System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
 

@@ -201,7 +201,7 @@ hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info | unpack | pack | replace | obj | verify
+    Main.java                        # CLI: info | unpack | pack | replace | obj | catalog | verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -212,6 +212,7 @@ hafen-resedit/
     res/Packer.java                  # folder -> .res (raw | tex | props | action codecs)
     res/Replacer.java                # one-shot single-asset swap
     res/Verifier.java                # batch round-trip + image/tex split validation
+    res/Catalog.java                 # folder-wide editable-asset listing
     layers/ImageInfo.java            # image header parse + PNG split point
     layers/TexInfo.java              # tex header parse + embedded-image split point
     layers/AudioInfo.java            # audio2 header parse + Ogg split point
@@ -252,6 +253,12 @@ hafen-resedit/
 # One-shot single-asset swap (image/tex/audio2/font/midi/tooltip/pagina/props/action)
 ./gradlew run --args="replace horse.res image newicon.png horse.res"
 ./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
+
+# Export 3D geometry to OBJ (view in Blender / 3D Viewer)
+./gradlew run --args="obj path/to/horse.res"
+
+# Catalogue what is editable across a folder of resources
+./gradlew run --args="catalog path/to/folder"
 
 # Validate real files (single file or a folder, recursive)
 ./gradlew run --args="verify path/to/horse.res"

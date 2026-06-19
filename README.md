@@ -113,6 +113,15 @@ This de-quantises the `vbuf2` vertex buffers (positions, normals, texture
 coords) and turns each `mesh` layer into an OBJ group. It is read-only — a
 viewing/inspection aid; editing geometry back into `.res` is future work.
 
+To see what is moddable across a whole folder of resources at a glance:
+
+```sh
+./gradlew run --args="catalog path/to/folder"
+```
+
+It prints one line per file listing its editable asset kinds (icon, texture,
+sound, font, music, keybind, props, text, 3D-model) plus an aggregate summary.
+
 Validate a file (or a whole folder, recursively) without unpacking — checks
 that parse/serialize and unpack/pack are byte-identical and that every `image`
 layer's embedded picture splits cleanly (decodable on its own):
