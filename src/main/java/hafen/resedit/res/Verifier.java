@@ -1,5 +1,6 @@
 package hafen.resedit.res;
 
+import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.AudioInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
@@ -41,6 +42,7 @@ public class Verifier {
         public final Map<String, Integer> texHist = new TreeMap<>();
         public final Map<String, Integer> propsHist = new TreeMap<>();
         public final Map<String, Integer> audioHist = new TreeMap<>();
+        public final Map<String, Integer> actionHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -91,6 +93,7 @@ public class Verifier {
         printHist(out, "Tex histogram", sum.texHist);
         printHist(out, "Props histogram", sum.propsHist);
         printHist(out, "Audio histogram", sum.audioHist);
+        printHist(out, "Action histogram", sum.actionHist);
         return sum;
     }
 
@@ -140,6 +143,9 @@ public class Verifier {
                 AudioInfo ai = AudioInfo.parse(l.data);
                 sum.audioHist.merge(ai.format != null ? "ogg" : "raw (no ogg)", 1, Integer::sum);
             }
+            else if(l.name.equals("action"))
+                sum.actionHist.merge(ActionCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
         }
         return r;
     }

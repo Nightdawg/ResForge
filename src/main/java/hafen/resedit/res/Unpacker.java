@@ -1,5 +1,6 @@
 package hafen.resedit.res;
 
+import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.AudioInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
@@ -83,6 +84,13 @@ public class Unpacker {
                 String part = LAYERS_SUBDIR + "/" + base + ".json";
                 Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
                 return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "props");
+            }
+        } else if(layer.name.equals("action")) {
+            String json = ActionCodec.toJsonIfLossless(layer.data);
+            if(json != null) {
+                String part = LAYERS_SUBDIR + "/" + base + ".json";
+                Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
+                return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "action");
             }
         } else if(layer.name.equals("tooltip") || layer.name.equals("pagina")) {
             String part = LAYERS_SUBDIR + "/" + base + ".txt";

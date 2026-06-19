@@ -1,6 +1,7 @@
 package hafen.resedit.res;
 
 import hafen.resedit.io.Json;
+import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.PropsCodec;
 
 import java.io.ByteArrayOutputStream;
@@ -51,6 +52,19 @@ public class Packer {
                 return PropsCodec.encode(model);
             } catch(RuntimeException ex) {
                 throw new IOException("Failed to encode props layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
+        }
+        if(e.codec.equals("action")) {
+            if(e.parts.size() != 1)
+                throw new IOException("action codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return ActionCodec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode action layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
         ByteArrayOutputStream payload = new ByteArrayOutputStream();

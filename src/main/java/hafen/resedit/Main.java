@@ -92,6 +92,15 @@ public class Main {
                     System.out.printf(" id=\"%s\" vol=%.3f", ai.id, ai.bvol);
                 if(ai.format != null)
                     System.out.printf("  %s @ +%d", ai.format, ai.audioOffset);
+            } else if(l.name.equals("action")) {
+                try {
+                    java.util.Map<String, Object> m = hafen.resedit.layers.ActionCodec.decode(l.data);
+                    long hk = ((Number) m.get("hotkey")).longValue();
+                    String hkc = (hk >= 33 && hk < 127) ? " '" + (char) hk + "'" : "";
+                    System.out.printf("  \"%s\" hotkey=%d%s", m.get("name"), hk, hkc);
+                } catch(RuntimeException e) {
+                    /* opaque action: leave as-is */
+                }
             }
             System.out.println();
         }
