@@ -31,12 +31,18 @@ equals the original payload, so `pack` can always rebuild the exact bytes.
 | Layer type        | Parts written                | Editable as              |
 |-------------------|------------------------------|--------------------------|
 | `image`           | `*.imghdr` + `*.png`         | swap the PNG texture     |
+| `tex`             | `*.pre.bin` + image + `*.post.bin` | swap a 3D model's texture (JPEG/PNG) |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |
 
 For images, the header (z, sub-z, id, offset, metadata) is preserved verbatim in
 the `.imghdr` part and only the embedded image is replaced — the most common
 mod (re-skinning). The PNG may be any size; the layer length is recomputed.
+
+`tex` layers hold the textures used by 3D models (the embedded picture is a
+JPEG or PNG after a short header). The texture is exposed as a normal image file
+between two verbatim `.bin` parts; on repack its length is recomputed, so you can
+drop in a replacement of any size.
 
 ## Usage
 
@@ -51,6 +57,15 @@ mod (re-skinning). The PNG may be any size; the layer length is recomputed.
 
 # Recompile -> horse.res
 ./gradlew run --args="pack horse.resdir"
+```
+
+Validate a file (or a whole folder, recursively) without unpacking — checks
+that parse/serialize and unpack/pack are byte-identical and that every `image`
+layer's embedded picture splits cleanly (decodable on its own):
+
+```sh
+./gradlew run --args="verify path/to/horse.res"
+./gradlew run --args="verify path/to/folder-of-res"
 ```
 
 Build a runnable jar with `./gradlew jar` (output under `build/libs/`), then:
@@ -77,5 +92,6 @@ package mirrors `haven.Message` primitives for decoding payloads.
 ## Status / scope
 
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
-for images and text. Deeper typed editing (props, meshes, animations) can be
-layered on incrementally using the same parts model.
+for 2D images (`image`), 3D model textures (`tex`), and text. Deeper typed
+editing (props, meshes, animations) can be layered on incrementally using the
+same parts model.

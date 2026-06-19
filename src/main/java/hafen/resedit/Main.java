@@ -6,6 +6,7 @@ import hafen.resedit.res.Manifest;
 import hafen.resedit.res.Packer;
 import hafen.resedit.res.ResContainer;
 import hafen.resedit.res.Unpacker;
+import hafen.resedit.res.Verifier;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -40,6 +41,7 @@ public class Main {
             case "info":   info(args);   break;
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
+            case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
         }
@@ -63,6 +65,14 @@ public class Main {
                     extra.append(String.format(" id=%d z=%d subz=%d", ii.id, ii.z, ii.subz));
                 if(ii.imageFormat != null)
                     extra.append("  ").append(ii.imageFormat).append(" @ +").append(ii.imageOffset);
+                System.out.print(extra);
+            } else if(l.name.equals("tex")) {
+                hafen.resedit.layers.TexInfo ti = hafen.resedit.layers.TexInfo.parse(l.data);
+                StringBuilder extra = new StringBuilder();
+                if(ti.recognized)
+                    extra.append(String.format(" id=%d sz=%dx%d", ti.id, ti.szX, ti.szY));
+                if(ti.found)
+                    extra.append("  ").append(ti.imageFormat).append(" @ +").append(ti.imageOffset);
                 System.out.print(extra);
             } else if(l.name.equals("tooltip") || l.name.equals("pagina")) {
                 System.out.printf("  \"%s\"", Unpacker.previewText(l.data, 40));
@@ -110,6 +120,15 @@ public class Main {
                 res.layers.size(), res.version, out);
     }
 
+    private static void verify(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("verify requires a .res file or directory");
+        Path target = Path.of(args[1]);
+        Verifier.Summary s = Verifier.run(target, System.out);
+        if(s.failed > 0)
+            System.exit(1);
+    }
+
     private static void usage() {
         System.out.println("hafen-resedit — Haven & Hearth .res mod tool");
         System.out.println();
@@ -117,6 +136,7 @@ public class Main {
         System.out.println("  info   <file.res>            Show version and layer summary");
         System.out.println("  unpack <file.res> [outDir]   Decompile into an editable folder");
         System.out.println("  pack   <dir> [out.res]       Recompile a folder into a .res file");
+        System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
 
     private static class UsageException extends RuntimeException {

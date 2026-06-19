@@ -1,6 +1,7 @@
 package hafen.resedit.res;
 
 import hafen.resedit.layers.ImageInfo;
+import hafen.resedit.layers.TexInfo;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -29,15 +30,14 @@ public class Unpacker {
         for(int i = 0; i < res.layers.size(); i++) {
             Layer layer = res.layers.get(i);
             String base = String.format("%03d_%s", i, sanitize(layer.name));
-            List<String> parts = writeParts(layer, base, outDir, layersDir);
-            manifest.entries.add(new Manifest.Entry(layer.name, parts));
+            manifest.entries.add(writeParts(layer, base, outDir, layersDir));
         }
 
         manifest.write(outDir);
         return manifest;
     }
 
-    private static List<String> writeParts(Layer layer, String base, Path outDir, Path layersDir) throws IOException {
+    private static Manifest.Entry writeParts(Layer layer, String base, Path outDir, Path layersDir) throws IOException {
         if(layer.name.equals("image")) {
             ImageInfo ii = ImageInfo.parse(layer.data);
             if(ii.imageOffset > 0 && ii.imageFormat != null && ii.imageOffset <= layer.data.length) {
@@ -47,16 +47,31 @@ public class Unpacker {
                 String imgPart = LAYERS_SUBDIR + "/" + base + "." + ii.imageFormat;
                 Files.write(outDir.resolve(hdrPart), header);
                 Files.write(outDir.resolve(imgPart), image);
-                return new ArrayList<>(Arrays.asList(hdrPart, imgPart));
+                return new Manifest.Entry(layer.name, new ArrayList<>(Arrays.asList(hdrPart, imgPart)));
+            }
+        } else if(layer.name.equals("tex")) {
+            TexInfo ti = TexInfo.parse(layer.data);
+            if(ti.found) {
+                byte[] pre = Arrays.copyOfRange(layer.data, 0, ti.lenFieldPos);
+                byte[] image = Arrays.copyOfRange(layer.data, ti.imageOffset, ti.imageOffset + ti.imageLen);
+                byte[] post = Arrays.copyOfRange(layer.data, ti.imageOffset + ti.imageLen, layer.data.length);
+                String prePart = LAYERS_SUBDIR + "/" + base + ".pre.bin";
+                String imgPart = LAYERS_SUBDIR + "/" + base + "." + ti.imageFormat;
+                String postPart = LAYERS_SUBDIR + "/" + base + ".post.bin";
+                Files.write(outDir.resolve(prePart), pre);
+                Files.write(outDir.resolve(imgPart), image);
+                Files.write(outDir.resolve(postPart), post);
+                return new Manifest.Entry(layer.name,
+                        new ArrayList<>(Arrays.asList(prePart, imgPart, postPart)), "tex");
             }
         } else if(layer.name.equals("tooltip") || layer.name.equals("pagina")) {
             String part = LAYERS_SUBDIR + "/" + base + ".txt";
             Files.write(outDir.resolve(part), layer.data);
-            return new ArrayList<>(List.of(part));
+            return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)));
         }
         String part = LAYERS_SUBDIR + "/" + base + ".bin";
         Files.write(outDir.resolve(part), layer.data);
-        return new ArrayList<>(List.of(part));
+        return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)));
     }
 
     private static String sanitize(String name) {

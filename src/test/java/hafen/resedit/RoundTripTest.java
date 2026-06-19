@@ -1,6 +1,7 @@
 package hafen.resedit;
 
 import hafen.resedit.io.MessageWriter;
+import hafen.resedit.layers.TexInfo;
 import hafen.resedit.res.Layer;
 import hafen.resedit.res.Manifest;
 import hafen.resedit.res.Packer;
@@ -45,6 +46,23 @@ class RoundTripTest {
         w.int16(3);        // off.x
         w.int16(-4);       // off.y
         w.bytes(tinyPng());
+        return w.toByteArray();
+    }
+
+    /** Builds a tex-layer payload: header + inline color image (PNG) + a mipmap part. */
+    private static byte[] texLayer() {
+        MessageWriter w = new MessageWriter();
+        w.int16(7);          // id
+        w.uint16(0);         // off.x
+        w.uint16(0);         // off.y
+        w.uint16(64);        // sz.x
+        w.uint16(64);        // sz.y
+        w.uint8(0);          // part tag: fl=0, t=0 (color image)
+        byte[] png = tinyPng();
+        w.int32(png.length); // embedded image length
+        w.bytes(png);
+        w.uint8(1);          // part tag: fl=0, t=1 (mipmap)
+        w.uint8(0);          // mipmap value
         return w.toByteArray();
     }
 
@@ -102,5 +120,49 @@ class RoundTripTest {
         // Image layer grew by 16 bytes; other layers untouched.
         assertEquals(imageLayer().length + 16, repacked.layers.get(0).data.length);
         assertArrayEquals("A fine horse".getBytes(StandardCharsets.UTF_8), repacked.layers.get(1).data);
+    }
+
+    @Test
+    void texLayerRoundTripIsByteIdentical(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", texLayer()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("tex.resdir");
+        Files.createDirectories(dir);
+        Manifest m = Unpacker.unpack(ResContainer.parse(original), dir);
+
+        // tex is split into pre/image/post via the "tex" codec.
+        assertEquals("tex", m.entries.get(0).codec);
+        assertEquals(3, m.entries.get(0).parts.size());
+        assertTrue(m.entries.get(0).parts.get(1).endsWith(".png"));
+
+        byte[] repacked = Packer.pack(dir).serialize();
+        assertArrayEquals(original, repacked, "untouched tex must repack byte-identically");
+    }
+
+    @Test
+    void editingTexImageRecomputesEmbeddedLength(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", texLayer()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("tex.resdir");
+        Files.createDirectories(dir);
+        Unpacker.unpack(ResContainer.parse(original), dir);
+
+        // Swap the texture for a larger image; the embedded int32 length must follow.
+        String imgPart = Manifest.read(dir).entries.get(0).parts.get(1);
+        ByteArrayOutputStream bigger = new ByteArrayOutputStream();
+        bigger.writeBytes(tinyPng());
+        bigger.writeBytes(new byte[32]);
+        Files.write(dir.resolve(imgPart), bigger.toByteArray());
+
+        byte[] texData = Packer.pack(dir).layers.get(0).data;
+        TexInfo ti = TexInfo.parse(texData);
+        assertTrue(ti.found, "color image must still be locatable after swap");
+        assertEquals(bigger.size(), ti.imageLen, "embedded length must match the new image size");
+        // The trailing mipmap part (2 bytes) must be preserved after the image.
+        assertEquals(texData.length, ti.imageOffset + ti.imageLen + 2);
     }
 }

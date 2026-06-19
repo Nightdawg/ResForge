@@ -6,23 +6,49 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * Repacks an unpacked folder back into a .res file by concatenating each
- * layer's part files (in manifest order) into its payload.
+ * Repacks an unpacked folder back into a .res file. Most layers use the "raw"
+ * codec (their part files are simply concatenated). The "tex" codec reassembles
+ * a texture layer as {@code pre + int32(len(image)) + image + post}, recomputing
+ * the embedded image length so the texture can be swapped for one of any size.
  */
 public class Packer {
     public static ResContainer pack(Path dir) throws IOException {
         Manifest manifest = Manifest.read(dir);
         ResContainer res = new ResContainer(manifest.version);
-        for(Manifest.Entry e : manifest.entries) {
-            ByteArrayOutputStream payload = new ByteArrayOutputStream();
-            for(String part : e.parts) {
-                Path p = dir.resolve(part);
-                if(!Files.exists(p))
-                    throw new IOException("Missing part file referenced by manifest: " + part);
-                payload.writeBytes(Files.readAllBytes(p));
-            }
-            res.layers.add(new Layer(e.name, payload.toByteArray()));
-        }
+        for(Manifest.Entry e : manifest.entries)
+            res.layers.add(new Layer(e.name, buildPayload(dir, e)));
         return res;
+    }
+
+    private static byte[] buildPayload(Path dir, Manifest.Entry e) throws IOException {
+        if(e.codec.equals("tex")) {
+            if(e.parts.size() != 3)
+                throw new IOException("tex codec expects 3 parts (pre, image, post) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            byte[] pre = read(dir, e.parts.get(0));
+            byte[] image = read(dir, e.parts.get(1));
+            byte[] post = read(dir, e.parts.get(2));
+            ByteArrayOutputStream payload = new ByteArrayOutputStream();
+            payload.writeBytes(pre);
+            payload.writeBytes(int32le(image.length));
+            payload.writeBytes(image);
+            payload.writeBytes(post);
+            return payload.toByteArray();
+        }
+        ByteArrayOutputStream payload = new ByteArrayOutputStream();
+        for(String part : e.parts)
+            payload.writeBytes(read(dir, part));
+        return payload.toByteArray();
+    }
+
+    private static byte[] read(Path dir, String part) throws IOException {
+        Path p = dir.resolve(part);
+        if(!Files.exists(p))
+            throw new IOException("Missing part file referenced by manifest: " + part);
+        return Files.readAllBytes(p);
+    }
+
+    private static byte[] int32le(int v) {
+        return new byte[]{(byte) v, (byte) (v >> 8), (byte) (v >> 16), (byte) (v >> 24)};
     }
 }
