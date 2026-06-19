@@ -35,6 +35,8 @@ equals the original payload, so `pack` can always rebuild the exact bytes.
 | `audio2`          | `*.audhdr` + `*.ogg`         | swap a sound (Ogg Vorbis) |
 | `props`           | `*.json`                     | edit typed properties as JSON |
 | `action`          | `*.json`                     | edit button/keybind metadata as JSON |
+| `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
+| `midi`            | `*.mid`                      | swap the MIDI music      |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |
 
@@ -61,6 +63,10 @@ header and a replaceable `*.ogg` — drop in any Ogg Vorbis file to swap a sound
 hotkey, arguments). The format is fully deterministic, so it is exposed as
 editable `*.json` (with the same lossless-or-raw guard as `props`) — handy for
 renaming a button or rebinding its hotkey.
+
+`font` layers embed a TrueType/OpenType font after a 2-byte header — split into
+`*.fonthdr` + `*.ttf`/`*.otf` so you can swap the typeface. `midi` layers are a
+whole MIDI file, exposed as `*.mid`.
 
 ## Usage
 
@@ -110,7 +116,7 @@ package mirrors `haven.Message` primitives for decoding payloads.
 ## Status / scope
 
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
-for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), typed
-properties (`props`) and action/keybind metadata (`action`) as JSON, and text.
-Deeper typed editing (meshes, animations, collision geometry) can be layered on
-incrementally using the same parts model.
+for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
+(`font`), typed properties (`props`) and action/keybind metadata (`action`) as
+JSON, and text. Deeper typed editing (meshes, animations, collision geometry)
+can be layered on incrementally using the same parts model.

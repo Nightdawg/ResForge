@@ -107,6 +107,8 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 | `audio2`           | `*.audhdr` + `*.ogg`    | swap a sound (Ogg Vorbis) |
 | `props`            | `*.json`                | edit typed props as JSON |
 | `action`           | `*.json`                | edit button/keybind as JSON |
+| `font`             | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font |
+| `midi`             | `*.mid`                 | swap the MIDI music   |
 | `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
@@ -212,6 +214,7 @@ hafen-resedit/
     layers/ImageInfo.java            # image header parse + PNG split point
     layers/TexInfo.java              # tex header parse + embedded-image split point
     layers/AudioInfo.java            # audio2 header parse + Ogg split point
+    layers/FontInfo.java             # font header parse + TTF/OTF split point
     layers/ImageMagic.java           # encoded-image magic-byte detection
     layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
     layers/ActionCodec.java          # action <-> JSON (deterministic record)
@@ -316,6 +319,13 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   `customclient/menugrid/Bots.res`: `info` → `"| Bots |" hotkey=66 'B'`; edited
   the JSON to rebind the hotkey to `71 'G'`, repacked (`verify` PASS), and `info`
   on the result confirmed the change.
+- **`font` codec (2026-06-19)**: the sample set's one `font` layer split as
+  `ttf` (`font` histogram = `ttf 1`). End-to-end on
+  `customclient/uiThemes/Trollex Red/font/cambria.res`: `info` → `ttf @ +2`;
+  unpack produced a valid 822 KB `.ttf` (magic `00 01 00 00`); repack was
+  byte-identical. `midi` layers (none in the sample set) are exposed as `.mid`.
+  Note: `gradlew run --args` mishandles paths containing spaces — use the built
+  jar (`java -jar …`) for such paths; the tool itself handles them correctly.
 
 ---
 
@@ -323,7 +333,8 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
 
 - ~~Validate against real `.res` files~~ (§7), ~~`tex` 3D-texture editing~~ (§3),
   ~~typed `props` editing~~ (§3), ~~`audio2` sound swapping~~ (§3), and
-  ~~`action` button/keybind editing~~ (§3) are all done.
+  ~~`action` button/keybind editing~~ (§3), and ~~`font`/`midi` swapping~~ (§3)
+  are all done.
 - Add typed editors for `neg`/`obst` (collision/boundary geometry; note `obst`
   uses lossy `float16`, so preserve raw bits) and eventually
   `vbuf2`/`mesh`/`manim` (port the relevant parts of `mkres`).

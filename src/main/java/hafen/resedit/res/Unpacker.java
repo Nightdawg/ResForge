@@ -2,6 +2,7 @@ package hafen.resedit.res;
 
 import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.AudioInfo;
+import hafen.resedit.layers.FontInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
@@ -92,6 +93,21 @@ public class Unpacker {
                 Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
                 return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "action");
             }
+        } else if(layer.name.equals("font")) {
+            FontInfo fi = FontInfo.parse(layer.data);
+            if(fi.fontOffset > 0 && fi.format != null && fi.fontOffset <= layer.data.length) {
+                byte[] header = Arrays.copyOfRange(layer.data, 0, fi.fontOffset);
+                byte[] font = Arrays.copyOfRange(layer.data, fi.fontOffset, layer.data.length);
+                String hdrPart = LAYERS_SUBDIR + "/" + base + ".fonthdr";
+                String fontPart = LAYERS_SUBDIR + "/" + base + "." + fi.format;
+                Files.write(outDir.resolve(hdrPart), header);
+                Files.write(outDir.resolve(fontPart), font);
+                return new Manifest.Entry(layer.name, new ArrayList<>(Arrays.asList(hdrPart, fontPart)));
+            }
+        } else if(layer.name.equals("midi") && startsWith(layer.data, 'M', 'T', 'h', 'd')) {
+            String part = LAYERS_SUBDIR + "/" + base + ".mid";
+            Files.write(outDir.resolve(part), layer.data);
+            return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)));
         } else if(layer.name.equals("tooltip") || layer.name.equals("pagina")) {
             String part = LAYERS_SUBDIR + "/" + base + ".txt";
             Files.write(outDir.resolve(part), layer.data);
@@ -109,6 +125,16 @@ public class Unpacker {
             sb.append(Character.isLetterOrDigit(c) ? c : '_');
         }
         return sb.length() == 0 ? "layer" : sb.toString();
+    }
+
+    private static boolean startsWith(byte[] b, int... sig) {
+        if(b.length < sig.length)
+            return false;
+        for(int i = 0; i < sig.length; i++) {
+            if((b[i] & 0xff) != (sig[i] & 0xff))
+                return false;
+        }
+        return true;
     }
 
     public static String previewText(byte[] data, int max) {

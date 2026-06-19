@@ -76,6 +76,15 @@ class RoundTripTest {
         return w.toByteArray();
     }
 
+    /** Builds a font-layer payload: ver1/type0 header + a (TTF-magic) program blob. */
+    private static byte[] fontLayer() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(1);             // ver
+        w.uint8(0);             // type (TrueType)
+        w.bytes(new byte[]{0x00, 0x01, 0x00, 0x00, 0x00, 0x04, 0x10, 0x20});
+        return w.toByteArray();
+    }
+
     private static ResContainer sample() {
         ResContainer res = new ResContainer(7);
         res.layers.add(new Layer("image", imageLayer()));
@@ -172,6 +181,20 @@ class RoundTripTest {
         bigger.writeBytes(new byte[64]);
         Files.write(ogg, bigger.toByteArray());
         assertEquals(audioLayer().length + 64, Packer.pack(dir).layers.get(0).data.length);
+    }
+
+    @Test
+    void fontLayerSplitsAndRoundTrips(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("font", fontLayer()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("font.resdir");
+        Files.createDirectories(dir);
+        Manifest m = Unpacker.unpack(ResContainer.parse(original), dir);
+        assertEquals(2, m.entries.get(0).parts.size());
+        assertTrue(m.entries.get(0).parts.get(1).endsWith(".ttf"));
+        assertArrayEquals(original, Packer.pack(dir).serialize(), "untouched font must repack byte-identically");
     }
 
     @Test
