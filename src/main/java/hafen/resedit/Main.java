@@ -101,6 +101,10 @@ public class Main {
                 } catch(RuntimeException e) {
                     /* opaque action: leave as-is */
                 }
+            } else if(l.name.equals("font")) {
+                hafen.resedit.layers.FontInfo fi = hafen.resedit.layers.FontInfo.parse(l.data);
+                if(fi.format != null)
+                    System.out.printf("  %s @ +%d", fi.format, fi.fontOffset);
             }
             System.out.println();
         }

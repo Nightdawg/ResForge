@@ -2,6 +2,7 @@ package hafen.resedit.res;
 
 import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.AudioInfo;
+import hafen.resedit.layers.FontInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
@@ -43,6 +44,7 @@ public class Verifier {
         public final Map<String, Integer> propsHist = new TreeMap<>();
         public final Map<String, Integer> audioHist = new TreeMap<>();
         public final Map<String, Integer> actionHist = new TreeMap<>();
+        public final Map<String, Integer> fontHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -94,6 +96,7 @@ public class Verifier {
         printHist(out, "Props histogram", sum.propsHist);
         printHist(out, "Audio histogram", sum.audioHist);
         printHist(out, "Action histogram", sum.actionHist);
+        printHist(out, "Font histogram", sum.fontHist);
         return sum;
     }
 
@@ -146,6 +149,10 @@ public class Verifier {
             else if(l.name.equals("action"))
                 sum.actionHist.merge(ActionCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
                         1, Integer::sum);
+            else if(l.name.equals("font")) {
+                FontInfo fi = FontInfo.parse(l.data);
+                sum.fontHist.merge(fi.format != null ? fi.format : "raw", 1, Integer::sum);
+            }
         }
         return r;
     }
