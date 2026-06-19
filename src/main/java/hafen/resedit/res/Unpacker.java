@@ -1,6 +1,7 @@
 package hafen.resedit.res;
 
 import hafen.resedit.layers.ImageInfo;
+import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
 
 import java.io.IOException;
@@ -63,6 +64,13 @@ public class Unpacker {
                 Files.write(outDir.resolve(postPart), post);
                 return new Manifest.Entry(layer.name,
                         new ArrayList<>(Arrays.asList(prePart, imgPart, postPart)), "tex");
+            }
+        } else if(layer.name.equals("props")) {
+            String json = PropsCodec.toJsonIfLossless(layer.data);
+            if(json != null) {
+                String part = LAYERS_SUBDIR + "/" + base + ".json";
+                Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
+                return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "props");
             }
         } else if(layer.name.equals("tooltip") || layer.name.equals("pagina")) {
             String part = LAYERS_SUBDIR + "/" + base + ".txt";

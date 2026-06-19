@@ -1,0 +1,124 @@
+package hafen.resedit;
+
+import hafen.resedit.io.Json;
+import hafen.resedit.io.MessageWriter;
+import hafen.resedit.layers.PropsCodec;
+import hafen.resedit.res.Layer;
+import hafen.resedit.res.Manifest;
+import hafen.resedit.res.Packer;
+import hafen.resedit.res.ResContainer;
+import hafen.resedit.res.Unpacker;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class PropsJsonTest {
+    /** Mirrors knarr.res: { "place": ["surface", "map"] } with a top-level list (no trailing T_END). */
+    private static byte[] knarrLikeProps() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(1);                          // version
+        w.uint8(2).string("place");          // T_STR key
+        w.uint8(8);                          // T_TTOL
+        w.uint8(2).string("surface");        // T_STR
+        w.uint8(2).string("map");            // T_STR
+        w.uint8(0);                          // T_END (closes nested list)
+        return w.toByteArray();
+    }
+
+    @Test
+    void jsonWriteParseRoundTrip() {
+        Object v = Json.parse(Json.write(Map.of()));
+        assertTrue(((Map<?, ?>) v).isEmpty());
+
+        String src = "{\n  \"a\": \"x\\n\\\"y\",\n  \"n\": 42,\n  \"f\": 1.5,\n"
+                + "  \"b\": true,\n  \"z\": null,\n  \"list\": [1, 2, [\"deep\"]]\n}\n";
+        Object parsed = Json.parse(src);
+        // Re-serialize and re-parse must be stable.
+        Object reparsed = Json.parse(Json.write(parsed));
+        assertEquals(Json.write(parsed), Json.write(reparsed));
+
+        Map<?, ?> m = (Map<?, ?>) parsed;
+        assertEquals("x\n\"y", m.get("a"));
+        assertEquals(42L, m.get("n"));
+        assertEquals(1.5, m.get("f"));
+        assertEquals(Boolean.TRUE, m.get("b"));
+        assertNull(m.get("z"));
+        assertEquals(List.of(1L, 2L, List.of("deep")), m.get("list"));
+    }
+
+    @Test
+    void propsDecodeEncodeIsLossless() {
+        byte[] payload = knarrLikeProps();
+        Map<String, Object> model = PropsCodec.decode(payload);
+        assertEquals(1L, model.get("version"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> props = (Map<String, Object>) model.get("props");
+        assertEquals(List.of("surface", "map"), props.get("place"));
+        assertArrayEquals(payload, PropsCodec.encode(model));
+
+        String json = PropsCodec.toJsonIfLossless(payload);
+        assertNotNull(json, "knarr-like props must be exposable as lossless JSON");
+    }
+
+    @Test
+    void propsIntegerValuesRoundTripCanonically() {
+        // Values that addtto would canonicalize as u8 / u16 / i8 / i16 / i32.
+        MessageWriter w = new MessageWriter();
+        w.uint8(1);
+        w.uint8(2).string("a"); w.uint8(4).uint8(200);        // T_UINT8 200
+        w.uint8(2).string("b"); w.uint8(5).uint16(50000);     // T_UINT16 50000
+        w.uint8(2).string("c"); w.uint8(9).int8(-5);          // T_INT8 -5
+        w.uint8(2).string("d"); w.uint8(10).int16(-1000);     // T_INT16 -1000
+        w.uint8(2).string("e"); w.uint8(1).int32(123456);     // T_INT 123456
+        byte[] payload = w.toByteArray();
+        assertArrayEquals(payload, PropsCodec.encode(PropsCodec.decode(payload)));
+        assertNotNull(PropsCodec.toJsonIfLossless(payload));
+    }
+
+    @Test
+    void unsupportedPropsFallsBackToRaw() {
+        // A coord value (T_COORD) is not JSON-native -> must not be exposed as JSON.
+        MessageWriter w = new MessageWriter();
+        w.uint8(1);
+        w.uint8(2).string("pos");
+        w.uint8(3).int32(10).int32(20);   // T_COORD
+        assertNull(PropsCodec.toJsonIfLossless(w.toByteArray()));
+    }
+
+    @Test
+    void propsLayerRoundTripsAndIsEditable(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(90);
+        res.layers.add(new Layer("props", knarrLikeProps()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("p.resdir");
+        Files.createDirectories(dir);
+        Manifest m = Unpacker.unpack(ResContainer.parse(original), dir);
+        assertEquals("props", m.entries.get(0).codec);
+        assertTrue(m.entries.get(0).parts.get(0).endsWith(".json"));
+
+        // Untouched repack is byte-identical.
+        assertArrayEquals(original, Packer.pack(dir).serialize());
+
+        // Edit the JSON (rename "map" -> "ocean") and confirm the change survives a repack.
+        Path json = dir.resolve(m.entries.get(0).parts.get(0));
+        String edited = Files.readString(json, StandardCharsets.UTF_8).replace("\"map\"", "\"ocean\"");
+        Files.writeString(json, edited, StandardCharsets.UTF_8);
+
+        byte[] propsData = Packer.pack(dir).layers.get(0).data;
+        @SuppressWarnings("unchecked")
+        Map<String, Object> props = (Map<String, Object>) PropsCodec.decode(propsData).get("props");
+        assertEquals(List.of("surface", "ocean"), props.get("place"));
+    }
+}
