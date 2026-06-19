@@ -219,7 +219,9 @@ hafen-resedit/
     layers/ImageMagic.java           # encoded-image magic-byte detection
     layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
     layers/ActionCodec.java          # action <-> JSON (deterministic record)
-    layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector
+    layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector (incl. bones)
+    layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
+    layers/TtoSkip.java              # generic tto value skipper
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
@@ -392,21 +394,28 @@ carry the de-quantisation scale): `f4`=4·cap, `f2`=2·cap, `f1`=cap; `snN`/`unN
 is variable-length: a per-bone list of name + run-length-coded per-vertex weight
 spans (see `PoseMorph` / `mkres.writebones`); the weight format is `f4`/`un2`/`un1`.
 
-### What is built (read-only inspector)
+### What is built (read-only decoders)
 
-`layers/Vbuf2Info.java` walks the float attributes exactly and reports the vertex
-count + each attribute's format, surfaced in `info` and the `verify` "Vbuf2
-histogram". Validated on real models: **9/11** vbuf2 layers walk fully (the
-length-prefixed ver≥1 form — e.g. `knarr`: 12838 verts `pos2(sn2) nrm2(uvec1)
-tan2(uvec1) bit2(uvec1) tex2(sn2) otex2(sn2) bones2(un1)`), and the **2** legacy
-ver=0 layers walk their bare `pos/nrm/tex` up to the variable-length bone data.
-This is the "read-only first" milestone; the layers remain lossless raw `.bin`.
+`layers/Vbuf2Info.java` fully walks a `vbuf2` — every float attribute *and* the
+variable-length bone data (`bones`/`bones2`, a per-bone run-length-coded weight
+table) — and `layers/MeshInfo.java` decodes the `mesh` layer's header and its
+triangle indices, including the delta-stripped form (a faithful port of
+`haven.FastMesh.unstrip`/`decdelta`). Both are surfaced in `info` and the
+`verify` histograms, and both consume the payload to the **exact** end on every
+real layer, which validates the structural understanding:
+
+- **Vbuf2 histogram: `walked 11`** (all 11 sample `vbuf2`, ver 0 and ≥1).
+- **Mesh histogram: `decoded 41`** (all 41 sample `mesh`, raw and stripped).
+
+e.g. `info` on `knarr`: a 12838-vert buffer `[pos2(sn2) nrm2(uvec1) tan2(uvec1)
+bit2(uvec1) tex2(sn2) otex2(sn2) bones2(un1)]` with stripped submeshes like
+`2940 tris vbuf=0 mat=1 stripped`. This is the "read-only first" milestone; the
+layers remain lossless raw `.bin`.
 
 ### Remaining for full 3D editing (future)
 
-1. Decode the bone data (`bones`/`bones2`) to finish walking ver=0 layers, and
-   decode the `mesh` index layer (triangle lists) and `skel`/`skan` (skeleton +
-   animations).
+1. ~~Decode the bone data and the `mesh` index layer~~ (done — see above);
+   `skel`/`skan` (skeleton + animations) are still raw.
 2. Emit an editable form — ideally **Ogre XML**, so it re-imports into Blender —
    and port `mkres-fragment.py` to Java for the XML → binary direction.
 3. Gate any write path behind the usual lossless-or-raw guard. Note the float/

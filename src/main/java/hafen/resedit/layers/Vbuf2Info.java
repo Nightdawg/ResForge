@@ -70,6 +70,11 @@ public class Vbuf2Info {
                     in.skip(sublen);
                     continue;
                 }
+                if(name.equals("bones") || name.equals("bones2")) {
+                    String wfmt = walkBones(in, name.equals("bones2"));
+                    vi.attribs.add(name + "(" + wfmt + ")");
+                    continue;
+                }
                 Integer eln = ELN.get(name);
                 if(eln == null) {
                     vi.stoppedAt = name;
@@ -96,6 +101,37 @@ public class Vbuf2Info {
             vi.stoppedAt = (vi.stoppedAt != null) ? vi.stoppedAt : "<error>";
         }
         return vi;
+    }
+
+    /** Consumes inline bone data (haven.PoseMorph): per-bone run-length-coded
+     *  per-vertex weight spans. Returns the weight format. */
+    private static String walkBones(MessageReader in, boolean v2) {
+        String wfmt = "f4";
+        if(v2) {
+            in.uint8();              // bone-data version (== 1)
+            wfmt = in.string();      // weight format
+        }
+        in.uint8();                  // mba (max bones per vertex)
+        int wsz;
+        switch(wfmt) {
+            case "f4": wsz = 4; break;
+            case "un2": wsz = 2; break;
+            case "un1": wsz = 1; break;
+            default: throw new IllegalStateException("unknown bone-weight format: " + wfmt);
+        }
+        while(true) {
+            String bone = in.string();
+            if(bone.isEmpty())
+                break;
+            while(true) {
+                int run = in.uint16();
+                in.uint16();          // starting vertex index
+                if(run == 0)
+                    break;
+                in.skip(run * wsz);
+            }
+        }
+        return wfmt;
     }
 
     private static String peekFmt(byte[] b, int at) {

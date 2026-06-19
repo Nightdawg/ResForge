@@ -4,6 +4,7 @@ import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.AudioInfo;
 import hafen.resedit.layers.FontInfo;
 import hafen.resedit.layers.ImageInfo;
+import hafen.resedit.layers.MeshInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
 import hafen.resedit.layers.Vbuf2Info;
@@ -47,6 +48,7 @@ public class Verifier {
         public final Map<String, Integer> actionHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
+        public final Map<String, Integer> meshHist = new TreeMap<>();
     }
 
     static class FileResult {
@@ -100,6 +102,7 @@ public class Verifier {
         printHist(out, "Action histogram", sum.actionHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
+        printHist(out, "Mesh histogram", sum.meshHist);
         return sum;
     }
 
@@ -162,6 +165,11 @@ public class Verifier {
                         : vi.fullyWalked ? "walked"
                         : (vi.stoppedAt != null ? "stopped@" + vi.stoppedAt : "partial");
                 sum.vbufHist.merge(key, 1, Integer::sum);
+            }
+            else if(l.name.equals("mesh")) {
+                MeshInfo mi = MeshInfo.parse(l.data);
+                sum.meshHist.merge(!mi.recognized ? "unrecognized"
+                        : (mi.reachedEnd ? "decoded" : "partial"), 1, Integer::sum);
             }
         }
         return r;

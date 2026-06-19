@@ -116,6 +116,11 @@ public class Main {
                     if(vi.stoppedAt != null)
                         System.out.printf(" +%s", vi.stoppedAt);
                 }
+            } else if(l.name.equals("mesh")) {
+                hafen.resedit.layers.MeshInfo mi = hafen.resedit.layers.MeshInfo.parse(l.data);
+                if(mi.recognized)
+                    System.out.printf("  %d tris vbuf=%d%s%s", mi.numTris, mi.vbufid,
+                            mi.matid >= 0 ? " mat=" + mi.matid : "", mi.stripped ? " stripped" : "");
             }
             System.out.println();
         }
