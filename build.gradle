@@ -1,0 +1,36 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'hafen'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'hafen.resedit.Main'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.named('jar') {
+    manifest {
+        attributes 'Main-Class': 'hafen.resedit.Main'
+    }
+}
