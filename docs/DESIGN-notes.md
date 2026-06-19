@@ -10,8 +10,8 @@ created. Keep it with the code so the context isn't lost.
 - **Tool location:** `IdeaProjects/hafen-resedit` (standalone Gradle/Java project).
 - **Reference sources:** verbatim copies of the authoritative files live in
   [`reference/`](reference/) — `Resource.java`, `Message.java`,
-  `NormNumber.java`, and `mkres-fragment.py` (see `reference/README.md` for
-  provenance and licensing).
+  `NormNumber.java`, `TexR.java`, and `mkres-fragment.py` (see
+  `reference/README.md` for provenance and licensing).
 
 ---
 
@@ -103,6 +103,7 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 | Layer type         | Parts written           | Editable as           |
 |--------------------|-------------------------|-----------------------|
 | `image`            | `*.imghdr` + `*.png`    | swap the PNG texture  |
+| `tex`              | `*.pre.bin` + image + `*.post.bin` | swap a 3D model texture |
 | `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
@@ -111,6 +112,34 @@ parsing the simple header exactly, then validating against the image's magic
 bytes (PNG/JPEG/GIF/BMP); a magic-scan fallback covers the newer typed header.
 The header is preserved verbatim in `*.imghdr`, so only the picture changes.
 The replacement PNG may be any size — the layer length is recomputed on pack.
+
+### The `tex` layer and the "codec" idea
+
+`tex` layers carry the textures used by 3D models. From `haven.TexR.Encoded`:
+
+```
+int16  id
+uint16 off.x, off.y
+uint16 sz.x,  sz.y
+parts, repeated until end-of-message:
+    uint8 tag      fl = (tag & 0xc0) >> 6 ;  t = tag & 0x3f
+      fl==0 inline:  t==0 color image / t==4 alpha mask -> int32 len, len bytes
+                     t==1|2|3 filter -> 1 byte ; t==5 -> 0 bytes
+      fl==1: uint8 length-prefixed sub-message
+      fl==2: uint8 + int32 length-prefixed sub-message
+```
+
+The embedded picture (a normal JPEG/PNG) sits *inside* the payload, preceded by
+an `int32` length — unlike `image`, where it runs to the end. So a resized
+replacement needs that length recomputed. The layer is therefore split into
+three parts — `*.pre.bin` (everything up to the length field), the image file,
+and `*.post.bin` (everything after the image, including filters/mask verbatim) —
+and marked with a **codec** in the manifest (`tex`). On pack, the default `raw`
+codec concatenates parts (unchanged), while the `tex` codec emits
+`pre + int32(len(image)) + image + post`, recomputing the length. Untouched
+files repack byte-identically; a swapped texture of any size repacks correctly.
+Only the first inline color image (the common form) is exposed; anything exotic
+(length-prefixed parts, no inline image) falls back to a raw `.bin`.
 
 `manifest.txt` example:
 
@@ -121,7 +150,12 @@ res-version: 7
 layer	image	layers/000_image.imghdr,layers/000_image.png
 layer	tooltip	layers/001_tooltip.txt
 layer	neg	layers/002_neg.bin
+layer	tex	layers/003_tex.pre.bin,layers/003_tex.jpg,layers/003_tex.post.bin	tex
 ```
+
+Each `layer` line is `layer⇥<name>⇥<part1,part2,…>` with an optional fourth
+tab-separated **codec** field (omitted means `raw` = concatenate parts). The
+`tex` codec recomputes the embedded image length on repack (see §3).
 
 ---
 
@@ -132,7 +166,7 @@ hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info | unpack | pack
+    Main.java                        # CLI: info | unpack | pack | verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     res/ResContainer.java            # parse/serialize container + Layer list
@@ -140,9 +174,12 @@ hafen-resedit/
     res/Manifest.java                # read/write manifest.txt
     res/Unpacker.java                # .res -> folder (parts model)
     res/Packer.java                  # folder -> .res
+    res/Verifier.java                # batch round-trip + image/tex split validation
     layers/ImageInfo.java            # image header parse + PNG split point
+    layers/TexInfo.java              # tex header parse + embedded-image split point
+    layers/ImageMagic.java           # encoded-image magic-byte detection
   src/test/java/hafen/resedit/
-    RoundTripTest.java               # byte-identical round-trip + image-edit tests
+    RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
   README.md
   docs/DESIGN-notes.md               # this file
 ```
@@ -162,6 +199,10 @@ hafen-resedit/
 
 # Recompile -> horse.res
 ./gradlew run --args="pack horse.resdir"
+
+# Validate real files (single file or a folder, recursive)
+./gradlew run --args="verify path/to/horse.res"
+./gradlew run --args="verify path/to/folder"
 
 # Or use the jar
 ./gradlew jar
@@ -192,18 +233,41 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
 - End-to-end CLI run on a synthesized resource (image + tooltip + neg):
   `info` reported metadata correctly; `unpack` split image into `.imghdr`+`.png`,
   tooltip into `.txt`; `pack` reproduced a **byte-identical** 146-byte file.
+- **Real-file validation (2026-06-19)** via the new `verify` command against 5
+  game files (`apple`, `cutblade`, `mulberry`, `male`, `knarr`; res-versions
+  3–90, up to 61 layers, 2.7 KB–462 KB): **5/5 PASS** — container parse/serialize
+  and unpack/pack both byte-identical, and every `image` layer's split picture
+  re-decodes standalone via `ImageIO`. Layer types seen in the wild: `image`,
+  `tooltip`, `props`, `obst`, `rlink`, `deps`, `codeentry`, and the 3D set
+  `tex`, `mesh`, `vbuf2`, `mat2`, `boneoff`, `skel`, `skan`, `manim`.
+- **Findings worth noting:**
+  - The new-style typed (`tto`) `image` header (`ver-128 == 1`) did **not**
+    occur in these samples — the one image (`apple`) is old-style. That decode
+    path is still only magic-scan-validated.
+  - **3D model skins live in `tex` layers, not `image`.** A `tex` payload embeds
+    an encoded picture after a short header (e.g. `male`'s first `tex` is a JPEG
+    at byte +15). **Now handled** by the `tex` codec (see §3).
+- **`tex` codec validation (2026-06-19)** against 8 game files (added `bull`,
+  `stallion`, `bearcape-head`): **8/8 PASS**, still byte-identical, and all 15
+  `tex` layers decode as standalone JPEGs. End-to-end edit demo on `male.res`:
+  unpacked the first `tex` to `000_tex.jpg`, replaced it with a different-sized
+  JPEG (12368 → 1635 bytes), repacked (`verify` PASS, embedded length recomputed,
+  file 69798 → 59065 bytes), and a re-unpack reproduced the new texture
+  byte-for-byte. 3D re-skinning confirmed working on real assets.
 
 ---
 
 ## 8. Possible next steps
 
-- Validate against real `.res` files from a game install (none were available in
-  the dev environment at creation time).
+- ~~Validate against real `.res` files~~ (done — see §7) and ~~`tex` 3D-texture
+  editing~~ (done — `tex` codec, §3).
 - Add typed editors: `props` (→ JSON-ish), `neg`/`obst` (collision/boundary
   geometry), `action`/`pagina` metadata, and eventually `vbuf2`/`mesh`/`manim`
   (port the relevant parts of the `mkres` Python encoder).
-- Optional `repng`/`reimg` convenience command to validate that a replacement
-  image re-encodes and that offsets/`tsz` still make sense.
+- Validate the new-style typed (`tto`) `image` header against a real sample that
+  uses it (none of the current samples do).
+- Optional: expose the `tex` alpha **mask** (part `t==4`) as a second editable
+  image; today it is preserved verbatim inside `*.post.bin`.
 - A small GUI or a `--watch` mode for rapid skin iteration.
 
 ---

@@ -20,10 +20,16 @@ public class Manifest {
     public static class Entry {
         public final String name;
         public final List<String> parts;
+        public final String codec;
 
         public Entry(String name, List<String> parts) {
+            this(name, parts, "raw");
+        }
+
+        public Entry(String name, List<String> parts, String codec) {
             this.name = name;
             this.parts = parts;
+            this.codec = (codec == null || codec.isEmpty()) ? "raw" : codec;
         }
     }
 
@@ -37,7 +43,10 @@ public class Manifest {
         sb.append("res-version: ").append(version).append('\n');
         for(Entry e : entries) {
             sb.append("layer\t").append(e.name).append('\t')
-              .append(String.join(",", e.parts)).append('\n');
+              .append(String.join(",", e.parts));
+            if(!e.codec.equals("raw"))
+                sb.append('\t').append(e.codec);
+            sb.append('\n');
         }
         Files.write(dir.resolve(FILENAME), sb.toString().getBytes(StandardCharsets.UTF_8));
     }
@@ -53,15 +62,16 @@ public class Manifest {
                 m.version = Integer.parseInt(trimmed.substring("res-version:".length()).strip());
                 haveVersion = true;
             } else if(line.startsWith("layer\t")) {
-                String[] f = line.split("\t", 3);
-                if(f.length != 3)
+                String[] f = line.split("\t", 4);
+                if(f.length < 3)
                     throw new IOException("Malformed layer line: " + line);
                 List<String> parts = new ArrayList<>();
                 for(String p : f[2].split(",")) {
                     if(!p.isEmpty())
                         parts.add(p);
                 }
-                m.entries.add(new Entry(f[1], parts));
+                String codec = (f.length >= 4) ? f[3].strip() : "raw";
+                m.entries.add(new Entry(f[1], parts, codec));
             } else {
                 throw new IOException("Unrecognized manifest line: " + line);
             }

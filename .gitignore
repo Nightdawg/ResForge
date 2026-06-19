@@ -4,3 +4,6 @@ build/
 *.iml
 out/
 bin/
+
+# Real .res files from a game install for local validation — copyrighted, never commit.
+/samples/
