@@ -106,6 +106,7 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 | `tex`              | `*.pre.bin` + image + `*.post.bin` | swap a 3D model texture |
 | `audio2`           | `*.audhdr` + `*.ogg`    | swap a sound (Ogg Vorbis) |
 | `props`            | `*.json`                | edit typed props as JSON |
+| `action`           | `*.json`                | edit button/keybind as JSON |
 | `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
@@ -164,6 +165,13 @@ JSON-native `tto` types are handled (string, integer, float64, nested list/map,
 nil); coords, colors, byte blobs, `float32`, norm numbers, resource specs, etc.
 keep the layer raw. (Real example — `knarr.res`: `{ "place": ["surface", "map"] }`.)
 
+The `action` layer (button/keybind metadata, `haven.Resource.AButton`) is a
+fixed-shape record — `string parent; uint16 parentVer; string name; string
+prereq; uint16 hotkey; uint16 adCount; string[] ad` — with no type ambiguity, so
+it is exposed as editable JSON via the same decode → JSON → re-encode → compare
+guard (codec `action`). Rebinding a hotkey or renaming a button is a one-line
+JSON edit.
+
 `manifest.txt` example:
 
 ```
@@ -206,6 +214,7 @@ hafen-resedit/
     layers/AudioInfo.java            # audio2 header parse + Ogg split point
     layers/ImageMagic.java           # encoded-image magic-byte detection
     layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
+    layers/ActionCodec.java          # action <-> JSON (deterministic record)
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
@@ -302,16 +311,22 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   (`OggS`-validated). End-to-end on `customclient/sfx/alchemistTheme.res`:
   `info` → `id="cl" vol=1.000 ogg @ +6`; unpack produced a 1.16 MB `.ogg`;
   repack was byte-identical.
+- **`action` codec (2026-06-19)**: all **76** action layers exposed as editable
+  JSON (`action` histogram = `json 76`). End-to-end on
+  `customclient/menugrid/Bots.res`: `info` → `"| Bots |" hotkey=66 'B'`; edited
+  the JSON to rebind the hotkey to `71 'G'`, repacked (`verify` PASS), and `info`
+  on the result confirmed the change.
 
 ---
 
 ## 8. Possible next steps
 
 - ~~Validate against real `.res` files~~ (§7), ~~`tex` 3D-texture editing~~ (§3),
-  ~~typed `props` editing~~ (§3), and ~~`audio2` sound swapping~~ (§3) are all done.
+  ~~typed `props` editing~~ (§3), ~~`audio2` sound swapping~~ (§3), and
+  ~~`action` button/keybind editing~~ (§3) are all done.
 - Add typed editors for `neg`/`obst` (collision/boundary geometry; note `obst`
-  uses lossy `float16`, so preserve raw bits), `action` (button/keybind metadata,
-  76 seen in the wild), and eventually `vbuf2`/`mesh`/`manim` (port `mkres`).
+  uses lossy `float16`, so preserve raw bits) and eventually
+  `vbuf2`/`mesh`/`manim` (port the relevant parts of `mkres`).
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32) using
   an explicit tagged JSON form, to expose props that currently stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that

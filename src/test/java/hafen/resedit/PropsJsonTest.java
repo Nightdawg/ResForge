@@ -2,6 +2,7 @@ package hafen.resedit;
 
 import hafen.resedit.io.Json;
 import hafen.resedit.io.MessageWriter;
+import hafen.resedit.layers.ActionCodec;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.res.Layer;
 import hafen.resedit.res.Manifest;
@@ -120,5 +121,52 @@ class PropsJsonTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> props = (Map<String, Object>) PropsCodec.decode(propsData).get("props");
         assertEquals(List.of("surface", "ocean"), props.get("place"));
+    }
+
+    /** Mirrors a real action record: parent + ver + name + prereq + hotkey + ad[]. */
+    private static byte[] actionLayer() {
+        MessageWriter w = new MessageWriter();
+        w.string("customclient/menugrid/CustomClientExtras"); // parent
+        w.uint16(4);                                          // parentVer
+        w.string("| Bots |");                                 // name
+        w.string("");                                         // prereq
+        w.uint16(66);                                         // hotkey 'B'
+        w.uint16(0);                                          // adCount
+        return w.toByteArray();
+    }
+
+    @Test
+    void actionDecodeEncodeIsLossless() {
+        byte[] payload = actionLayer();
+        Map<String, Object> m = ActionCodec.decode(payload);
+        assertEquals("| Bots |", m.get("name"));
+        assertEquals(66L, m.get("hotkey"));
+        assertEquals(4L, m.get("parentVer"));
+        assertEquals(List.of(), m.get("ad"));
+        assertArrayEquals(payload, ActionCodec.encode(m));
+        assertNotNull(ActionCodec.toJsonIfLossless(payload));
+    }
+
+    @Test
+    void actionLayerRoundTripsAndIsEditable(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(50);
+        res.layers.add(new Layer("action", actionLayer()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("a.resdir");
+        Files.createDirectories(dir);
+        Manifest m = Unpacker.unpack(ResContainer.parse(original), dir);
+        assertEquals("action", m.entries.get(0).codec);
+        assertTrue(m.entries.get(0).parts.get(0).endsWith(".json"));
+        assertArrayEquals(original, Packer.pack(dir).serialize());
+
+        // Rebind the hotkey 'B'(66) -> 'C'(67) and confirm it survives a repack.
+        Path json = dir.resolve(m.entries.get(0).parts.get(0));
+        String edited = Files.readString(json, StandardCharsets.UTF_8)
+                .replace("\"hotkey\": 66", "\"hotkey\": 67");
+        Files.writeString(json, edited, StandardCharsets.UTF_8);
+
+        byte[] actionData = Packer.pack(dir).layers.get(0).data;
+        assertEquals(67L, ActionCodec.decode(actionData).get("hotkey"));
     }
 }
