@@ -4,6 +4,41 @@ A standalone tool to **decompile, edit, and recompile Haven & Hearth `.res`
 files** for modding. It unpacks a `.res` into an editable folder and repacks it
 back — byte-for-byte identical when nothing is changed.
 
+## Quick start (common mods)
+
+Build the tool once, then use the jar (handles paths with spaces):
+
+```sh
+./gradlew jar
+# the jar is at build/libs/hafen-resedit-0.1.0.jar
+alias resedit='java -jar build/libs/hafen-resedit-0.1.0.jar'
+```
+
+```sh
+# See what's inside a file, or what's moddable across a whole folder:
+resedit info   horse.res
+resedit catalog C:\Haven\res
+
+# Swap a single asset in one command (the originals are format-checked):
+resedit replace horse.res image  newicon.png   horse.res   # 2D icon / sprite
+resedit replace horse.res tex    newskin.jpg    horse.res   # 3D model texture
+resedit replace theme.res audio2 newsound.ogg   theme.res   # sound
+resedit replace ui.res    font   myfont.ttf     ui.res      # UI font
+
+# Edit text / typed data: unpack, edit the file, pack:
+resedit unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
+resedit pack   horse.resdir         # -> horse.res
+
+# Look at a 3D model (opens in Blender / Windows 3D Viewer):
+resedit obj    horse.res horse.obj
+```
+
+`replace` is the easy path for re-skinning; `unpack`/`pack` is for editing text
+(`tooltip`/`pagina`) and typed JSON (`props`, `action` keybinds). Editing can
+never silently corrupt a file — typed layers are only exposed when they
+re-encode byte-for-byte, otherwise they stay raw.
+
+
 ## The `.res` format
 
 A `.res` file is a tiny container (see `haven.Resource.load()` in the client):
