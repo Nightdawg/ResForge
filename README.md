@@ -32,6 +32,7 @@ equals the original payload, so `pack` can always rebuild the exact bytes.
 |-------------------|------------------------------|--------------------------|
 | `image`           | `*.imghdr` + `*.png`         | swap the PNG texture     |
 | `tex`             | `*.pre.bin` + image + `*.post.bin` | swap a 3D model's texture (JPEG/PNG) |
+| `audio2`          | `*.audhdr` + `*.ogg`         | swap a sound (Ogg Vorbis) |
 | `props`           | `*.json`                     | edit typed properties as JSON |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |
@@ -50,6 +51,10 @@ exposed as editable `*.json`, but **only when the round-trip is provably
 lossless** — the tool decodes, re-serializes to JSON, re-encodes, and checks it
 reproduces the original bytes before offering JSON; otherwise the layer stays a
 raw `.bin`. So editing props can never silently corrupt a resource.
+
+`audio2` layers hold sound effects/music as Ogg Vorbis. The audio runs to the
+end of the payload (like `image`), so it is split into a verbatim `*.audhdr`
+header and a replaceable `*.ogg` — drop in any Ogg Vorbis file to swap a sound.
 
 ## Usage
 
@@ -99,6 +104,7 @@ package mirrors `haven.Message` primitives for decoding payloads.
 ## Status / scope
 
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
-for 2D images (`image`), 3D model textures (`tex`), typed properties (`props`,
-as JSON), and text. Deeper typed editing (meshes, animations, collision
-geometry) can be layered on incrementally using the same parts model.
+for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), typed
+properties (`props`, as JSON), and text. Deeper typed editing (meshes,
+animations, collision geometry) can be layered on incrementally using the same
+parts model.

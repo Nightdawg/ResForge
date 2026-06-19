@@ -66,6 +66,16 @@ class RoundTripTest {
         return w.toByteArray();
     }
 
+    /** Builds an audio2-layer payload: ver2 header + an (OggS-prefixed) audio blob. */
+    private static byte[] audioLayer() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(2);             // ver
+        w.string("cl");         // id
+        w.uint16(1000);         // vol -> bvol 1.0
+        w.bytes(new byte[]{0x4F, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00, 0x00, 0x01, 0x02});
+        return w.toByteArray();
+    }
+
     private static ResContainer sample() {
         ResContainer res = new ResContainer(7);
         res.layers.add(new Layer("image", imageLayer()));
@@ -139,6 +149,29 @@ class RoundTripTest {
 
         byte[] repacked = Packer.pack(dir).serialize();
         assertArrayEquals(original, repacked, "untouched tex must repack byte-identically");
+    }
+
+    @Test
+    void audioLayerSplitsAndRoundTrips(@TempDir Path tmp) throws Exception {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("audio2", audioLayer()));
+        byte[] original = res.serialize();
+
+        Path dir = tmp.resolve("aud.resdir");
+        Files.createDirectories(dir);
+        Manifest m = Unpacker.unpack(ResContainer.parse(original), dir);
+        assertEquals(2, m.entries.get(0).parts.size());
+        assertTrue(m.entries.get(0).parts.get(1).endsWith(".ogg"));
+
+        assertArrayEquals(original, Packer.pack(dir).serialize(), "untouched audio must repack byte-identically");
+
+        // Swapping the .ogg for a larger one grows only the audio layer.
+        Path ogg = dir.resolve(m.entries.get(0).parts.get(1));
+        ByteArrayOutputStream bigger = new ByteArrayOutputStream();
+        bigger.writeBytes(Files.readAllBytes(ogg));
+        bigger.writeBytes(new byte[64]);
+        Files.write(ogg, bigger.toByteArray());
+        assertEquals(audioLayer().length + 64, Packer.pack(dir).layers.get(0).data.length);
     }
 
     @Test

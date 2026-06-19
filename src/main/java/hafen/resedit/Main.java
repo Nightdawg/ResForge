@@ -86,6 +86,12 @@ public class Main {
                 } catch(RuntimeException e) {
                     /* opaque props: leave as-is */
                 }
+            } else if(l.name.equals("audio2")) {
+                hafen.resedit.layers.AudioInfo ai = hafen.resedit.layers.AudioInfo.parse(l.data);
+                if(ai.recognized)
+                    System.out.printf(" id=\"%s\" vol=%.3f", ai.id, ai.bvol);
+                if(ai.format != null)
+                    System.out.printf("  %s @ +%d", ai.format, ai.audioOffset);
             }
             System.out.println();
         }
