@@ -1,5 +1,6 @@
 package hafen.resedit.res;
 
+import hafen.resedit.layers.AudioInfo;
 import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.layers.PropsCodec;
 import hafen.resedit.layers.TexInfo;
@@ -64,6 +65,17 @@ public class Unpacker {
                 Files.write(outDir.resolve(postPart), post);
                 return new Manifest.Entry(layer.name,
                         new ArrayList<>(Arrays.asList(prePart, imgPart, postPart)), "tex");
+            }
+        } else if(layer.name.equals("audio2")) {
+            AudioInfo ai = AudioInfo.parse(layer.data);
+            if(ai.audioOffset > 0 && ai.format != null && ai.audioOffset <= layer.data.length) {
+                byte[] header = Arrays.copyOfRange(layer.data, 0, ai.audioOffset);
+                byte[] audio = Arrays.copyOfRange(layer.data, ai.audioOffset, layer.data.length);
+                String hdrPart = LAYERS_SUBDIR + "/" + base + ".audhdr";
+                String audPart = LAYERS_SUBDIR + "/" + base + "." + ai.format;
+                Files.write(outDir.resolve(hdrPart), header);
+                Files.write(outDir.resolve(audPart), audio);
+                return new Manifest.Entry(layer.name, new ArrayList<>(Arrays.asList(hdrPart, audPart)));
             }
         } else if(layer.name.equals("props")) {
             String json = PropsCodec.toJsonIfLossless(layer.data);

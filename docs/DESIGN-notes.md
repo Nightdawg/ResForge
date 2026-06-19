@@ -104,6 +104,7 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 |--------------------|-------------------------|-----------------------|
 | `image`            | `*.imghdr` + `*.png`    | swap the PNG texture  |
 | `tex`              | `*.pre.bin` + image + `*.post.bin` | swap a 3D model texture |
+| `audio2`           | `*.audhdr` + `*.ogg`    | swap a sound (Ogg Vorbis) |
 | `props`            | `*.json`                | edit typed props as JSON |
 | `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
@@ -202,6 +203,7 @@ hafen-resedit/
     res/Verifier.java                # batch round-trip + image/tex split validation
     layers/ImageInfo.java            # image header parse + PNG split point
     layers/TexInfo.java              # tex header parse + embedded-image split point
+    layers/AudioInfo.java            # audio2 header parse + Ogg split point
     layers/ImageMagic.java           # encoded-image magic-byte detection
     layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
   src/test/java/hafen/resedit/
@@ -286,16 +288,30 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   `{ "place": ["surface", "map"] }`; adding a key and repacking passed `verify`
   (462841 → 462867 bytes) and survived a re-unpack. The lossless-or-raw guard
   classifies each props layer as `json` or `raw` in the `verify` report.
+- **Large-scale validation (2026-06-19)** — the user's full custom-client asset
+  set, **661 `.res` files** (~70 MB; plus 21 raw `.png`/`.wav` the client uses
+  directly): **660/661 PASS, byte-identical**. The single "failure" is correct —
+  `customclient/uiThemes/Trollex Blue/chat-mid.res` is not a resource at all (11
+  zero bytes followed by a raw PNG; bad signature). Aggregate layer counts
+  included **669 `image`** (all old-style headers, all split + `ImageIO`-decoded),
+  269 `tooltip`, 76 `action`, 32 `audio2`, 30 `pagina`, 21 `tex`, plus `font`,
+  `light`, `code`, `src`, `anim`, `obst`, `mesh`/`vbuf2`/`mat2`/… The new-style
+  (`tto`) `image` header did **not** appear in any of the 669 images — it is
+  effectively unused, and the magic-scan fallback covers it regardless.
+- **`audio2` codec (2026-06-19)**: all **32** audio layers split into `*.ogg`
+  (`OggS`-validated). End-to-end on `customclient/sfx/alchemistTheme.res`:
+  `info` → `id="cl" vol=1.000 ogg @ +6`; unpack produced a 1.16 MB `.ogg`;
+  repack was byte-identical.
 
 ---
 
 ## 8. Possible next steps
 
 - ~~Validate against real `.res` files~~ (§7), ~~`tex` 3D-texture editing~~ (§3),
-  and ~~typed `props` editing~~ (§3, as JSON) are all done.
+  ~~typed `props` editing~~ (§3), and ~~`audio2` sound swapping~~ (§3) are all done.
 - Add typed editors for `neg`/`obst` (collision/boundary geometry; note `obst`
-  uses lossy `float16`, so preserve raw bits) and `action`/`pagina` metadata, and
-  eventually `vbuf2`/`mesh`/`manim` (port the relevant parts of `mkres`).
+  uses lossy `float16`, so preserve raw bits), `action` (button/keybind metadata,
+  76 seen in the wild), and eventually `vbuf2`/`mesh`/`manim` (port `mkres`).
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32) using
   an explicit tagged JSON form, to expose props that currently stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
