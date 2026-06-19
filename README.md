@@ -83,6 +83,25 @@ whole MIDI file, exposed as `*.mid`.
 ./gradlew run --args="pack horse.resdir"
 ```
 
+Swap a single asset in one shot, without unpacking the whole resource — pick a
+layer by name (`image`), name + occurrence (`tex#2`), or absolute index (`#5`):
+
+```sh
+# Replace an icon, a 3D texture, a sound, or a font:
+./gradlew run --args="replace horse.res image newicon.png horse.res"
+./gradlew run --args="replace horse.res tex newskin.jpg horse.res"
+./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
+./gradlew run --args="replace ui.res font myfont.ttf ui.res"
+
+# Replace text or typed JSON (tooltip/pagina, or props/action):
+./gradlew run --args="replace horse.res tooltip newtip.txt horse.res"
+./gradlew run --args="replace menu.res action newaction.json menu.res"
+```
+
+If the output path is omitted, `replace` overwrites the input file in place.
+Replacement media is format-checked (PNG/JPEG for images, `OggS` for audio,
+sfnt for fonts), so a wrong file type is rejected rather than written.
+
 Validate a file (or a whole folder, recursively) without unpacking — checks
 that parse/serialize and unpack/pack are byte-identical and that every `image`
 layer's embedded picture splits cleanly (decodable on its own):

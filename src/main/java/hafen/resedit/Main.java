@@ -4,6 +4,7 @@ import hafen.resedit.layers.ImageInfo;
 import hafen.resedit.res.Layer;
 import hafen.resedit.res.Manifest;
 import hafen.resedit.res.Packer;
+import hafen.resedit.res.Replacer;
 import hafen.resedit.res.ResContainer;
 import hafen.resedit.res.Unpacker;
 import hafen.resedit.res.Verifier;
@@ -16,9 +17,11 @@ import java.nio.file.Path;
  * Command-line entry point for hafen-resedit.
  *
  * Usage:
- *   info   <file.res>
- *   unpack <file.res> [outDir]
- *   pack   <dir> [out.res]
+ *   info    <file.res>
+ *   unpack  <file.res> [outDir]
+ *   pack    <dir> [out.res]
+ *   replace <file.res> <selector> <newfile> [out.res]
+ *   verify  <file.res | dir>
  */
 public class Main {
     public static void main(String[] args) {
@@ -41,6 +44,7 @@ public class Main {
             case "info":   info(args);   break;
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
+            case "replace": replace(args); break;
             case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
@@ -158,6 +162,20 @@ public class Main {
             System.exit(1);
     }
 
+    private static void replace(String[] args) throws IOException {
+        if(args.length < 4)
+            throw new UsageException("replace requires <file.res> <selector> <newfile> [out.res]");
+        Path file = Path.of(args[1]);
+        String selector = args[2];
+        Path newFile = Path.of(args[3]);
+        Path out = (args.length >= 5) ? Path.of(args[4]) : file;
+        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
+        int idx = Replacer.replace(res, selector, Files.readAllBytes(newFile));
+        Files.write(out, res.serialize());
+        System.out.printf("Replaced layer [%d] %s in %s with %s -> %s%n",
+                idx, res.layers.get(idx).name, file, newFile, out);
+    }
+
     private static void usage() {
         System.out.println("hafen-resedit — Haven & Hearth .res mod tool");
         System.out.println();
@@ -165,6 +183,9 @@ public class Main {
         System.out.println("  info   <file.res>            Show version and layer summary");
         System.out.println("  unpack <file.res> [outDir]   Decompile into an editable folder");
         System.out.println("  pack   <dir> [out.res]       Recompile a folder into a .res file");
+        System.out.println("  replace <file.res> <layer> <newfile> [out.res]");
+        System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
+        System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
 

@@ -201,7 +201,7 @@ hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info | unpack | pack | verify
+    Main.java                        # CLI: info | unpack | pack | replace | verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -209,7 +209,8 @@ hafen-resedit/
     res/Layer.java                   # (name, byte[] payload)
     res/Manifest.java                # read/write manifest.txt (+ per-layer codec)
     res/Unpacker.java                # .res -> folder (parts model)
-    res/Packer.java                  # folder -> .res (raw | tex | props codecs)
+    res/Packer.java                  # folder -> .res (raw | tex | props | action codecs)
+    res/Replacer.java                # one-shot single-asset swap
     res/Verifier.java                # batch round-trip + image/tex split validation
     layers/ImageInfo.java            # image header parse + PNG split point
     layers/TexInfo.java              # tex header parse + embedded-image split point
@@ -221,6 +222,7 @@ hafen-resedit/
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
+    ReplaceTest.java                 # one-shot replace tests
   README.md
   docs/DESIGN-notes.md               # this file
 ```
@@ -240,6 +242,10 @@ hafen-resedit/
 
 # Recompile -> horse.res
 ./gradlew run --args="pack horse.resdir"
+
+# One-shot single-asset swap (image/tex/audio2/font/midi/tooltip/pagina/props/action)
+./gradlew run --args="replace horse.res image newicon.png horse.res"
+./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
 
 # Validate real files (single file or a folder, recursive)
 ./gradlew run --args="verify path/to/horse.res"
@@ -326,18 +332,47 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   byte-identical. `midi` layers (none in the sample set) are exposed as `.mid`.
   Note: `gradlew run --args` mishandles paths containing spaces — use the built
   jar (`java -jar …`) for such paths; the tool itself handles them correctly.
+- **`replace` command (2026-06-19)**: one-shot single-asset swap. Demos: a
+  generated PNG swapped into `apple.res` (`image` 2742 → 414 bytes, tooltip
+  untouched, `verify` PASS); and a cross-file sound swap putting
+  `berserkerTheme`'s Ogg into `alchemistTheme.res` (`verify` PASS, length
+  recomputed). Format checks reject a wrong file type before writing.
 
 ---
 
-## 8. Possible next steps
+## 8. The 3D geometry pipeline (plan, not yet built)
 
-- ~~Validate against real `.res` files~~ (§7), ~~`tex` 3D-texture editing~~ (§3),
-  ~~typed `props` editing~~ (§3), ~~`audio2` sound swapping~~ (§3), and
-  ~~`action` button/keybind editing~~ (§3), and ~~`font`/`midi` swapping~~ (§3)
-  are all done.
+Context from the game developer: the 3D models are authored in **Blender** and
+exported as **Ogre XML** (`.mesh.xml` / `.skeleton.xml`), then compiled by the
+dev's `mkres` tool into the binary `vbuf2` / `mesh` / `bones` / `skel` / `skan`
+layers. The shared `reference/mkres-fragment.py` *is* that Ogre-XML → binary
+encoder: `vertexbuf.parse()` reads `<vbuffer>` nodes and `vertexlay` writes each
+attribute in a chosen on-wire format (`f4`/`f2`, `sn4`/`sn2`/`sn1`,
+`un4`/`un2`/`un1`, `rn*`, `uvec*`), which matches `haven.Message`'s float/norm
+primitives and `NormNumber`.
+
+A full editable 3D round-trip therefore means two halves:
+1. **Decode** `vbuf2`/`mesh`/… → an editable form (ideally Ogre XML, so it can be
+   re-imported into Blender). This is the inverse of `mkres` and must read the
+   per-layer attribute table (names + element counts + formats) before the
+   vertex/index data.
+2. **Encode** Ogre XML → `vbuf2`/`mesh`/… by porting the relevant parts of
+   `mkres-fragment.py` to Java.
+
+Risk/effort: high, and **hard to validate here** — there is no reference `mkres`
+binary to diff against, and the float/norm formats are lossy, so a faithful
+round-trip needs the exact per-attribute format the original used (recorded, not
+guessed). Recommended approach for a future session: start read-only — decode a
+`vbuf2` header + attribute table and report it (extending `info`/`verify`), diff
+the understanding against several real `mesh`/`vbuf2` layers, *then* attempt the
+XML emit and the `mkres` port behind the usual “lossless-or-raw” guard. Until
+then these layers remain lossless raw `.bin` (already safe to pass through).
+
+## 9. Possible next steps
+
 - Add typed editors for `neg`/`obst` (collision/boundary geometry; note `obst`
   uses lossy `float16`, so preserve raw bits) and eventually
-  `vbuf2`/`mesh`/`manim` (port the relevant parts of `mkres`).
+  `vbuf2`/`mesh`/`manim` (port `mkres`; see §8).
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32) using
   an explicit tagged JSON form, to expose props that currently stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
@@ -348,7 +383,7 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
 
 ---
 
-## 9. Environment gotcha
+## 10. Environment gotcha
 
 The dev machine's `JAVA_HOME` was set to `...\graalvm-jdk-21.0.9+7.1\bin`
 (includes `\bin`), which Gradle rejects. It must point at the **JDK root**
