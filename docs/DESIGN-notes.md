@@ -201,7 +201,7 @@ hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info | unpack | pack | replace | verify
+    Main.java                        # CLI: info | unpack | pack | replace | obj | verify
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -222,6 +222,8 @@ hafen-resedit/
     layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector (incl. bones)
     layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
     layers/TtoSkip.java              # generic tto value skipper
+    model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays
+    model/ObjExport.java             # 3D geometry -> Wavefront OBJ
   src/test/java/hafen/resedit/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
@@ -347,6 +349,16 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
   histogram = `walked 9, stopped@bones 2`). `info` reports e.g. `knarr` → 12838
   verts `[pos2(sn2), nrm2(uvec1), tan2(uvec1), bit2(uvec1), tex2(sn2),
   otex2(sn2), bones2(un1)]`. Read-only; the layers stay lossless raw.
+- **Full 3D decode (2026-06-20)**: after adding bone-data walking and the `mesh`
+  index decoder (incl. delta-strip), all sample 3D layers decode to the exact end
+  of payload — `verify` Vbuf2 histogram = `walked 11`, Mesh histogram =
+  `decoded 41`.
+- **3D OBJ export (2026-06-20)**: `model/Vbuf2Data` de-quantises vertex
+  attributes and `model/ObjExport` writes a Wavefront OBJ. Validated on real
+  models: `male.res` → 1325 verts / 2248 tris, bbox x[-1.3,1.7] y[-5.0,5.0]
+  z[-0.1,12.8] (humanoid); `knarr.res` → 12838 verts / 16952 tris / 21 submeshes,
+  bbox x[-81,84] y[-42,42] z[-16,108] (ship). Counts match the decoders and the
+  bounding boxes are geometrically plausible.
 
 ---
 
@@ -416,8 +428,12 @@ layers remain lossless raw `.bin`.
 
 1. ~~Decode the bone data and the `mesh` index layer~~ (done — see above);
    `skel`/`skan` (skeleton + animations) are still raw.
-2. Emit an editable form — ideally **Ogre XML**, so it re-imports into Blender —
-   and port `mkres-fragment.py` to Java for the XML → binary direction.
+2. ~~Emit an editable form~~ — a read-only **Wavefront OBJ** export is built
+   (`model/Vbuf2Data.java` de-quantises positions/normals/texcoords;
+   `model/ObjExport.java` emits OBJ; CLI `obj`). Validated: `male` → 1325 verts /
+   2248 tris (humanoid bbox), `knarr` → 12838 verts / 16952 tris / 21 submeshes
+   (ship bbox). For a Blender *round-trip* (editing back to `.res`), emit **Ogre
+   XML** instead and port `mkres-fragment.py` to Java for the XML → binary path.
 3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
