@@ -1,6 +1,7 @@
 package hafen.resedit;
 
 import hafen.resedit.layers.ImageInfo;
+import hafen.resedit.model.ObjExport;
 import hafen.resedit.res.Layer;
 import hafen.resedit.res.Manifest;
 import hafen.resedit.res.Packer;
@@ -45,6 +46,7 @@ public class Main {
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
+            case "obj":    obj(args);    break;
             case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
@@ -174,6 +176,29 @@ public class Main {
             System.exit(1);
     }
 
+    private static void obj(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("obj requires a .res file");
+        Path file = Path.of(args[1]);
+        String name = file.getFileName().toString();
+        Path out;
+        if(args.length >= 3) {
+            out = Path.of(args[2]);
+        } else {
+            String n = name;
+            if(n.toLowerCase().endsWith(".res"))
+                n = n.substring(0, n.length() - 4);
+            out = file.resolveSibling(n + ".obj");
+        }
+        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
+        ObjExport.Result r = ObjExport.toObj(res, name);
+        if(r.vertices == 0 || r.triangles == 0)
+            throw new RuntimeException("no 3D geometry (vbuf2/mesh) found in " + file);
+        Files.writeString(out, r.obj);
+        System.out.printf("Exported %d vertices, %d triangles (%d submeshes) -> %s%n",
+                r.vertices, r.triangles, r.submeshes, out);
+    }
+
     private static void replace(String[] args) throws IOException {
         if(args.length < 4)
             throw new UsageException("replace requires <file.res> <selector> <newfile> [out.res]");
@@ -198,6 +223,7 @@ public class Main {
         System.out.println("  replace <file.res> <layer> <newfile> [out.res]");
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
+        System.out.println("  obj    <file.res> [out.obj]  Export 3D geometry to a Wavefront OBJ");
         System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
 

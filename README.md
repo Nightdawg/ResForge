@@ -102,6 +102,17 @@ If the output path is omitted, `replace` overwrites the input file in place.
 Replacement media is format-checked (PNG/JPEG for images, `OggS` for audio,
 sfnt for fonts), so a wrong file type is rejected rather than written.
 
+Export a model's 3D geometry to a Wavefront **OBJ** you can open in Blender,
+MeshLab, or the Windows 3D Viewer:
+
+```sh
+./gradlew run --args="obj horse.res horse.obj"
+```
+
+This de-quantises the `vbuf2` vertex buffers (positions, normals, texture
+coords) and turns each `mesh` layer into an OBJ group. It is read-only — a
+viewing/inspection aid; editing geometry back into `.res` is future work.
+
 Validate a file (or a whole folder, recursively) without unpacking — checks
 that parse/serialize and unpack/pack are byte-identical and that every `image`
 layer's embedded picture splits cleanly (decodable on its own):
