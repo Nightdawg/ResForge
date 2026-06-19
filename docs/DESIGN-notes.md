@@ -8,6 +8,10 @@ created. Keep it with the code so the context isn't lost.
 - **Origin:** Built alongside the Haven & Hearth client repo (`hafen-client`),
   by reverse-engineering `src/haven/Resource.java` and `src/haven/Message.java`.
 - **Tool location:** `IdeaProjects/hafen-resedit` (standalone Gradle/Java project).
+- **Reference sources:** verbatim copies of the authoritative files live in
+  [`reference/`](reference/) — `Resource.java`, `Message.java`,
+  `NormNumber.java`, and `mkres-fragment.py` (see `reference/README.md` for
+  provenance and licensing).
 
 ---
 
