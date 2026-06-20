@@ -51,10 +51,13 @@ a sibling project at `../hafen-client`).
 ## 3. CLI commands (`resforge.Main`)
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
-`obj <file> [out.obj]` · `transform <file> <sx> <sy> <sz> [out]` ·
+`obj <file> [out.obj]` · `gltf <file> [out.glb]` ·
+`transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
-`.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`.)
+`.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
+exports the 3D model as a Blender-ready binary glTF; `obj` is the simpler legacy
+export.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
@@ -70,8 +73,8 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
-Toolbar: Open, Fetch, Save As, Export OBJ, **References…** (aggregated reference
-report dialog), **resource-version spinner** (uint16).
+Toolbar: Open, Fetch, Save As, Export OBJ, **Export glTF** (Blender-ready .glb),
+References… (aggregated reference report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
 ## 5. Architecture (packages under `src/main/java/resforge/`)
@@ -94,8 +97,10 @@ report dialog), **resource-version spinner** (uint16).
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
-  (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ +
-  a `.mtl` and the local `tex` image(s), so models open textured).
+  (structure-preserving vbuf2 encode), `GltfExport` (geometry → Blender-ready
+  binary glTF `.glb`, with both UV sets + embedded textures, dependency-free),
+  `ObjExport` (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex`
+  image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -169,9 +174,15 @@ report dialog), **resource-version spinner** (uint16).
 ## 10. Open / next steps
 - **In-game test of the `transform` write path** (user-side; the one thing not
   auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
-- **3D import** (edit in Blender → back to `.res`): port `mkres` (Ogre-XML or OBJ
-  → vbuf2/mesh, re-strip + re-quantise) behind lossless-or-raw — needs the in-game
-  loop. `Vbuf2Codec` is the structure-preserving foundation.
+- **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
+  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1a
+  done** — `GltfExport` writes a static textured `.glb` (positions/normals + both UV
+  sets + per-submesh materials/textures, Z-up→Y-up). **Next:** add skeleton (skin +
+  `JOINTS_0`/`WEIGHTS_0` — needs `Vbuf2Data` to read bones), `skan`→glTF animations,
+  `manim`→morph targets; then **glTF import** to re-encode (vbuf2/mesh re-strip +
+  re-quantise, behind lossless-or-raw). The Haven *encode* toolkit is fully present
+  in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
+  `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.

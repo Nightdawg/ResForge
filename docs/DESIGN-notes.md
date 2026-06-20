@@ -490,16 +490,27 @@ needs the in-game feedback loop.
 
 ## 9. Possible next steps
 
-- Eventually edit `vbuf2`/`mesh`/`manim` (port `mkres`; see §8). (`mat2`, `anim`,
+- **3D round-trip via glTF** (format decided 2026-06-21 with the game dev loftar —
+  glTF over Ogre XML, which has no modern Blender importer, and over OBJ, which
+  can't carry Haven's two UV sets or skeleton bindings). **Phase 1a is done:**
+  `GltfExport` writes a static, textured binary glTF (`.glb`) — positions, normals,
+  both UV sets (`tex`→`TEXCOORD_0`, `otex`→`TEXCOORD_1`), per-submesh materials with
+  embedded textures, Haven Z-up→glTF Y-up. Dependency-free (our `Json` + a binary
+  buffer). **Remaining:** skeleton (glTF skin + `JOINTS_0`/`WEIGHTS_0`, needs
+  `Vbuf2Data` to read bones), `skan`→glTF animations, `manim`→morph targets; then
+  the **glTF import** path (re-encode vbuf2/mesh with re-strip + re-quantise behind
+  lossless-or-raw). The Haven encode toolkit is fully in the client
+  (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
+  `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
+- Eventually edit `vbuf2`/`mesh`/`manim` directly. (`mat2`, `anim`,
   `neg` and `obst` are done — editable JSON via
   `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`; `code`/`codeentry`, the
   dependency layers `deps`/`rlink`/`src`, and the rig/light/morph layers
   `light`/`skel`/`skan`/`boneoff`/`manim` are decoded read-only via
   `CodeInfo`/`CodeEntryInfo`/`DepsInfo`/`RLinkInfo`/`SrcInfo`/`LightInfo`/`SkelInfo`/
   `SkanInfo`/`BoneOffInfo`/`MeshAnimInfo` — every sample layer type is now decoded.)
-  The rig decoders + the new `cpfloat`/norm io primitives are the groundwork for a
-  future skeleton/animation **write** path (which would benefit from the dev's
-  `mkres` skeleton encoder).
+  The rig decoders + the `cpfloat`/norm io primitives are the groundwork for the
+  skeleton/animation **write** path.
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32, the
   last now possible via the new `float16`/`MessageWriter.float16` codec) using an
   explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.
