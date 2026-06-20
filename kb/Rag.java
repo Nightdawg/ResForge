@@ -12,20 +12,24 @@ import java.util.stream.Stream;
 
 /**
  * A tiny, dependency-free local RAG (retrieval) over the project's Markdown
- * knowledge base. Run directly with Java's single-file launcher (no build):
+ * notes AND Java source. Run directly with Java's single-file launcher (no build):
  *
  *   java kb/Rag.java query "how does the tex codec recompute length" [-k 5] [-d docs -d kb/notes]
  *   java kb/Rag.java list                       # show every indexed chunk
  *
- * It splits each .md file into chunks at headings, ranks them against the query
- * with BM25 (classic lexical/keyword retrieval — the same family as FTS search),
- * and prints the most relevant chunks with their source and a snippet. This is
- * the "retrieval" half of retrieval-augmented generation: paste the results to
- * an AI (or read them yourself) to ground an answer in your own notes.
+ * Markdown (.md) is chunked at headings; Java (.java) is chunked into "documented
+ * declarations" — each comment block plus the class/method/field it annotates,
+ * tagged with the enclosing class. Chunks are ranked against the query with BM25
+ * (classic lexical/keyword retrieval — the same family as FTS search), and the
+ * most relevant are printed with their source and a snippet. This is the
+ * "retrieval" half of retrieval-augmented generation: feed the results to an AI
+ * (or read them yourself) to ground an answer in your own project.
  *
  * It is lexical, not semantic (no embeddings/vector DB) — by design: zero deps,
  * no model download, no network, and it indexes on the fly each run (the corpus
- * is small). To grow the knowledge base, just add Markdown files under kb/notes/.
+ * is small). Default sources: kb/notes, docs, README.md, src/main/java,
+ * src/test/java. Grow it by adding Markdown under kb/notes/ (or just write code
+ * comments — they're indexed too).
  */
 public class Rag {
     // BM25 parameters (standard defaults).
@@ -52,6 +56,9 @@ public class Rag {
         if(dirs.isEmpty()) {
             dirs.add(Path.of("kb/notes"));
             dirs.add(Path.of("docs"));
+            dirs.add(Path.of("README.md"));
+            dirs.add(Path.of("src/main/java"));
+            dirs.add(Path.of("src/test/java"));
         }
 
         List<Chunk> chunks = index(dirs);
@@ -66,7 +73,7 @@ public class Rag {
             }
             case "list":
                 for(Chunk c : chunks)
-                    System.out.printf("%-28s  %s  (%d terms)%n", c.file(), c.heading(), c.terms().size());
+                    System.out.printf("%-52s  %s  (%d terms)%n", c.file(), c.heading(), c.terms().size());
                 System.out.printf("%n%d chunks across %d file(s)%n", chunks.size(),
                         chunks.stream().map(Chunk::file).distinct().count());
                 break;
@@ -77,26 +84,45 @@ public class Rag {
 
     /* --------------------------------------------------------------- indexing */
 
-    static List<Chunk> index(List<Path> dirs) throws IOException {
+    static List<Chunk> index(List<Path> sources) throws IOException {
+        // Collect target files: each source may be a single file or a directory to walk.
+        List<Path> files = new ArrayList<>();
+        for(Path src : sources) {
+            if(Files.isRegularFile(src)) {
+                files.add(src);
+            } else if(Files.isDirectory(src)) {
+                try(Stream<Path> s = Files.walk(src)) {
+                    s.filter(Files::isRegularFile).forEach(files::add);
+                }
+            }
+        }
+        List<Path> targets = files.stream()
+                .filter(Rag::indexable)
+                .distinct()
+                .sorted(Comparator.comparing(Path::toString))
+                .toList();
+
         List<Chunk> chunks = new ArrayList<>();
-        for(Path dir : dirs) {
-            if(!Files.isDirectory(dir))
-                continue;
-            try(Stream<Path> s = Files.walk(dir)) {
-                List<Path> mds = new ArrayList<>();
-                s.filter(Files::isRegularFile)
-                 .filter(p -> p.getFileName().toString().toLowerCase().endsWith(".md"))
-                 .sorted(Comparator.comparing(Path::toString))
-                 .forEach(mds::add);
-                for(Path md : mds)
-                    chunkFile(md, chunks);
+        for(Path f : targets) {
+            try {
+                if(f.getFileName().toString().toLowerCase().endsWith(".java"))
+                    chunkJava(f, chunks);
+                else
+                    chunkMarkdown(f, chunks);
+            } catch(IOException e) {
+                System.err.println("skip " + f + ": " + e.getMessage());
             }
         }
         return chunks;
     }
 
+    static boolean indexable(Path p) {
+        String n = p.getFileName().toString().toLowerCase();
+        return n.endsWith(".md") || n.endsWith(".java");
+    }
+
     /** Split a Markdown file into chunks at heading lines (#, ##, ...). */
-    static void chunkFile(Path md, List<Chunk> out) throws IOException {
+    static void chunkMarkdown(Path md, List<Chunk> out) throws IOException {
         String content = Files.readString(md, StandardCharsets.UTF_8);
         String[] lines = content.split("\n", -1);
         String heading = "(intro)";
@@ -121,11 +147,95 @@ public class Rag {
         out.add(new Chunk(md, heading, text, terms(full)));
     }
 
+    /**
+     * Chunk a .java file into "documented declarations": each comment block plus
+     * the class/method/field declaration it precedes, tagged with the enclosing
+     * class name. Annotations and blank lines between the comment and the
+     * declaration are tolerated; an unattached trailing comment is kept on its own.
+     */
+    static void chunkJava(Path f, List<Chunk> out) throws IOException {
+        String content = Files.readString(f, StandardCharsets.UTF_8);
+        String[] lines = content.split("\n", -1);
+        String cls = classNameOf(lines, f);
+
+        List<String> comment = new ArrayList<>();
+        boolean inBlock = false;
+        for(String raw : lines) {
+            String line = raw.strip();
+            if(inBlock) {
+                comment.add(stripComment(line));
+                if(line.endsWith("*/"))
+                    inBlock = false;
+                continue;
+            }
+            if(line.startsWith("/*")) {
+                comment.add(stripComment(line));
+                inBlock = !line.endsWith("*/");
+                continue;
+            }
+            if(line.startsWith("//")) {
+                comment.add(stripComment(line));
+                continue;
+            }
+            if(line.isEmpty() || line.startsWith("@"))
+                continue;                       // tolerate blanks/annotations before the declaration
+            if(!comment.isEmpty()) {
+                emitJava(f, cls, comment, line, out);
+                comment.clear();
+            }
+        }
+        if(!comment.isEmpty())
+            emitJava(f, cls, comment, "", out);
+    }
+
+    static void emitJava(Path f, String cls, List<String> comment, String decl, List<Chunk> out) {
+        String body = String.join(" ", comment).replaceAll("\\s+", " ").strip();
+        String sig = decl.replaceAll("[{;]\\s*$", "").strip();
+        if(body.isEmpty() && sig.isEmpty())
+            return;
+        if(sig.length() > 100)
+            sig = sig.substring(0, 100) + "\u2026";
+        String heading = sig.isEmpty() ? cls + " (comment)" : cls + " :: " + sig;
+        String text = (sig.isEmpty() ? "" : sig + "\n") + body;
+        out.add(new Chunk(f, heading, text, terms(heading + " " + text)));
+    }
+
+    static String classNameOf(String[] lines, Path f) {
+        java.util.regex.Pattern p =
+                java.util.regex.Pattern.compile("\\b(?:class|interface|enum|record)\\s+(\\w+)");
+        for(String line : lines) {
+            var m = p.matcher(line);
+            if(m.find())
+                return m.group(1);
+        }
+        String n = f.getFileName().toString();
+        return n.endsWith(".java") ? n.substring(0, n.length() - 5) : n;
+    }
+
+    static String stripComment(String line) {
+        return line.replaceFirst("^/\\*\\*?", "")
+                   .replaceFirst("^//+", "")
+                   .replaceFirst("^\\*+", "")
+                   .replaceFirst("\\*/$", "")
+                   .strip();
+    }
+
+    /** Tokenize, also splitting camelCase / digit boundaries so `recomputeLength`
+     *  matches the words "recompute" and "length". */
     static List<String> terms(String s) {
         List<String> t = new ArrayList<>();
-        for(String tok : s.toLowerCase(Locale.ROOT).split("[^a-z0-9]+"))
-            if(tok.length() >= 2)
-                t.add(tok);
+        for(String raw : s.split("[^A-Za-z0-9]+")) {
+            if(raw.isEmpty())
+                continue;
+            String whole = raw.toLowerCase(Locale.ROOT);
+            if(whole.length() >= 2)
+                t.add(whole);
+            for(String part : raw.split("(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Za-z])(?=[0-9])|(?<=[0-9])(?=[A-Za-z])")) {
+                String pl = part.toLowerCase(Locale.ROOT);
+                if(pl.length() >= 2 && !pl.equals(whole))
+                    t.add(pl);
+            }
+        }
         return t;
     }
 
@@ -133,7 +243,7 @@ public class Rag {
 
     static void query(List<Chunk> chunks, String q, int k) {
         if(chunks.isEmpty()) {
-            System.out.println("No notes indexed. Add Markdown files under kb/notes/ (or pass -d <dir>).");
+            System.out.println("Nothing indexed. Add Markdown under kb/notes/ or pass -d <dir-or-file>.");
             return;
         }
         List<String> qterms = terms(q);
@@ -201,8 +311,10 @@ public class Rag {
 
     static void usage() {
         System.out.println("hafen-resedit knowledge-base retrieval (lexical BM25)\n");
-        System.out.println("  java kb/Rag.java query \"your question\" [-k N] [-d dir]...");
+        System.out.println("  java kb/Rag.java query \"your question\" [-k N] [-d dir-or-file]...");
         System.out.println("  java kb/Rag.java list");
-        System.out.println("\nDefault dirs: kb/notes, docs. Add Markdown under kb/notes/ to grow it.");
+        System.out.println("\nIndexes Markdown (.md, by heading) and Java (.java, by documented declaration).");
+        System.out.println("Default sources: kb/notes, docs, README.md, src/main/java, src/test/java.");
+        System.out.println("Add Markdown under kb/notes/ (or write code comments) to grow it.");
     }
 }
