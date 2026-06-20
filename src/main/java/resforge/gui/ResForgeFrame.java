@@ -1,5 +1,6 @@
 package resforge.gui;
 
+import resforge.model.GltfExport;
 import resforge.model.ObjExport;
 import resforge.res.Layer;
 import resforge.res.Replacer;
@@ -391,6 +392,7 @@ public class ResForgeFrame extends JFrame {
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
+        tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
         tb.add(new JButton(action("References\u2026", this::doShowReferences)));
         tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
@@ -630,6 +632,29 @@ public class ResForgeFrame extends JFrame {
             }
         } catch(Exception e) {
             error("OBJ export failed: " + e.getMessage());
+        }
+    }
+
+    private void doExportGltf() {
+        if(res == null)
+            return;
+        try {
+            GltfExport.Result r = GltfExport.toGlb(res, file != null ? file.getFileName().toString() : "model");
+            if(r.vertices == 0 || r.triangles == 0) {
+                info("This resource has no 3D geometry (vbuf2/mesh) to export.");
+                return;
+            }
+            JFileChooser fc = new JFileChooser(dir());
+            fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
+            fc.setSelectedFile(new File(baseName() + ".glb"));
+            if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                Files.write(fc.getSelectedFile().toPath(), r.glb);
+                setStatus("Exported " + r.vertices + " vertices, " + r.triangles
+                        + " triangles (" + r.submeshes + " submeshes, " + r.textures
+                        + " texture(s)) as glTF");
+            }
+        } catch(Exception e) {
+            error("glTF export failed: " + e.getMessage());
         }
     }
 
@@ -1083,9 +1108,11 @@ public class ResForgeFrame extends JFrame {
             content.add(labeled(GuiSupport.summary(l)));
         }
         content.add(Box.createVerticalStrut(8));
-        content.add(labeled("3D geometry is read-only here; edit the whole model via OBJ export."));
+        content.add(labeled("3D geometry is read-only here; edit the whole model via glTF or OBJ export."));
         content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export model as OBJ\u2026", this::doExportObj))));
+        content.add(buttonRow(
+                new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
+                new JButton(action("Export OBJ\u2026", this::doExportObj))));
     }
 
     private void buildCodePanel(JPanel content, int idx, Layer l) {

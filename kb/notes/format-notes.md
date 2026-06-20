@@ -108,6 +108,28 @@ texture is `[{u8:k}]` (k indexes this resource's own `tex` layers), while an
 multi-tex use the `matid→mat2→local tex` chain best-effort; external (mlink)
 textures aren't fetched. (knarr: 6 local tex but most parts use external mlinks.)
 
+## glTF (.glb) model export
+Modern alternative to OBJ for the 3D model, and the basis for the eventual edit
+round-trip. Format chosen 2026-06-21 on the game dev's (loftar) recommendation:
+Ogre XML has no modern Blender importer; OBJ can't carry Haven's *two* UV sets
+(`tex`+`otex`) nor skeleton bindings — glTF handles both and has native Blender
+import/export. `GltfExport` writes a self-contained binary glTF (`.glb` = 12-byte
+header + JSON chunk + BIN chunk), dependency-free (our `Json` + a hand-built
+little-endian binary buffer). Phase 1a (done) = static textured geometry:
+per `vbuf2` a POSITION/NORMAL/TEXCOORD_0(`tex`)/TEXCOORD_1(`otex`) accessor (all
+float32); per `mesh` a primitive (its `vbuf`'s attributes + a USHORT index
+accessor + a material); local `tex` layers → embedded `image`s + PBR materials
+(baseColorTexture, alphaMode MASK, doubleSided), reusing the OBJ `matid→mat2→
+local tex` mapping. Coordinates convert Haven Z-up → glTF Y-up via
+`(x,y,z)→(x,z,-y)`. bufferViews are 4-byte aligned; the BIN chunk holds geometry
+then image bytes. Validated structurally (chunk types/alignment, every
+accessor/bufferView within the buffer) on male/mulberry/knarr/etc.; knarr exports
+both TEXCOORD_0 and TEXCOORD_1. **Remaining:** skeleton (skin + JOINTS_0/WEIGHTS_0,
+needs `Vbuf2Data` bone reading), `skan`→animations, `manim`→morph targets, then
+the glTF *import* (re-encode with the client's encoders + mkres quantization).
+The Haven encode toolkit is fully in the client: `Utils.hfenc`/`uvec2oct`,
+`Message.add*`, `NormNumber` snorm/mnorm encoders — no dev code needed.
+
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
 `uint16 n`, then `int16[n]` frame image-ids. Each frame references `image`

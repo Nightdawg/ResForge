@@ -1,6 +1,7 @@
 package resforge;
 
 import resforge.layers.ImageInfo;
+import resforge.model.GltfExport;
 import resforge.model.ObjExport;
 import resforge.model.Vbuf2Codec;
 import resforge.res.Catalog;
@@ -26,6 +27,7 @@ import java.nio.file.Path;
  *   pack    <dir> [out.res]
  *   replace <file.res> <selector> <newfile> [out.res]
  *   obj     <file.res> [out.obj]
+ *   gltf    <file.res> [out.glb]
  *   transform <file.res> <sx> <sy> <sz> [out.res]
  *   catalog <file.res | dir>
  *   verify  <file.res | dir>
@@ -61,6 +63,7 @@ public class Main {
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
             case "obj":    obj(args);    break;
+            case "gltf":   gltf(args);   break;
             case "transform": transform(args); break;
             case "catalog": catalog(args); break;
             case "verify": verify(args); break;
@@ -399,6 +402,29 @@ public class Main {
         }
     }
 
+    private static void gltf(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("gltf requires a .res file");
+        Path file = Path.of(args[1]);
+        String name = file.getFileName().toString();
+        Path out;
+        if(args.length >= 3) {
+            out = Path.of(args[2]);
+        } else {
+            String n = name;
+            if(n.toLowerCase().endsWith(".res"))
+                n = n.substring(0, n.length() - 4);
+            out = file.resolveSibling(n + ".glb");
+        }
+        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
+        GltfExport.Result r = GltfExport.toGlb(res, name);
+        if(r.vertices == 0 || r.triangles == 0)
+            throw new RuntimeException("no 3D geometry (vbuf2/mesh) found in " + file);
+        Files.write(out, r.glb);
+        System.out.printf("Exported %d vertices, %d triangles (%d submeshes, %d texture(s)) -> %s%n",
+                r.vertices, r.triangles, r.submeshes, r.textures, out);
+    }
+
     private static void replace(String[] args) throws IOException {
         if(args.length < 4)
             throw new UsageException("replace requires <file.res> <selector> <newfile> [out.res]");
@@ -428,6 +454,7 @@ public class Main {
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  obj    <file.res> [out.obj]  Export 3D geometry to a Wavefront OBJ");
+        System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
         System.out.println("  transform <file.res> <sx> <sy> <sz> [out.res]");
         System.out.println("                               Scale a model's vertices (re-quantizes positions)");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
