@@ -44,12 +44,12 @@ and are **not** part of the distributed jar; they document the authoritative
 behaviour of the `.res` format.
 
 - `Resource.java`, `Message.java`, `NormNumber.java`, `TexR.java`,
-  `VertexBuf.java`, `Skeleton.java`, `Light.java` — part of the Haven & Hearth
-  client, distributed under the **GNU Lesser General Public License, version 3
-  (LGPL-3)** (see the header comment in each file). Reproduced here under those
-  terms for interoperability/reference. If you redistribute them, keep the notices
-  intact and consult the upstream `COPYING` / `doc/LGPL-3` in the client for the
-  full license text.
+  `VertexBuf.java`, `Skeleton.java`, `Light.java`, `MeshAnim.java` — part of the
+  Haven & Hearth client, distributed under the **GNU Lesser General Public License,
+  version 3 (LGPL-3)** (see the header comment in each file). Reproduced here under
+  those terms for interoperability/reference. If you redistribute them, keep the
+  notices intact and consult the upstream `COPYING` / `doc/LGPL-3` in the client for
+  the full license text.
 - `mkres-fragment.py` — provided by the game's developer (**loftar**) as an
   example of how `.res` files are built. Treat its licensing as belonging to the
   upstream author; it is included only as documentation of the encoder side.

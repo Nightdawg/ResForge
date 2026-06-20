@@ -11,6 +11,7 @@ import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.LightInfo;
 import resforge.layers.Mat2Codec;
+import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
@@ -62,6 +63,7 @@ public final class GuiSupport {
             case "skel":    return "skeleton";
             case "skan":    return "skeletal anim";
             case "boneoff": return "equip point";
+            case "manim":   return "mesh anim";
             default:        return "raw";
         }
     }
@@ -187,6 +189,13 @@ public final class GuiSupport {
                     if(!bo.recognized)
                         return "equip point";
                     return "\"" + bo.name + "\"  " + bo.ops.size() + " op" + (bo.ops.size() == 1 ? "" : "s");
+                }
+                case "manim": {
+                    MeshAnimInfo mi = MeshAnimInfo.parse(l.data);
+                    if(!mi.recognized)
+                        return "mesh animation";
+                    return mi.frames.size() + " frame" + (mi.frames.size() == 1 ? "" : "s")
+                            + ", " + trim(mi.len) + "s";
                 }
                 default:
                     return l.data.length + " bytes";
@@ -398,6 +407,22 @@ public final class GuiSupport {
                 sb.append("  name: \"").append(bo.name).append("\"\n\n");
                 for(BoneOffInfo.Op op : bo.ops)
                     sb.append("  [").append(op.code).append("] ").append(op.desc).append('\n');
+                return sb.toString();
+            }
+            case "manim": {
+                MeshAnimInfo mi = MeshAnimInfo.parse(l.data);
+                if(!mi.recognized)
+                    return "(unrecognized manim layer)";
+                StringBuilder sb = new StringBuilder("Mesh (morph) animation (read-only).\n\n");
+                sb.append("  id=").append(mi.id).append("   length=").append(trim(mi.len))
+                  .append("s   order=").append(mi.random ? "random" : "sequential").append('\n');
+                sb.append("  ").append(mi.frames.size()).append(" frame(s), ")
+                  .append(mi.totalMorphs()).append(" vertex morphs total\n\n");
+                for(int i = 0; i < mi.frames.size(); i++) {
+                    MeshAnimInfo.Frame f = mi.frames.get(i);
+                    sb.append(String.format("  frame %-2d  t=%-7s %-16s %d vertices%n",
+                            i, trim(f.time), f.formatName(), f.vertices));
+                }
                 return sb.toString();
             }
             default:

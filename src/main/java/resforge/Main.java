@@ -258,6 +258,12 @@ public class Main {
                 resforge.layers.BoneOffInfo bo = resforge.layers.BoneOffInfo.parse(l.data);
                 if(bo.recognized)
                     System.out.printf("  \"%s\" %d ops", bo.name, bo.ops.size());
+            } else if(l.name.equals("manim")) {
+                resforge.layers.MeshAnimInfo mi = resforge.layers.MeshAnimInfo.parse(l.data);
+                if(mi.recognized)
+                    System.out.printf("  %d frames %ss %s", mi.frames.size(),
+                            (mi.len == Math.rint(mi.len)) ? Integer.toString((int) mi.len) : Float.toString(mi.len),
+                            mi.random ? "random" : "seq");
             }
             System.out.println();
         }

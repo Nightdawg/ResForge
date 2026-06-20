@@ -152,6 +152,19 @@ Formats:
 Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28. e.g.
 knarr's skel = 11 bones (Main root + sails/oar), skan = 8 s loop, 11 tracks.
 
+## manim layer (mesh / morph animation)
+Read-only viewer (`MeshAnimInfo`) ported from the client's `haven.MeshAnim.Res`.
+Unlike `skan` (bones), `manim` animates **vertex positions** directly — a flag
+rippling, a plant swaying. Stays raw/lossless. Format: `uint8 ver`(1), `int16 id`,
+`uint8 rnd` (play frames random vs sequential), `float32 len`, then frames until a
+`0` terminator. Each frame: `uint8 fmt`(1..4), `float32 time`, `uint16 n`
+(vertex count); fmt 4 adds 6×`float16` quantisation bounds; then RLE spans
+(`uint16 start`, `uint16 run`) of per-vertex data — fmt1 = 6×`float32` (pos+nrm),
+fmt2 = `float9995`-packed `int32` (pos), fmt3 = 3×`float16` (pos), fmt4 = 3×
+`unorm8` (pos, dequantised by the frame header). Confirmed on all 20 sample
+layers (wisp flicker 8 frames float16; algaeblob 7 frames, ~10k morphs). With
+this, **every layer type present in the samples is decoded** (read-only or editable).
+
 ## dependency / reference layers (deps, rlink, src)
 These three are **read-only reference views** — they show which other resources a
 `.res` references; the layers stay raw/lossless.
