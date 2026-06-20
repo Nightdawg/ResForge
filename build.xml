@@ -97,4 +97,13 @@
             <arg line="${args}"/>
         </java>
     </target>
+
+    <target name="gui" depends="compile" description="Launch the graphical editor (detached)">
+        <java classname="${main.class}" fork="true" spawn="true">
+            <classpath>
+                <pathelement location="${classes.dir}"/>
+            </classpath>
+        </java>
+        <echo message="Launched the hafen-resedit GUI."/>
+    </target>
 </project>
