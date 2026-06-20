@@ -14,7 +14,11 @@ game client, so a tool can pass them through untouched.
 `uint8 ver`. If ver < 128: `int8`*256+ver = z, `int16` subz, `uint8` flags
 (bit2 nooff, bit3 has-info), `int16` id, offset coord, optional info entries,
 then the encoded image (a normal PNG/JPEG) to the end. If ver-128 == 1: a typed
-(tto) header. We swap the embedded image and keep the header verbatim.
+(tto) header. We swap the embedded image and keep the header verbatim. The
+`off` coord is the frame's draw offset — the GUI's `AnimView` uses each frame's
+size + offset to composite an `anim` preview at one shared scale, so
+differently-sized frames keep their true relative size and position (e.g.
+cleave's 8 frames range 44x27→23x25 with offsets sweeping (14,27)→(35,16)).
 
 ## tex layer (3D model texture)
 From `haven.TexR.Encoded`: `int16 id`, `uint16` off x/y, `uint16` sz x/y, then
