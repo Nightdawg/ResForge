@@ -7,9 +7,11 @@ then read to answer grounded in project knowledge instead of guesswork.
 
 ## What's here
 - `Rag.java` — the whole tool, one file, no build, no dependencies.
-- `notes/` — the growing corpus. Add Markdown files here; they're indexed on the
-  fly. Seeded with `format-notes.md` and `decisions.md`.
-- It also indexes `docs/` by default (`AI-CONTEXT.md`, `DESIGN-notes.md`, ...).
+- `notes/` — the growing prose corpus. Add Markdown files here; they're indexed on
+  the fly. Seeded with `format-notes.md` and `decisions.md`.
+- By default it also indexes `docs/` (`AI-CONTEXT.md`, `DESIGN-notes.md`, ...), the
+  root `README.md`, and the **Java source** under `src/main/java` + `src/test/java`
+  (so code comments are searchable too).
 
 ## Run it
 No compile step — Java's single-file launcher runs the source directly (JDK 11+;
@@ -32,11 +34,16 @@ kb\rag.ps1 query "vbuf2 attribute formats"
 kb\rag query "neg layer 12 bytes"
 ```
 
-Flags: `-k N` (top-N, default 5), `-d <dir>` (override the search dirs; repeat
-for several; defaults to `kb/notes` then `docs`).
+Flags: `-k N` (top-N, default 5), `-d <dir-or-file>` (override the search sources;
+repeat for several). Defaults: `kb/notes`, `docs`, `README.md`, `src/main/java`,
+`src/test/java`.
 
 ## How it works (briefly)
-- Splits each `.md` into chunks at heading lines (`#`, `##`, ...).
+- **Markdown** (`.md`) is split into chunks at heading lines (`#`, `##`, ...).
+- **Java** (`.java`) is split into "documented declarations": each comment block
+  plus the class/method/field it precedes, tagged with the enclosing class.
+- The tokenizer also splits camelCase / digit boundaries, so an identifier like
+  `recomputeLength` matches the words "recompute" and "length".
 - Ranks chunks against the query with **BM25** — classic lexical/keyword scoring
   (the same family as full-text search), so it's exact-term, not semantic. No
   embeddings, no model download, no network.
