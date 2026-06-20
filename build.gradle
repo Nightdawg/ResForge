@@ -3,7 +3,7 @@ plugins {
     id 'application'
 }
 
-group = 'hafen'
+group = 'resforge'
 version = '0.1.0'
 
 // Use build-gradle/ (not the default build/) so it's clearly Gradle's output
@@ -27,7 +27,7 @@ dependencies {
 }
 
 application {
-    mainClass = 'hafen.resedit.Main'
+    mainClass = 'resforge.Main'
 }
 
 test {
@@ -36,7 +36,7 @@ test {
 
 tasks.named('jar') {
     manifest {
-        attributes 'Main-Class': 'hafen.resedit.Main'
+        attributes 'Main-Class': 'resforge.Main'
     }
     // Fat jar: fold the bundled Ogg-decoder (jorbis) classes in so `java -jar` works.
     from {

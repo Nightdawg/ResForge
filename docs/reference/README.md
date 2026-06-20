@@ -1,7 +1,7 @@
 # Reference sources
 
 These files are **copied verbatim for reference** while developing this tool.
-They are not compiled as part of `hafen-resedit`; they document the authoritative
+They are not compiled as part of `ResForge`; they document the authoritative
 behaviour of the `.res` format.
 
 | File | Origin | Purpose |
