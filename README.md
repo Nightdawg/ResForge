@@ -241,3 +241,20 @@ code, tests and docs were produced by prompting the assistant and validating the
 results against real game files (the round-trip oracle in `verify`). Commits
 reflect this with a `Co-authored-by: Copilot` trailer and a `Powered by Claude
 Opus 4.8` note.
+
+## License
+
+ResForge is open source under the **MIT License** — use it however you like
+(modify, redistribute, embed, commercial or not). See [`LICENSE`](LICENSE).
+
+It bundles and references third-party components under their own licenses —
+notably the **LGPL** [JOrbis](http://www.jcraft.com/jorbis/) Ogg/Vorbis decoder
+(shipped standalone as `lib/jorbis-0.0.17.jar` and folded into the fat jar for
+convenience) and the **LGPL-3** Haven & Hearth client sources kept for reference
+under [`docs/reference/`](docs/reference/) (not compiled into the tool). Those
+remain under their respective licenses; see
+[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). If you redistribute ResForge,
+keep those notices intact.
+
+This is a personal, fan-made modding tool and is not affiliated with or endorsed
+by the makers of Haven & Hearth.
