@@ -67,8 +67,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 
 ## 5. Architecture (packages under `src/main/java/resforge/`)
 - `Main` — CLI dispatch + GUI launch.
-- `io/` — `MessageReader`/`MessageWriter` (LE primitives mirroring `haven.Message`),
-  `Json` (dependency-free JSON).
+- `io/` — `MessageReader`/`MessageWriter` (LE primitives mirroring `haven.Message`,
+  incl. `float16` half-precision ↔ float), `Json` (dependency-free JSON).
 - `res/` — `ResContainer` (parse/serialize the container), `Layer` (name+bytes,
   immutable), `Manifest` (manifest.txt + per-layer codec), `Unpacker`/`Packer`
   (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
@@ -76,7 +76,7 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`
   (read-only); typed JSON codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`,
-  `AnimCodec`, `NegCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
+  `AnimCodec`,   `NegCodec`, `ObstCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
@@ -101,10 +101,11 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 | `mat2` | edit as JSON (id + per-command tto value lists; tagged-value form, lossless-or-raw) |
 | `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
+| `obst` | edit as JSON (collision polygons; float16 coords, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export (+ `.mtl` + local `tex` image, textured); `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
-| everything else (`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
+| everything else (`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,
@@ -151,9 +152,9 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - **3D import** (edit in Blender → back to `.res`): port `mkres` (Ogre-XML or OBJ
   → vbuf2/mesh, re-strip + re-quantise) behind lossless-or-raw — needs the in-game
   loop. `Vbuf2Codec` is the structure-preserving foundation.
-- Typed editor for `obst` (movement-collision polygons; uses lossy `float16`, so
-  needs a half-precision codec under the lossless-or-raw guard). (`mat2`, `anim`
-  and `neg` are now done — editable JSON; `code`/`codeentry` are read-only.)
+- Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
+  using the new `float16` codec under lossless-or-raw). The same `float16` codec can
+  broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)
 

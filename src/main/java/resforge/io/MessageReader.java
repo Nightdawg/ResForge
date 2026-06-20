@@ -91,6 +91,37 @@ public class MessageReader {
         return Double.longBitsToDouble(int64());
     }
 
+    /** IEEE-754 half-precision (16-bit) float, little-endian. */
+    public float float16() {
+        return halfToFloat(uint16());
+    }
+
+    /** Converts a 16-bit half-precision bit pattern to a 32-bit float (exact). */
+    public static float halfToFloat(int h) {
+        int sign = (h >> 15) & 0x1;
+        int exp = (h >> 10) & 0x1f;
+        int mant = h & 0x3ff;
+        int bits;
+        if(exp == 0) {
+            if(mant == 0) {
+                bits = sign << 31;                       // +/- 0
+            } else {
+                exp = 127 - 15 + 1;                      // subnormal -> normalize
+                while((mant & 0x400) == 0) {
+                    mant <<= 1;
+                    exp--;
+                }
+                mant &= 0x3ff;
+                bits = (sign << 31) | (exp << 23) | (mant << 13);
+            }
+        } else if(exp == 0x1f) {
+            bits = (sign << 31) | 0x7f800000 | (mant << 13);   // inf / NaN
+        } else {
+            bits = (sign << 31) | ((exp - 15 + 127) << 23) | (mant << 13);
+        }
+        return Float.intBitsToFloat(bits);
+    }
+
     /** NUL-terminated UTF-8 string. */
     public String string() {
         int start = pos;
