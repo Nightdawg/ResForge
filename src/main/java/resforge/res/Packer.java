@@ -2,6 +2,7 @@ package resforge.res;
 
 import resforge.io.Json;
 import resforge.layers.ActionCodec;
+import resforge.layers.AnimCodec;
 import resforge.layers.Mat2Codec;
 import resforge.layers.PropsCodec;
 
@@ -66,6 +67,19 @@ public class Packer {
                 return ActionCodec.encode(model);
             } catch(RuntimeException ex) {
                 throw new IOException("Failed to encode action layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
+        }
+        if(e.codec.equals("anim")) {
+            if(e.parts.size() != 1)
+                throw new IOException("anim codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return AnimCodec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode anim layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
         if(e.codec.equals("mat2")) {

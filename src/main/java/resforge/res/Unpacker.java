@@ -1,6 +1,7 @@
 package resforge.res;
 
 import resforge.layers.ActionCodec;
+import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
@@ -93,6 +94,13 @@ public class Unpacker {
                 String part = LAYERS_SUBDIR + "/" + base + ".json";
                 Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
                 return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "action");
+            }
+        } else if(layer.name.equals("anim")) {
+            String json = AnimCodec.toJsonIfLossless(layer.data);
+            if(json != null) {
+                String part = LAYERS_SUBDIR + "/" + base + ".json";
+                Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
+                return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "anim");
             }
         } else if(layer.name.equals("mat2")) {
             String json = Mat2Codec.toJsonIfLossless(layer.data);
