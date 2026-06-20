@@ -490,13 +490,13 @@ needs the in-game feedback loop.
 
 ## 9. Possible next steps
 
-- Add a typed editor for `obst` (movement-collision polygons; uses lossy
-  `float16`, so a half-precision codec is needed behind the lossless-or-raw guard)
-  and eventually `vbuf2`/`mesh`/`manim` (port `mkres`; see §8). (`mat2`, `anim` and
-  `neg` are done — editable JSON via `Mat2Codec`/`AnimCodec`/`NegCodec`;
-  `code`/`codeentry` are decoded read-only via `CodeInfo`/`CodeEntryInfo`.)
-- Broaden the `props` codec to more `tto` types (coord/color/bytes/float32) using
-  an explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.
+- Eventually edit `vbuf2`/`mesh`/`manim` (port `mkres`; see §8). (`mat2`, `anim`,
+  `neg` and `obst` are done — editable JSON via
+  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`; `code`/`codeentry` are decoded
+  read-only via `CodeInfo`/`CodeEntryInfo`.)
+- Broaden the `props` codec to more `tto` types (coord/color/bytes/float32, the
+  last now possible via the new `float16`/`MessageWriter.float16` codec) using an
+  explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
   uses it (none of the current samples do).
 - Optional: expose the `tex` alpha **mask** (part `t==4`) as a second editable

@@ -65,6 +65,17 @@ From `haven.FastMesh`: `uint8 fl`; old form (fl & 0x80 == 0): `uint16` numTris,
 `int16` matid, optional id/ref/rdat/vbufid, then indices — raw `uint16`*3*num or
 **delta-stripped** (`unstrip`/`decdelta`). References a vbuf2 by id.
 
+## obst layer (movement collision)
+From `haven.Resource.Obstacle`: `uint8 ver` (1 or 2); if ver 2 a `string id`;
+then `uint8 n` (polygon count), `n` per-polygon point counts (all counts first),
+then per polygon per point a `(float16 x, float16 y)` coordinate (tile units; the
+client scales by tile size). This is the shape that physically blocks walking.
+**Editable as JSON** `{version, id?, polygons:[[[x,y],…],…]}` (`ObstCodec`, codec
+`obst`) under the lossless-or-raw guard. Coordinates are float16, so editing
+stores at the game's own half-precision; `MessageReader.float16`/`float16` was
+added (round-to-nearest, exhaustively round-trip-tested over all non-NaN halves).
+Samples (knarr, mulberry) are ver-1, one 4-point polygon (a footprint rectangle).
+
 ## neg layer (click hitbox / interaction geometry)
 From `haven.Resource.Neg`: `coord cc` (the click hotspot center), then 12 bytes
 the client skips (CarryGun reads them as 3 coords — tl/br/oc: top-left,

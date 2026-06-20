@@ -68,6 +68,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `mat2`            | `*.json`                     | edit material commands as JSON |
 | `anim`            | `*.json`                     | edit sprite animation (speed + frames) as JSON |
 | `neg`             | `*.json`                     | edit click hotspot / hitbox + connection points as JSON |
+| `obst`            | `*.json`                     | edit movement-collision polygons as JSON |
 | `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
 | `midi`            | `*.mid`                      | swap the MIDI music      |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
@@ -209,7 +210,8 @@ v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
 for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`), action/keybind metadata (`action`) and
 materials (`mat2`) as JSON, sprite animations (`anim`: speed + frame sequence) as
-JSON, click hitboxes (`neg`: hotspot + connection points) as JSON, and text. The 3D vertex buffers (`vbuf2`) are
+JSON, click hitboxes (`neg`: hotspot + connection points) as JSON, movement
+collision (`obst`: polygons) as JSON, and text. The 3D vertex buffers (`vbuf2`) are
 inspected read-only (vertex count + attribute formats shown by `info`/`verify`),
 and `code`/`codeentry` layers are decoded read-only (class names and the
 entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).

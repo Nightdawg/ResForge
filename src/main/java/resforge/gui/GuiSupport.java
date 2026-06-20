@@ -10,6 +10,7 @@ import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
+import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
@@ -39,6 +40,7 @@ public final class GuiSupport {
             case "props":   return "props";
             case "anim":    return "animation";
             case "neg":     return "hitbox";
+            case "obst":    return "collision";
             case "tooltip":
             case "pagina":  return "text";
             case "vbuf2":
@@ -120,6 +122,14 @@ public final class GuiSupport {
                     java.util.List<?> eps = (java.util.List<?>) m.get("endpoints");
                     return "click (" + c.get(0) + "," + c.get(1) + "), " + eps.size() + " endpoint grp";
                 }
+                case "obst": {
+                    java.util.Map<String, Object> m = ObstCodec.decode(l.data);
+                    java.util.List<?> polys = (java.util.List<?>) m.get("polygons");
+                    int pts = 0;
+                    for(Object p : polys)
+                        pts += ((java.util.List<?>) p).size();
+                    return polys.size() + " polygon" + (polys.size() == 1 ? "" : "s") + ", " + pts + " pts";
+                }
                 case "codeentry": {
                     CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
                     return ce.entries.size() + " entry pt" + (ce.entries.size() == 1 ? "" : "s")
@@ -188,6 +198,8 @@ public final class GuiSupport {
             return AnimCodec.toJsonIfLossless(l.data);
         if(l.name.equals("neg"))
             return NegCodec.toJsonIfLossless(l.data);
+        if(l.name.equals("obst"))
+            return ObstCodec.toJsonIfLossless(l.data);
         return null;
     }
 
@@ -373,6 +385,12 @@ public final class GuiSupport {
                 break;
             }
             case "neg": {
+                String j = editableJson(l);
+                if(j != null)
+                    return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "obst": {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");

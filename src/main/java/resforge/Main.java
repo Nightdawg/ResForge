@@ -193,6 +193,18 @@ public class Main {
                 } catch(RuntimeException e) {
                     /* opaque neg: leave as-is */
                 }
+            } else if(l.name.equals("obst")) {
+                try {
+                    java.util.Map<String, Object> m = resforge.layers.ObstCodec.decode(l.data);
+                    java.util.List<?> polys = (java.util.List<?>) m.get("polygons");
+                    int pts = 0;
+                    for(Object p : polys)
+                        pts += ((java.util.List<?>) p).size();
+                    System.out.printf("  %d polygon%s, %d point%s", polys.size(),
+                            polys.size() == 1 ? "" : "s", pts, pts == 1 ? "" : "s");
+                } catch(RuntimeException e) {
+                    /* opaque obst: leave as-is */
+                }
             } else if(l.name.equals("code")) {
                 resforge.layers.CodeInfo ci = resforge.layers.CodeInfo.parse(l.data);
                 if(ci.recognized)

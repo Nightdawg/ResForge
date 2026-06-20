@@ -9,6 +9,7 @@ import resforge.layers.ImageInfo;
 import resforge.layers.ImageMagic;
 import resforge.layers.Mat2Codec;
 import resforge.layers.NegCodec;
+import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
 
@@ -134,6 +135,8 @@ public class Replacer {
                 return encodeAnim(nf);
             case "neg":
                 return encodeNeg(nf);
+            case "obst":
+                return encodeObst(nf);
             default:
                 throw new ReplaceException("layer '" + layer.name + "' is not replaceable");
         }
@@ -178,6 +181,17 @@ public class Replacer {
             @SuppressWarnings("unchecked")
             Map<String, Object> model = (Map<String, Object>) Json.parse(json);
             return NegCodec.encode(model);
+        } catch(RuntimeException e) {
+            throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
+        }
+    }
+
+    private static byte[] encodeObst(byte[] nf) {
+        String json = new String(nf, StandardCharsets.UTF_8);
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+            return ObstCodec.encode(model);
         } catch(RuntimeException e) {
             throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
         }
