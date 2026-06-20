@@ -87,6 +87,16 @@ tagged-value form (a string stays a plain JSON string; everything else is a
 single-tag object like `{"color":[204,204,204,255]}`, `{"f32":0.5}`, `{"u8":0}`)
 under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value-list".
 
+## material → texture mapping (for OBJ export)
+A `mesh` references a material by `matid`; the `mat2` with that `id` describes the
+look. A material points at its texture via a `tex`/`otex` command: a **local**
+texture is `[{u8:k}]` (k indexes this resource's own `tex` layers), while an
+**external** texture is `[<string respath>, …]` (e.g. `mlink` →
+`gfx/terobjs/trees/peartree-tex` — lives in *another* `.res`). `ObjExport` writes
+`.mtl` + the local `tex` images only: single-tex models map cleanly to everything;
+multi-tex use the `matid→mat2→local tex` chain best-effort; external (mlink)
+textures aren't fetched. (knarr: 6 local tex but most parts use external mlinks.)
+
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
 `uint16 n`, then `int16[n]` frame image-ids. Each frame references `image`

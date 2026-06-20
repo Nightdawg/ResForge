@@ -613,9 +613,17 @@ public class ResForgeFrame extends JFrame {
             fc.setFileFilter(new FileNameExtensionFilter("Wavefront OBJ (*.obj)", "obj"));
             fc.setSelectedFile(new File(baseName() + ".obj"));
             if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                Files.writeString(fc.getSelectedFile().toPath(), r.obj);
+                Path objPath = fc.getSelectedFile().toPath();
+                Files.writeString(objPath, r.obj);
+                String extra = "";
+                if(r.mtl != null) {
+                    Files.writeString(objPath.resolveSibling(r.baseName + ".mtl"), r.mtl);
+                    for(ObjExport.TexFile tf : r.textures)
+                        Files.write(objPath.resolveSibling(tf.name), tf.data);
+                    extra = " + .mtl + " + r.textures.size() + " texture(s)";
+                }
                 setStatus("Exported " + r.vertices + " vertices, " + r.triangles
-                        + " triangles (" + r.submeshes + " submeshes)");
+                        + " triangles (" + r.submeshes + " submeshes)" + extra);
             }
         } catch(Exception e) {
             error("OBJ export failed: " + e.getMessage());
