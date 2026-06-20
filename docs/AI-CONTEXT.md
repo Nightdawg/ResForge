@@ -40,6 +40,10 @@ a sibling project at `../hafen-client`).
   `jogg`+`jorbis`) — the GUI's Ogg player. Vendored in `lib/` (Gradle/Ant) or
   pulled from Central (Maven), folded into the jar by all three (Gradle fat-jar
   via runtimeClasspath; Ant `zipgroupfileset`; Maven shade). The CLI never uses it.
+- **License:** project is **MIT** (`LICENSE`, Copyright Nightdawg). Bundled JOrbis
+  stays **LGPL** and the `docs/reference/*.java` client files stay **LGPL-3** —
+  both documented in `THIRD-PARTY-NOTICES.md` (keep those notices on redistribution).
+  Only the core JOrbis decoder is used, never the GPL JOrbisPlayer.
 - Verifying the GUI: launch the jar, screenshot the screen, view the PNG. GUI
   mouse/keys automation is flaky — prefer screenshotting + trusting shared code
   paths. Always `Stop-Process -Id <PID>` test windows (never kill IntelliJ).

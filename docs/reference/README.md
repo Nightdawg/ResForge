@@ -31,3 +31,7 @@ it is included here only as documentation of the encoder side.
 
 These are point-in-time snapshots. If the upstream client changes the format,
 re-copy the current versions and update `../DESIGN-notes.md` accordingly.
+
+See also the top-level [`../../THIRD-PARTY-NOTICES.md`](../../THIRD-PARTY-NOTICES.md)
+for how these reference files (and the bundled LGPL JOrbis decoder) relate to
+ResForge's own MIT license.
