@@ -738,6 +738,12 @@ public class ResForgeFrame extends JFrame {
             case "source":
                 buildReferencePanel(content, idx, l);
                 break;
+            case "light":
+            case "skeleton":
+            case "skeletal anim":
+            case "equip point":
+                buildRigPanel(content, idx, l);
+                break;
             default:
                 buildRawPanel(content, idx, l);
         }
@@ -1114,6 +1120,21 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(
                 new JButton(action("Replace raw\u2026", () -> replaceFromFile(idx, l.name))),
                 new JButton(action("Export raw\u2026", () -> exportLayer(idx)))));
+    }
+
+    private void buildRigPanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.rigText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setCaretPosition(0);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(labeled("Read-only structural view; the layer is preserved exactly on save."));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(action("Export raw\u2026", () -> exportLayer(idx)))));
     }
 
     /* ------------------------------------------------------------ edit actions */

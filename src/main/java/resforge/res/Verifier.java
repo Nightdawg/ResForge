@@ -3,17 +3,21 @@ package resforge.res;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.BoneOffInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.LightInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.RLinkInfo;
+import resforge.layers.SkanInfo;
+import resforge.layers.SkelInfo;
 import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
@@ -65,6 +69,10 @@ public class Verifier {
         public final Map<String, Integer> depsHist = new TreeMap<>();
         public final Map<String, Integer> srcHist = new TreeMap<>();
         public final Map<String, Integer> rlinkHist = new TreeMap<>();
+        public final Map<String, Integer> lightHist = new TreeMap<>();
+        public final Map<String, Integer> skelHist = new TreeMap<>();
+        public final Map<String, Integer> skanHist = new TreeMap<>();
+        public final Map<String, Integer> boneoffHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
@@ -129,6 +137,10 @@ public class Verifier {
         printHist(out, "Deps histogram", sum.depsHist);
         printHist(out, "Src histogram", sum.srcHist);
         printHist(out, "RLink histogram", sum.rlinkHist);
+        printHist(out, "Light histogram", sum.lightHist);
+        printHist(out, "Skel histogram", sum.skelHist);
+        printHist(out, "Skan histogram", sum.skanHist);
+        printHist(out, "BoneOff histogram", sum.boneoffHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
@@ -219,6 +231,22 @@ public class Verifier {
                 RLinkInfo ri = RLinkInfo.parse(l.data);
                 sum.rlinkHist.merge(ri.recognized ? "decoded" : ri.links.isEmpty() ? "unrecognized" : "partial",
                         1, Integer::sum);
+            }
+            else if(l.name.equals("light")) {
+                LightInfo li = LightInfo.parse(l.data);
+                sum.lightHist.merge(li.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
+            }
+            else if(l.name.equals("skel")) {
+                SkelInfo si = SkelInfo.parse(l.data);
+                sum.skelHist.merge(si.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
+            }
+            else if(l.name.equals("skan")) {
+                SkanInfo si = SkanInfo.parse(l.data);
+                sum.skanHist.merge(si.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
+            }
+            else if(l.name.equals("boneoff")) {
+                BoneOffInfo bo = BoneOffInfo.parse(l.data);
+                sum.boneoffHist.merge(bo.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
             }
             else if(l.name.equals("font")) {
                 FontInfo fi = FontInfo.parse(l.data);

@@ -224,6 +224,9 @@ and their decoded specs (`rlink`), and embedded source files (`src`, exportable 
 `.java`). The **References…** toolbar button (and the `refs` CLI command) rolls all
 of this up into one deduplicated report of every resource a file references —
 gathered across `deps`, `rlink`, `code` classpaths and `mat2` material links.
+The rig/lighting layers are also decoded read-only: `light` (light type, colours,
+attenuation/direction), `skel` (bone hierarchy), `skan` (skeletal animation:
+length, mode, per-bone tracks) and `boneoff` (equip-point transforms).
 Deeper typed editing (mesh/skeleton geometry, animations, collision) can
 be layered on incrementally using the same parts model.
 

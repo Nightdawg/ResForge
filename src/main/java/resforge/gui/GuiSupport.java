@@ -3,17 +3,21 @@ package resforge.gui;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.BoneOffInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.LightInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.RLinkInfo;
+import resforge.layers.SkanInfo;
+import resforge.layers.SkelInfo;
 import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
@@ -54,6 +58,10 @@ public final class GuiSupport {
             case "deps":    return "dependencies";
             case "rlink":   return "links";
             case "src":     return "source";
+            case "light":   return "light";
+            case "skel":    return "skeleton";
+            case "skan":    return "skeletal anim";
+            case "boneoff": return "equip point";
             default:        return "raw";
         }
     }
@@ -156,6 +164,29 @@ public final class GuiSupport {
                 case "src": {
                     SrcInfo si = SrcInfo.parse(l.data);
                     return si.recognized ? si.fileName : "source file";
+                }
+                case "light": {
+                    LightInfo li = LightInfo.parse(l.data);
+                    return li.recognized ? li.kind() : "light";
+                }
+                case "skel": {
+                    SkelInfo si = SkelInfo.parse(l.data);
+                    if(!si.recognized)
+                        return "skeleton";
+                    return si.bones.size() + " bone" + (si.bones.size() == 1 ? "" : "s");
+                }
+                case "skan": {
+                    SkanInfo si = SkanInfo.parse(l.data);
+                    if(!si.recognized)
+                        return "animation";
+                    return si.tracks.size() + " track" + (si.tracks.size() == 1 ? "" : "s")
+                            + ", " + trim(si.len) + "s " + si.mode;
+                }
+                case "boneoff": {
+                    BoneOffInfo bo = BoneOffInfo.parse(l.data);
+                    if(!bo.recognized)
+                        return "equip point";
+                    return "\"" + bo.name + "\"  " + bo.ops.size() + " op" + (bo.ops.size() == 1 ? "" : "s");
                 }
                 default:
                     return l.data.length + " bytes";
@@ -297,6 +328,91 @@ public final class GuiSupport {
             return "// " + si.fileName + "  (embedded source, read-only)\n\n" + si.text();
         }
         return null;
+    }
+
+    /** A read-only, human-readable view of a light/skel/skan/boneoff layer, else null. */
+    public static String rigText(Layer l) {
+        switch(l.name) {
+            case "light": {
+                LightInfo li = LightInfo.parse(l.data);
+                if(!li.recognized)
+                    return "(unrecognized light layer)";
+                StringBuilder sb = new StringBuilder("Light (read-only).\n\n");
+                sb.append("  type: ").append(li.kind()).append("   id=").append(li.id)
+                  .append("   (format v").append(li.ver).append(")\n");
+                sb.append("  ambient:  ").append(rgba(li.amb)).append('\n');
+                sb.append("  diffuse:  ").append(rgba(li.dif)).append('\n');
+                sb.append("  specular: ").append(rgba(li.spc)).append('\n');
+                if(li.hasAtt)
+                    sb.append(String.format("  attenuation: const=%.3f linear=%.3f quadratic=%.3f%n",
+                            li.ac, li.al, li.aq));
+                if(li.hasDir)
+                    sb.append(String.format("  direction: (%.3f, %.3f, %.3f)%n", li.dx, li.dy, li.dz));
+                if(li.hasExp)
+                    sb.append(String.format("  spot exponent: %.3f%n", li.exp));
+                return sb.toString();
+            }
+            case "skel": {
+                SkelInfo si = SkelInfo.parse(l.data);
+                if(!si.recognized)
+                    return "(unrecognized skel layer)";
+                StringBuilder sb = new StringBuilder("Skeleton (read-only).\n\n");
+                sb.append("  ").append(si.bones.size()).append(" bone")
+                  .append(si.bones.size() == 1 ? "" : "s").append(", ")
+                  .append(si.rootCount()).append(" root\n\n");
+                for(SkelInfo.Bone b : si.bones)
+                    sb.append(String.format("  %-16s parent=%-14s pos=(%.2f, %.2f, %.2f)%n",
+                            b.name, b.parent.isEmpty() ? "(root)" : b.parent, b.px, b.py, b.pz));
+                return sb.toString();
+            }
+            case "skan": {
+                SkanInfo si = SkanInfo.parse(l.data);
+                if(!si.recognized)
+                    return "(unrecognized skan layer)";
+                StringBuilder sb = new StringBuilder("Skeletal animation (read-only).\n\n");
+                sb.append("  id=").append(si.id).append("   length=").append(trim(si.len))
+                  .append("s   mode=").append(si.mode);
+                if(si.nspeed >= 0)
+                    sb.append("   nspeed=").append(trim((float) si.nspeed));
+                sb.append("   (format ").append(si.fmt).append(")\n");
+                sb.append("  ").append(si.tracks.size()).append(" bone track(s), ")
+                  .append(si.totalFrames()).append(" keyframes total");
+                if(!si.fxTracks.isEmpty())
+                    sb.append(", ").append(si.fxTracks.size()).append(" effect track(s)");
+                sb.append("\n\n");
+                for(SkanInfo.Track t : si.tracks)
+                    sb.append(String.format("  %-16s %d frame(s)%n", t.bone, t.frames));
+                for(SkanInfo.Fx fx : si.fxTracks) {
+                    sb.append("  {ctl}  ").append(fx.events).append(" event(s)");
+                    if(!fx.refs.isEmpty())
+                        sb.append(" -> ").append(String.join(", ", fx.refs));
+                    sb.append('\n');
+                }
+                return sb.toString();
+            }
+            case "boneoff": {
+                BoneOffInfo bo = BoneOffInfo.parse(l.data);
+                if(!bo.recognized)
+                    return "(unrecognized boneoff layer)";
+                StringBuilder sb = new StringBuilder("Equip point / bone offset (read-only).\n\n");
+                sb.append("  name: \"").append(bo.name).append("\"\n\n");
+                for(BoneOffInfo.Op op : bo.ops)
+                    sb.append("  [").append(op.code).append("] ").append(op.desc).append('\n');
+                return sb.toString();
+            }
+            default:
+                return null;
+        }
+    }
+
+    private static String rgba(int[] c) {
+        return "(" + c[0] + ", " + c[1] + ", " + c[2] + ", " + c[3] + ")";
+    }
+
+    private static String trim(float v) {
+        if(v == Math.rint(v))
+            return Integer.toString((int) v);
+        return Float.toString(v);
     }
 
     /** A read-only metadata line for an image/tex layer (id, z/sub-z, offset), else null. */

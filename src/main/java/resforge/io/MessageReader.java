@@ -122,6 +122,60 @@ public class MessageReader {
         return Float.intBitsToFloat(bits);
     }
 
+    /** Custom-packed float (haven {@code Message.cpfloat}): a signed {@code int8}
+     *  exponent followed by a little-endian {@code uint32} where the top bit is the
+     *  sign and the low 31 bits are the mantissa. Mirrors {@code Utils.floatd}. */
+    public double cpfloat() {
+        int e = int8();
+        long t = uint32();
+        int m = (int) (t & 0x7fffffffL);
+        boolean s = (t & 0x80000000L) != 0;
+        if(e == -128) {
+            if(m == 0)
+                return 0.0;
+            throw new IllegalStateException("invalid special cpfloat (" + m + ")");
+        }
+        double v = (m / 2147483648.0) + 1.0;
+        if(s)
+            v = -v;
+        return Math.pow(2.0, e) * v;
+    }
+
+    /** Signed normalized 16-bit value in [-1, 1] (haven {@code Message.snorm16}). */
+    public float snorm16() {
+        int v = int16();
+        if(v < -0x7fff)
+            v = -0x7fff;
+        if(v > 0x7fff)
+            v = 0x7fff;
+        return v / (float) 0x7fff;
+    }
+
+    /** Unsigned normalized 16-bit value in [0, 1] (haven {@code Message.unorm16}). */
+    public float unorm16() {
+        return uint16() / (float) 0xffff;
+    }
+
+    /** Modular normalized 16-bit value in [0, 1) (haven {@code Message.mnorm16}). */
+    public float mnorm16() {
+        return uint16() / (float) 0x10000;
+    }
+
+    /** Decodes an octahedral-encoded unit vector from two snorm components into
+     *  {@code out[0..2]} (mirrors {@code Utils.oct2uvec}). */
+    public static void oct2uvec(float[] out, float x, float y) {
+        float z = 1 - (Math.abs(x) + Math.abs(y));
+        if(z < 0) {
+            float xc = x, yc = y;
+            x = (1 - Math.abs(yc)) * Math.copySign(1, xc);
+            y = (1 - Math.abs(xc)) * Math.copySign(1, yc);
+        }
+        float f = 1 / (float) Math.sqrt((x * x) + (y * y) + (z * z));
+        out[0] = x * f;
+        out[1] = y * f;
+        out[2] = z * f;
+    }
+
     /** NUL-terminated UTF-8 string. */
     public String string() {
         int start = pos;

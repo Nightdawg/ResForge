@@ -117,6 +117,41 @@ image layers. Fully deterministic, so **editable as JSON**
 Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 `flex` (8 @75ms) — all `id=-1`, frame ids contiguous from 128.
 
+## rig / lighting layers (light, skel, skan, boneoff)
+Read-only viewers ported from the client's `Light.java` and `Skeleton.java`
+(LGPL-3, in `docs/reference/`). These stay raw/lossless; we only surface structure.
+They use number encodings beyond the basic primitives, now in `MessageReader`:
+- **`cpfloat`** — custom-packed float: `int8` exponent + LE `uint32` (top bit sign,
+  low 31 bits mantissa); value = `2^e · (1 + m/2^31)`, with `e=-128,m=0` meaning 0.
+  Mirrors `haven.Utils.floatd`. (Validated bit-exact on real `light`/`skel` samples.)
+- **`mnorm16`** = `uint16/2^16` (modular [0,1)), **snorm16** = `int16/0x7fff`
+  (signed [-1,1]), **unorm16** = `uint16/0xffff` ([0,1]).
+- **`oct2uvec`** — decodes an octahedral-encoded unit vector from two snorm16s.
+
+Formats:
+- **`light`** (`LightInfo`): `u8 ver`. ver0: `int8 id`, 3 colours (each 4×`cpfloat`
+  ×255 = RGBA), then tagged opts to EOM — `t1` attenuation (3 cpfloat), `t2`
+  direction (3 cpfloat), `t3` spot exponent (cpfloat). ver1: `int16 id`, colours as
+  4×`float32`, same tags with float32. Att ⇒ point/spot light; else directional.
+- **`skel`** (`SkelInfo`): the bone tree. Decoding starts in "ver 0" and a 1-char
+  string whose code is <32 switches sub-version. ver0 bone: `string name`,
+  3 `cpfloat` pos, 3 `cpfloat` axis (normalized), `cpfloat` angle, `string parent`.
+  ver1 bone: `string name`, `string parent`, 3 `float32` pos, `mnorm16`×2π angle,
+  `snorm16`,`snorm16`→`oct2uvec` axis. Parent "" = root.
+- **`skan`** (`SkanInfo`): skeletal animation. `int16 id`, `u8 fl` (fmt=(fl&6)>>1),
+  `u8 mode` (0..3 once/loop/pong/pongloop), `len` (fmt0 cpfloat else float32), if
+  `fl&1` an nspeed; then to EOM `string bnm` — `"{ctl}"` = an fx-event track, else a
+  bone keyframe track. Track: `u16 count` frames (fmt0 = cpfloat time+trans+ang+axis;
+  fmt1 = unorm16 time, 3×half-float trans, mnorm16 ang, 2×snorm16 axis). FX events:
+  `u16 count`, each time + `u8 t` (`t&0x80` ⇒ sub-message of `u16` length); t 0/2
+  spawn-sprite (resname+ver+sdt[+eqp]), 1 trigger, 3 mkoverlay, 4 rmoverlay.
+- **`boneoff`** (`BoneOffInfo`): equip-point opcode program — `string name` then
+  opcodes to EOM: 0/16 translate (cpfloat/float32), 1/17 rotate (cpfloat / mnorm16
+  ang + oct axis), 2 equip-point at named bone, 3/19 bone-align, 4 null-rotation,
+  5 scale (float32).
+Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28. e.g.
+knarr's skel = 11 bones (Main root + sails/oar), skan = 8 s loop, 11 tracks.
+
 ## dependency / reference layers (deps, rlink, src)
 These three are **read-only reference views** — they show which other resources a
 `.res` references; the layers stay raw/lossless.
