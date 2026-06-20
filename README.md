@@ -186,7 +186,9 @@ v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
 for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`), action/keybind metadata (`action`) and
 materials (`mat2`) as JSON, and text. The 3D vertex buffers (`vbuf2`) are
-inspected read-only (vertex count + attribute formats shown by `info`/`verify`).
+inspected read-only (vertex count + attribute formats shown by `info`/`verify`),
+and `code`/`codeentry` layers are decoded read-only (class names and the
+entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).
 Deeper typed editing (mesh/skeleton geometry, animations, collision) can be
 layered on incrementally using the same parts model.
 

@@ -2,6 +2,8 @@ package resforge.gui;
 
 import resforge.layers.ActionCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.CodeEntryInfo;
+import resforge.layers.CodeInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
@@ -38,6 +40,8 @@ public final class GuiSupport {
             case "vbuf2":
             case "mesh":    return "3D model";
             case "mat2":    return "material";
+            case "code":
+            case "codeentry": return "code";
             default:        return "raw";
         }
     }
@@ -87,6 +91,18 @@ public final class GuiSupport {
                     java.util.Map<String, Object> m = Mat2Codec.decode(l.data);
                     java.util.List<?> es = (java.util.List<?>) m.get("entries");
                     return es.size() + " material command" + (es.size() == 1 ? "" : "s");
+                }
+                case "code": {
+                    CodeInfo ci = CodeInfo.parse(l.data);
+                    if(!ci.recognized)
+                        return "code";
+                    int dot = ci.name.lastIndexOf('.');
+                    return (dot >= 0 ? ci.name.substring(dot + 1) : ci.name) + ".class";
+                }
+                case "codeentry": {
+                    CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
+                    return ce.entries.size() + " entry pt" + (ce.entries.size() == 1 ? "" : "s")
+                            + ", " + ce.classpath.size() + " dep" + (ce.classpath.size() == 1 ? "" : "s");
                 }
                 default:
                     return l.data.length + " bytes";
@@ -139,7 +155,7 @@ public final class GuiSupport {
         return null;
     }
 
-    /** Editable JSON for props/action (only when losslessly reversible), else null. */
+    /** Editable JSON for props/action/mat2 (only when losslessly reversible), else null. */
     public static String editableJson(Layer l) {
         if(l.name.equals("props"))
             return PropsCodec.toJsonIfLossless(l.data);
@@ -147,6 +163,39 @@ public final class GuiSupport {
             return ActionCodec.toJsonIfLossless(l.data);
         if(l.name.equals("mat2"))
             return Mat2Codec.toJsonIfLossless(l.data);
+        return null;
+    }
+
+    /** A read-only, human-readable description of a code/codeentry layer, else null. */
+    public static String codeText(Layer l) {
+        if(l.name.equals("code")) {
+            CodeInfo ci = CodeInfo.parse(l.data);
+            if(!ci.recognized)
+                return "(unrecognized code layer)";
+            return "Class: " + ci.name + "\n"
+                    + (ci.isClassFile ? "Compiled Java .class" : "data") + ", " + ci.code.length + " bytes\n\n"
+                    + "Server-authored bytecode (read-only). Export it to inspect or decompile externally.";
+        }
+        if(l.name.equals("codeentry")) {
+            CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
+            if(!ce.recognized)
+                return "(unrecognized codeentry layer)";
+            StringBuilder sb = new StringBuilder("Code entry manifest (read-only).\n");
+            if(!ce.entries.isEmpty()) {
+                sb.append("\nEntry points:\n");
+                for(CodeEntryInfo.Entry en : ce.entries)
+                    sb.append("  ").append(en.name).append("  ->  ").append(en.className)
+                      .append(en.args != null ? "  " + en.args : "").append('\n');
+            }
+            if(!ce.classpath.isEmpty()) {
+                sb.append("\nClasspath dependencies:\n");
+                for(CodeEntryInfo.Dep d : ce.classpath)
+                    sb.append("  ").append(d.name).append(d.ver >= 0 ? " @ v" + d.ver : "").append('\n');
+            }
+            if(ce.entries.isEmpty() && ce.classpath.isEmpty())
+                sb.append("\n(empty)\n");
+            return sb.toString();
+        }
         return null;
     }
 
@@ -217,6 +266,12 @@ public final class GuiSupport {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "code": {
+                CodeInfo ci = CodeInfo.parse(l.data);
+                if(ci.recognized && ci.code != null)
+                    return new Export(ci.code, "class", "Java class file");
                 break;
             }
             default:
