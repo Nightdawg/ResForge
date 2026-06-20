@@ -175,6 +175,18 @@ public class Main {
                 if(mi.recognized)
                     System.out.printf("  %d tris vbuf=%d%s%s", mi.numTris, mi.vbufid,
                             mi.matid >= 0 ? " mat=" + mi.matid : "", mi.stripped ? " stripped" : "");
+            } else if(l.name.equals("code")) {
+                resforge.layers.CodeInfo ci = resforge.layers.CodeInfo.parse(l.data);
+                if(ci.recognized)
+                    System.out.printf("  %s%s", ci.name, ci.isClassFile ? " (.class)" : "");
+            } else if(l.name.equals("codeentry")) {
+                resforge.layers.CodeEntryInfo ce = resforge.layers.CodeEntryInfo.parse(l.data);
+                if(ce.recognized) {
+                    for(resforge.layers.CodeEntryInfo.Entry en : ce.entries)
+                        System.out.printf("  ent %s->%s", en.name, en.className);
+                    for(resforge.layers.CodeEntryInfo.Dep d : ce.classpath)
+                        System.out.printf("  use %s%s", d.name, d.ver >= 0 ? "@v" + d.ver : "");
+                }
             }
             System.out.println();
         }

@@ -85,7 +85,8 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 | `mat2` | edit as JSON (id + per-command tto value lists; tagged-value form, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **read-only**: fully decoded; OBJ export; `transform` write path |
-| everything else (`neg`,`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`code`,`codeentry`,`src`,…) | **raw passthrough** (lossless) |
+| `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
+| everything else (`neg`,`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,

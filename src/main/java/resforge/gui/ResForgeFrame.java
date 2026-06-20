@@ -695,6 +695,9 @@ public class ResForgeFrame extends JFrame {
             case "3D model":
                 buildModelPanel(content, l);
                 break;
+            case "code":
+                buildCodePanel(content, idx, l);
+                break;
             default:
                 buildRawPanel(content, idx, l);
         }
@@ -781,6 +784,18 @@ public class ResForgeFrame extends JFrame {
         content.add(labeled("3D geometry is edited via the whole model."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(action("Export model as OBJ\u2026", this::doExportObj))));
+    }
+
+    private void buildCodePanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.codeText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(action("Export\u2026", () -> exportLayer(idx)))));
     }
 
     private void buildRawPanel(JPanel content, int idx, Layer l) {

@@ -68,6 +68,20 @@ tagged-value form (a string stays a plain JSON string; everything else is a
 single-tag object like `{"color":[204,204,204,255]}`, `{"f32":0.5}`, `{"u8":0}`)
 under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value-list".
 
+## code / codeentry layers
+`code` (from `haven.Resource.Code`): `string name` (a fully-qualified Java class
+name) + the rest of the payload = a compiled `.class` file (magic `CAFEBABE`).
+The game ships server-authored JVM bytecode and loads it via a custom class
+loader. `codeentry` (`haven.Resource.CodeEntry`): tagged sections until EOM —
+`t==1` pairs `[entryName, className]` (terminated by an empty pair), `t==2`
+classpath `[resName, uint16 ver]` (terminated by an empty name), `t==3` like
+`t==1` but each pair is followed by a `tto` argument list, `t==4` a `tto` list of
+`["ent",…]`/`["use",…]` records. Both are **read-only** here (`CodeInfo`,
+`CodeEntryInfo`): we surface the class name (+ `.class` export) and the
+entrypoint→class + classpath manifest, but neither runs nor edits the bytecode;
+the layers stay raw/lossless. Confirmed on all sample layers (18 code, 7
+codeentry; tags 1/2/3 seen, each parses to the exact end).
+
 ## Server fetch
 The game client (and our `fetch`) downloads `<base>/<path>.res`. Base default is
 `http://game.havenandhearth.com/res/` (the official server). Example path:

@@ -2,6 +2,8 @@ package resforge.res;
 
 import resforge.layers.ActionCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.CodeEntryInfo;
+import resforge.layers.CodeInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
@@ -49,6 +51,8 @@ public class Verifier {
         public final Map<String, Integer> audioHist = new TreeMap<>();
         public final Map<String, Integer> actionHist = new TreeMap<>();
         public final Map<String, Integer> matHist = new TreeMap<>();
+        public final Map<String, Integer> codeHist = new TreeMap<>();
+        public final Map<String, Integer> codeEntryHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
@@ -105,6 +109,8 @@ public class Verifier {
         printHist(out, "Audio histogram", sum.audioHist);
         printHist(out, "Action histogram", sum.actionHist);
         printHist(out, "Mat2 histogram", sum.matHist);
+        printHist(out, "Code histogram", sum.codeHist);
+        printHist(out, "CodeEntry histogram", sum.codeEntryHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
@@ -164,6 +170,16 @@ public class Verifier {
             else if(l.name.equals("mat2"))
                 sum.matHist.merge(Mat2Codec.toJsonIfLossless(l.data) != null ? "json" : "raw",
                         1, Integer::sum);
+            else if(l.name.equals("code")) {
+                CodeInfo ci = CodeInfo.parse(l.data);
+                sum.codeHist.merge(!ci.recognized ? "unrecognized" : ci.isClassFile ? "class" : "data",
+                        1, Integer::sum);
+            }
+            else if(l.name.equals("codeentry")) {
+                CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
+                sum.codeEntryHist.merge(!ce.recognized ? "unrecognized" : ce.reachedEnd ? "decoded" : "partial",
+                        1, Integer::sum);
+            }
             else if(l.name.equals("font")) {
                 FontInfo fi = FontInfo.parse(l.data);
                 sum.fontHist.merge(fi.format != null ? fi.format : "raw", 1, Integer::sum);
