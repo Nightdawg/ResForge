@@ -27,7 +27,7 @@ public class ImageView extends JComponent {
 
     @Override
     public Dimension getPreferredSize() {
-        return new Dimension(360, 360);
+        return isPreferredSizeSet() ? super.getPreferredSize() : new Dimension(360, 360);
     }
 
     @Override
