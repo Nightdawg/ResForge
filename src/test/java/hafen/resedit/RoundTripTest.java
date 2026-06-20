@@ -14,6 +14,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,6 +101,26 @@ class RoundTripTest {
         byte[] raw = sample().serialize();
         ResContainer reparsed = ResContainer.parse(raw);
         assertArrayEquals(raw, reparsed.serialize());
+    }
+
+    @Test
+    void layerAddDeleteReorderSerializeInOrder() {
+        // Mirrors what the GUI does to res.layers, then checks the file round-trips.
+        ResContainer res = new ResContainer(5);
+        res.layers.add(new Layer("a", new byte[]{1}));
+        res.layers.add(new Layer("b", new byte[]{2}));
+        res.layers.add(new Layer("c", new byte[]{3}));
+        // reorder: move "c" to the front
+        res.layers.add(0, res.layers.remove(2));
+        // add a new layer after the first
+        res.layers.add(1, new Layer("new", new byte[]{9, 9}));
+        // delete "b"
+        res.layers.removeIf(l -> l.name.equals("b"));
+
+        ResContainer re = ResContainer.parse(res.serialize());
+        assertEquals(List.of("c", "new", "a"), re.layers.stream().map(l -> l.name).toList());
+        assertArrayEquals(new byte[]{9, 9}, re.layers.get(1).data);
+        assertEquals(5, re.version);
     }
 
     @Test

@@ -66,6 +66,7 @@ public class ResEditFrame extends JFrame {
     private final JSpinner versionSpinner =
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
+    private JButton addBtn, delBtn, upBtn, downBtn;
 
     public ResEditFrame() {
         super("hafen-resedit");
@@ -83,11 +84,16 @@ public class ResEditFrame extends JFrame {
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.getColumnModel().getColumn(0).setMaxWidth(40);
         table.getSelectionModel().addListSelectionListener(e -> {
-            if(!e.getValueIsAdjusting())
+            if(!e.getValueIsAdjusting()) {
                 showSelected();
+                updateLayerButtons();
+            }
         });
-        JScrollPane left = new JScrollPane(table);
-        left.setPreferredSize(new Dimension(360, 480));
+        JScrollPane tableScroll = new JScrollPane(table);
+        JPanel left = new JPanel(new BorderLayout());
+        left.add(tableScroll, BorderLayout.CENTER);
+        left.add(buildLayerBar(), BorderLayout.SOUTH);
+        left.setPreferredSize(new Dimension(380, 480));
 
         detail.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         showPlaceholder("Open a .res file to begin (File \u2192 Open, or drag one in).");
@@ -102,6 +108,110 @@ public class ResEditFrame extends JFrame {
         setTransferHandler(new FileDropHandler());
         setSize(900, 600);
         setLocationByPlatform(true);
+        updateLayerButtons();
+    }
+
+    private JComponent buildLayerBar() {
+        JToolBar bar = new JToolBar();
+        bar.setFloatable(false);
+        addBtn = new JButton(action("Add\u2026", this::addLayer));
+        addBtn.setToolTipText("Add a new layer (optionally from a file)");
+        delBtn = new JButton(action("Delete", this::deleteLayer));
+        upBtn = new JButton(action("Move \u2191", () -> moveLayer(-1)));
+        upBtn.setToolTipText("Move the selected layer earlier (order is significant)");
+        downBtn = new JButton(action("Move \u2193", () -> moveLayer(1)));
+        downBtn.setToolTipText("Move the selected layer later (order is significant)");
+        bar.add(addBtn);
+        bar.add(delBtn);
+        bar.addSeparator();
+        bar.add(upBtn);
+        bar.add(downBtn);
+        return bar;
+    }
+
+    private void updateLayerButtons() {
+        int sel = table.getSelectedRow();
+        boolean hasFile = res != null;
+        boolean hasSel = hasFile && sel >= 0 && sel < res.layers.size();
+        if(addBtn != null)
+            addBtn.setEnabled(hasFile);
+        if(delBtn != null)
+            delBtn.setEnabled(hasSel);
+        if(upBtn != null)
+            upBtn.setEnabled(hasSel && sel > 0);
+        if(downBtn != null)
+            downBtn.setEnabled(hasSel && sel < res.layers.size() - 1);
+    }
+
+    private void addLayer() {
+        if(res == null)
+            return;
+        String name = JOptionPane.showInputDialog(this,
+                "New layer type/name (e.g. image, tooltip, neg, props):",
+                "Add layer", JOptionPane.PLAIN_MESSAGE);
+        if(name == null)
+            return;
+        name = name.strip();
+        if(name.isEmpty()) {
+            error("Layer name cannot be empty.");
+            return;
+        }
+        byte[] data = new byte[0];
+        JFileChooser fc = new JFileChooser(dir());
+        fc.setDialogTitle("Content for '" + name + "'  (Cancel = empty layer)");
+        if(fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+            try {
+                data = Files.readAllBytes(fc.getSelectedFile().toPath());
+            } catch(Exception e) {
+                error("Could not read file: " + e.getMessage());
+                return;
+            }
+        }
+        int sel = table.getSelectedRow();
+        int at = (sel >= 0) ? sel + 1 : res.layers.size();
+        res.layers.add(at, new Layer(name, data));
+        model.fireTableDataChanged();
+        table.setRowSelectionInterval(at, at);
+        markDirty();
+        setStatus("Added '" + name + "' layer (" + data.length + " bytes) at position " + at);
+    }
+
+    private void deleteLayer() {
+        int sel = table.getSelectedRow();
+        if(res == null || sel < 0 || sel >= res.layers.size())
+            return;
+        Layer l = res.layers.get(sel);
+        int r = JOptionPane.showConfirmDialog(this,
+                "Delete layer " + sel + " (" + l.name + ", " + l.data.length + " bytes)?",
+                "Delete layer", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+        if(r != JOptionPane.YES_OPTION)
+            return;
+        res.layers.remove(sel);
+        model.fireTableDataChanged();
+        if(res.layers.isEmpty()) {
+            showPlaceholder("This file has no layers.");
+        } else {
+            int n = Math.min(sel, res.layers.size() - 1);
+            table.setRowSelectionInterval(n, n);
+        }
+        markDirty();
+        updateLayerButtons();
+        setStatus("Deleted layer " + sel + " (" + l.name + ")");
+    }
+
+    private void moveLayer(int delta) {
+        int sel = table.getSelectedRow();
+        if(res == null || sel < 0)
+            return;
+        int target = sel + delta;
+        if(target < 0 || target >= res.layers.size())
+            return;
+        Layer l = res.layers.remove(sel);
+        res.layers.add(target, l);
+        model.fireTableDataChanged();
+        table.setRowSelectionInterval(target, target);
+        markDirty();
+        setStatus("Moved '" + l.name + "' to position " + target);
     }
 
     /* ------------------------------------------------------------------ menus */
@@ -189,6 +299,7 @@ public class ResEditFrame extends JFrame {
             else
                 showPlaceholder("This file has no layers.");
             updateTitle();
+            updateLayerButtons();
             setStatus("Opened " + p.getFileName() + " \u2014 res-version " + res.version
                     + ", " + res.layers.size() + " layers");
         } catch(Exception e) {
