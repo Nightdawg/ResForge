@@ -19,6 +19,13 @@ then the encoded image (a normal PNG/JPEG) to the end. If ver-128 == 1: a typed
 size + offset to composite an `anim` preview at one shared scale, so
 differently-sized frames keep their true relative size and position (e.g.
 cleave's 8 frames range 44x27→23x25 with offsets sweeping (14,27)→(35,16)).
+`ImageHeaderCodec` re-encodes the old-style header so the GUI can edit id / z /
+sub-z / offset / nooff (lossless-or-raw: image bytes kept verbatim, offered only
+when a straight re-encode reproduces the original). Note the first header byte is
+both the `ver` gate and `z`'s low byte, so editing z keeps that byte < 128. The
+codec's `build(...)` wraps a raw PNG/JPEG into a fresh image layer (used when
+adding a frame — the GUI assigns the next free id), enabling "expand an
+animation" by adding image layers + extending the `anim` frame list.
 
 ## tex layer (3D model texture)
 From `haven.TexR.Encoded`: `int16 id`, `uint16` off x/y, `uint16` sz x/y, then
