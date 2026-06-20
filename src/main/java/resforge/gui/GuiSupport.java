@@ -252,6 +252,51 @@ public final class GuiSupport {
         return null;
     }
 
+    /** A read-only multi-line detail for vbuf2/mesh layers (counts, attributes), else null. */
+    public static String modelDetail(Layer l) {
+        if(l.name.equals("vbuf2")) {
+            Vbuf2Info vi = Vbuf2Info.parse(l.data);
+            if(!vi.recognized)
+                return "vbuf2 (unrecognized)";
+            StringBuilder sb = new StringBuilder();
+            sb.append(vi.num).append(" vertices   (format v").append(vi.ver);
+            if(vi.ver >= 1)
+                sb.append(", id=").append(vi.id);
+            sb.append(")\nAttributes: ").append(String.join(", ", vi.attribs));
+            if(vi.stoppedAt != null)
+                sb.append("\n+ bone/skinning data (").append(vi.stoppedAt).append(")");
+            return sb.toString();
+        }
+        if(l.name.equals("mesh")) {
+            MeshInfo mi = MeshInfo.parse(l.data);
+            if(!mi.recognized)
+                return "mesh (unrecognized)";
+            StringBuilder sb = new StringBuilder();
+            sb.append(mi.numTris).append(" triangles\nvbuf=").append(mi.vbufid);
+            if(mi.matid >= 0)
+                sb.append("   material=").append(mi.matid);
+            if(mi.id >= 0)
+                sb.append("   id=").append(mi.id);
+            if(mi.stripped)
+                sb.append("   (delta-stripped indices)");
+            return sb.toString();
+        }
+        return null;
+    }
+
+    /** A read-only metadata line for font/midi layers, else null. */
+    public static String mediaMeta(Layer l) {
+        if(l.name.equals("font")) {
+            FontInfo fi = FontInfo.parse(l.data);
+            if(fi.format != null)
+                return "Embedded " + fi.format.toUpperCase() + " font (sfnt)   ver=" + fi.ver + " type=" + fi.type;
+            return "font (unrecognized)";
+        }
+        if(l.name.equals("midi"))
+            return "MIDI music (whole-file payload)";
+        return null;
+    }
+
     /** Result of preparing a layer's content for export. */
     public static final class Export {
         public final byte[] data;

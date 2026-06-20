@@ -26,9 +26,11 @@ an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and an **Export 3D model as OBJ** action. You can also add, rename,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
-offset, no-offset flag), and adding an image wraps it in a fresh layer with the
-next free id — so you can extend a sprite **animation** by adding frames and
-listing their ids in the `anim` editor. Unchanged
+offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and an
+**audio** clip's id + volume, and adding an image wraps it in a fresh layer with
+the next free id — so you can extend a sprite **animation** by adding frames and
+listing their ids in the `anim` editor. The 3D `vbuf2`/`mesh` layers show their
+vertex/attribute and triangle/material detail (read-only). Unchanged
 layers are preserved byte-for-byte on save, so edits can't corrupt a file.
 
 ## The `.res` format

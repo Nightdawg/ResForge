@@ -738,6 +738,15 @@ public class ResForgeFrame extends JFrame {
                 l.name.equals("image") ? resforge.layers.ImageHeaderCodec.parse(l.data) : null;
         if(hdr != null && hdr.editable) {
             addImageHeaderEditor(content, idx, hdr);
+        } else if(l.name.equals("tex")) {
+            resforge.layers.TexHeaderCodec th = resforge.layers.TexHeaderCodec.parse(l.data);
+            if(th.editable)
+                addTexHeaderEditor(content, idx, th);
+            else {
+                String meta = GuiSupport.imageMeta(l);
+                if(meta != null)
+                    content.add(labeled(meta));
+            }
         } else {
             String meta = GuiSupport.imageMeta(l);
             if(meta != null)
@@ -749,6 +758,38 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(
                 new JButton(action("Replace image\u2026", () -> replaceFromFile(idx, l.name))),
                 new JButton(action("Export image\u2026", () -> exportLayer(idx)))));
+    }
+
+    /** Editable header fields (id, offset, declared size) for a tex layer. */
+    private void addTexHeaderEditor(JPanel content, int idx, resforge.layers.TexHeaderCodec h) {
+        JSpinner idSp = intSpinner(h.id);
+        JSpinner oxSp = u16Spinner(h.offX);
+        JSpinner oySp = u16Spinner(h.offY);
+        JSpinner sxSp = u16Spinner(h.szX);
+        JSpinner sySp = u16Spinner(h.szY);
+
+        JPanel row1 = headerRow();
+        row1.add(new JLabel("id")); row1.add(idSp);
+        row1.add(new JLabel("  off.x")); row1.add(oxSp);
+        row1.add(new JLabel("  off.y")); row1.add(oySp);
+
+        JPanel row2 = headerRow();
+        row2.add(new JLabel("sz.x")); row2.add(sxSp);
+        row2.add(new JLabel("  sz.y")); row2.add(sySp);
+        row2.add(new JButton(action("Apply header", () -> {
+            try {
+                byte[] payload = h.encodeWith(
+                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(), (Integer) oySp.getValue(),
+                        (Integer) sxSp.getValue(), (Integer) sySp.getValue());
+                setLayerPayload(idx, payload);
+                setStatus("Updated tex header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                error(ex.getMessage());
+            }
+        })));
+
+        content.add(row1);
+        content.add(row2);
     }
 
     /** Editable header fields (id, z, sub-z, offset, nooff) for an old-style image layer. */
@@ -795,6 +836,12 @@ public class ResForgeFrame extends JFrame {
 
     private static JSpinner intSpinner(int value) {
         JSpinner s = new JSpinner(new SpinnerNumberModel(value, -32768, 32767, 1));
+        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
+        return s;
+    }
+
+    private static JSpinner u16Spinner(int value) {
+        JSpinner s = new JSpinner(new SpinnerNumberModel(Math.max(0, Math.min(65535, value)), 0, 65535, 1));
         ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
         return s;
     }
@@ -948,7 +995,8 @@ public class ResForgeFrame extends JFrame {
             }
             addAudioHeaderEditor(content, idx, l);
         }
-        content.add(labeled(GuiSupport.summary(l)));
+        String media = GuiSupport.mediaMeta(l);
+        content.add(labeled(media != null ? media : GuiSupport.summary(l)));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Replace\u2026", () -> replaceFromFile(idx, l.name))),
@@ -993,9 +1041,19 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void buildModelPanel(JPanel content, Layer l) {
-        content.add(labeled(GuiSupport.summary(l)));
+        String detail = GuiSupport.modelDetail(l);
+        if(detail != null) {
+            JTextArea area = new JTextArea(detail);
+            area.setEditable(false);
+            area.setOpaque(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setAlignmentX(Component.LEFT_ALIGNMENT);
+            content.add(area);
+        } else {
+            content.add(labeled(GuiSupport.summary(l)));
+        }
         content.add(Box.createVerticalStrut(8));
-        content.add(labeled("3D geometry is edited via the whole model."));
+        content.add(labeled("3D geometry is read-only here; edit the whole model via OBJ export."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(action("Export model as OBJ\u2026", this::doExportObj))));
     }
