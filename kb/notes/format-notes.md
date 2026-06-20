@@ -135,17 +135,16 @@ The Haven encode toolkit is fully in the client: `Utils.hfenc`/`uvec2oct`,
 them), faithfully porting `haven.PoseMorph.read`: collect each vertex's
 influences, sort by weight descending, keep the **top 4**, normalise to sum 1 →
 exactly glTF's `JOINTS_0` (VEC4) + `WEIGHTS_0` (VEC4). `GltfExport` emits a `skin`:
-a flat list of joint nodes (one per influence bone, unified across vbufs), each
-carrying its **bind world matrix** computed from the local `skel`
-(`world = parent·T(pos)·R(axis,angle)`, then converted to glTF space as
-`G = R·W·R⁻¹` with `R` = Haven-Z-up→Y-up), and an `inverseBindMatrices` accessor
-(`IBM = G⁻¹`). At bind pose `G·IBM = I` (verified ≤2.3e-5 on knarr), so the mesh
-shows undeformed. **Most characters (male/female/bull) have NO local skel** — their
-skeleton lives in another resource; those joints are emitted identity-placed
-(named, so Blender still gets named vertex groups + correct bind mesh, but the
-armature isn't posed). knarr has a local skel → fully posed (11 joints). 4×4 math
-is in `model/M4` (column-major). **Next:** `skan`→glTF animations, `manim`→morph
-targets; then glTF *import*.
+when a local `skel` is present its bones become a **connected node hierarchy**
+(each bone a node with its native local translation+rotation, parented per the
+skeleton) under a conversion **ROOT** node (rotation `R` = Haven-Z-up→Y-up), so a
+bone's glTF global is `G = R·nativeWorld` and `IBM = G⁻¹` (bind `G·IBM = I`,
+verified ≤1.5e-5 via the real node hierarchy on knarr/stallion/lilypadlotus). The
+connected hierarchy is what makes the armature display cleanly **and** lets `skan`
+animations target it. **Characters with an external skeleton** (male/female/bull —
+no local `skel`) fall back to identity-placed named joints (mesh + vertex groups
+still correct, armature un-posed). 4×4 maths are in `model/M4` (column-major).
+**Next:** `skan`→glTF animations, `manim`→morph targets; then glTF *import*.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

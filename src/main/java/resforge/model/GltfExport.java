@@ -123,7 +123,8 @@ public final class GltfExport {
                 for(String n : d.boneNames)
                     if(!joints.contains(n))
                         joints.add(n);
-        Map<String, float[]> boneWorld = skeletonWorld(res);   // bone name -> native bind world matrix
+        SkelInfo skel = firstSkel(res);                       // local skeleton, or null
+        Map<String, float[]> boneWorld = skeletonWorld(skel); // bone name -> native bind world matrix
 
         Buf bin = new Buf();
         List<Object> bufferViews = new ArrayList<>();
@@ -189,30 +190,66 @@ public final class GltfExport {
         root.put("scene", 0);
 
         if(!joints.isEmpty()) {
-            // One flat joint node per unified bone (its bind world matrix, or
-            // identity when the skeleton lives in another resource), plus a skin.
-            float[] R = M4.fromQuat(0.70710677f, -0.70710677f, 0, 0);   // Haven Z-up -> glTF Y-up
-            float[] Rinv = M4.rigidInverse(R);
+            // Connected joint hierarchy: each skel bone is a node with its native
+            // local transform, parented per the skeleton, all under a conversion
+            // ROOT node that rotates Haven Z-up -> glTF Y-up. A bone's glTF global
+            // transform is therefore G = R · nativeWorld, and IBM = G^-1, so at bind
+            // pose G·IBM = I (the inline-converted geometry shows undeformed).
+            float[] R = M4.fromQuat(0.70710677f, -0.70710677f, 0, 0);
+            List<Object> rxyzw = List.of(-0.70710677, 0.0, 0.0, 0.70710677);   // R as [x,y,z,w]
+
+            Map<String, Integer> boneNode = new LinkedHashMap<>();
+            if(skel != null && skel.recognized) {
+                for(SkelInfo.Bone b : skel.bones) {
+                    float[] q = M4.quat(b.ax, b.ay, b.az, b.ang);       // [w,x,y,z]
+                    Map<String, Object> jn = new LinkedHashMap<>();
+                    jn.put("name", b.name);
+                    jn.put("translation", List.of((double) b.px, (double) b.py, (double) b.pz));
+                    jn.put("rotation", List.of((double) q[1], (double) q[2], (double) q[3], (double) q[0]));
+                    boneNode.put(b.name, nodes.size());
+                    nodes.add(jn);
+                }
+                List<Object> rootBones = new ArrayList<>();
+                Map<Integer, List<Object>> childrenOf = new LinkedHashMap<>();
+                for(SkelInfo.Bone b : skel.bones) {
+                    int ni = boneNode.get(b.name);
+                    if(b.parent.isEmpty() || !boneNode.containsKey(b.parent))
+                        rootBones.add(ni);
+                    else
+                        childrenOf.computeIfAbsent(boneNode.get(b.parent), k -> new ArrayList<>()).add(ni);
+                }
+                for(Map.Entry<Integer, List<Object>> e : childrenOf.entrySet())
+                    ((Map<String, Object>) nodes.get(e.getKey())).put("children", e.getValue());
+
+                Map<String, Object> rootNode = new LinkedHashMap<>();
+                rootNode.put("name", "ROOT");
+                rootNode.put("rotation", rxyzw);
+                rootNode.put("children", rootBones);
+                sceneNodes.add(nodes.size());
+                nodes.add(rootNode);
+            }
+
+            // skin.joints in unified influence order; external bones (no local skel
+            // entry) get a flat identity node so weights/groups still transfer.
             List<Object> jointIndices = new ArrayList<>();
             float[] ibm = new float[joints.size() * 16];
             for(int j = 0; j < joints.size(); j++) {
                 String name = joints.get(j);
-                Map<String, Object> jn = new LinkedHashMap<>();
-                jn.put("name", name);
-                float[] world = boneWorld.get(name);
+                Integer ni = boneNode.get(name);
                 float[] inv;
-                if(world != null) {
-                    float[] g = M4.mul(R, M4.mul(world, Rinv));
-                    jn.put("matrix", floatList(g));
-                    inv = M4.rigidInverse(g);
+                if(ni != null && boneWorld.containsKey(name)) {
+                    inv = M4.rigidInverse(M4.mul(R, boneWorld.get(name)));
+                    jointIndices.add(ni);
                 } else {
+                    Map<String, Object> fn = new LinkedHashMap<>();
+                    fn.put("name", name);
+                    int fi = nodes.size();
+                    nodes.add(fn);
+                    sceneNodes.add(fi);
+                    jointIndices.add(fi);
                     inv = M4.identity();
                 }
                 System.arraycopy(inv, 0, ibm, j * 16, 16);
-                int nodeIdx = nodes.size();
-                nodes.add(jn);
-                sceneNodes.add(nodeIdx);
-                jointIndices.add(nodeIdx);
             }
             int ibmAccessor = addMat4(bin, bufferViews, accessors, ibm, joints.size());
             meshNode.put("skin", 0);
@@ -388,25 +425,12 @@ public final class GltfExport {
         return accs.size() - 1;
     }
 
-    private static List<Object> floatList(float[] m) {
-        List<Object> l = new ArrayList<>(m.length);
-        for(float v : m)
-            l.add((double) v);
-        return l;
-    }
-
     /**
-     * Computes each bone's native (Haven-space) bind world matrix from the first
-     * {@code skel} layer, or an empty map if the resource has no local skeleton
-     * (then bones live in another resource and joints stay identity-placed).
+     * Computes each bone's native (Haven-space) bind world matrix from a {@code
+     * skel} layer (or an empty map if there is no local skeleton — then bones live
+     * in another resource and joints stay identity-placed).
      */
-    private static Map<String, float[]> skeletonWorld(ResContainer res) {
-        SkelInfo skel = null;
-        for(Layer l : res.layers)
-            if(l.name.equals("skel")) {
-                skel = SkelInfo.parse(l.data);
-                break;
-            }
+    private static Map<String, float[]> skeletonWorld(SkelInfo skel) {
         Map<String, float[]> world = new LinkedHashMap<>();
         if(skel == null || !skel.recognized)
             return world;
@@ -435,6 +459,13 @@ public final class GltfExport {
             }
         }
         return world;
+    }
+
+    private static SkelInfo firstSkel(ResContainer res) {
+        for(Layer l : res.layers)
+            if(l.name.equals("skel"))
+                return SkelInfo.parse(l.data);
+        return null;
     }
 
     private static int addBufferView(List<Object> bvs, int off, int len, int target) {
