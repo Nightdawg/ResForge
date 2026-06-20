@@ -76,6 +76,7 @@ public class ResForgeFrame extends JFrame {
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
     private AudioPlayerPanel currentPlayer;
+    private javax.swing.Timer animTimer;
     private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
     private final JTextField pathField = new JTextField("(no file open)");
 
@@ -658,6 +659,10 @@ public class ResForgeFrame extends JFrame {
             currentPlayer.dispose();
             currentPlayer = null;
         }
+        if(animTimer != null) {
+            animTimer.stop();
+            animTimer = null;
+        }
         int idx = table.getSelectedRow();
         if(res == null || idx < 0 || idx >= res.layers.size()) {
             showPlaceholder("Select a layer.");
@@ -685,9 +690,11 @@ public class ResForgeFrame extends JFrame {
             case "props":
             case "keybind":
             case "material":
-            case "animation":
             case "hitbox":
                 buildJsonPanel(content, idx, l);
+                break;
+            case "animation":
+                buildAnimPanel(content, idx, l);
                 break;
             case "sound":
             case "font":
@@ -743,6 +750,10 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void buildJsonPanel(JPanel content, int idx, Layer l) {
+        addJsonEditor(content, idx, l, 320);
+    }
+
+    private void addJsonEditor(JPanel content, int idx, Layer l, int height) {
         String json = GuiSupport.editableJson(l);
         if(json == null) {
             content.add(labeled("This " + l.name + " layer uses types this editor can't safely"
@@ -755,13 +766,77 @@ public class ResForgeFrame extends JFrame {
         area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
+        sp.setPreferredSize(new Dimension(420, height));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(action("Apply JSON", () -> {
             applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
             setStatus("Updated " + l.name + " in layer " + idx);
         })), new JButton(action("Export JSON\u2026", () -> exportLayer(idx)))));
+    }
+
+    /** anim layers: a live frame preview (resolving frame image-ids to sibling image layers) + the JSON editor. */
+    private void buildAnimPanel(JPanel content, int idx, Layer l) {
+        addAnimPreview(content, l);
+        addJsonEditor(content, idx, l, 160);
+    }
+
+    private void addAnimPreview(JPanel content, Layer l) {
+        java.util.Map<String, Object> m;
+        try {
+            m = resforge.layers.AnimCodec.decode(l.data);
+        } catch(RuntimeException e) {
+            return;
+        }
+        int delay = ((Number) m.get("delay")).intValue();
+        java.util.List<?> ids = (java.util.List<?>) m.get("frames");
+        java.util.List<java.awt.image.BufferedImage> frames = new java.util.ArrayList<>();
+        for(Object o : ids) {
+            java.awt.image.BufferedImage bi = imageById(((Number) o).intValue());
+            if(bi != null)
+                frames.add(bi);
+        }
+        if(frames.isEmpty()) {
+            content.add(labeled("(no matching image frames in this resource to preview)"));
+            content.add(Box.createVerticalStrut(8));
+            return;
+        }
+        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"));
+        ImageView view = new ImageView();
+        Dimension d = new Dimension(220, 180);
+        view.setPreferredSize(d);
+        view.setMaximumSize(d);
+        view.setAlignmentX(Component.LEFT_ALIGNMENT);
+        view.setImage(frames.get(0));
+        content.add(view);
+        content.add(Box.createVerticalStrut(8));
+        int[] fi = {0};
+        animTimer = new javax.swing.Timer(Math.max(20, delay), ev -> {
+            fi[0] = (fi[0] + 1) % frames.size();
+            view.setImage(frames.get(fi[0]));
+        });
+        animTimer.setInitialDelay(Math.max(20, delay));
+        animTimer.start();
+    }
+
+    /** Decodes the first image layer whose header id matches {@code id}, else null. */
+    private java.awt.image.BufferedImage imageById(int id) {
+        if(res == null)
+            return null;
+        for(Layer ly : res.layers) {
+            if(!ly.name.equals("image"))
+                continue;
+            try {
+                resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
+                if(ii.recognized && ii.id == id) {
+                    java.awt.image.BufferedImage bi = GuiSupport.preview(ly);
+                    if(bi != null)
+                        return bi;
+                }
+            } catch(RuntimeException ignored) {
+            }
+        }
+        return null;
     }
 
     private void buildMediaPanel(JPanel content, int idx, Layer l) {

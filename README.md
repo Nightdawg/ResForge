@@ -20,7 +20,8 @@ Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
 `gfx/borka/male`). Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
-Stop / draggable seek) for audio; an editable **text box** for tooltips/pagina;
+Stop / draggable seek) for audio; a live **animation preview** that plays sprite
+animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and an **Export 3D model as OBJ** action. You can also add, rename,
 delete and reorder layers, edit the resource version, and undo/redo. Unchanged
