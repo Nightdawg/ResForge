@@ -60,7 +60,9 @@ offset — **editable** for old-style image headers)+replace+export, **Ogg playe
 sibling image layers, composited at their true relative size + per-frame offset),
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
-export), font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer
+export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
+`src` exports as `.java`), font/midi replace+export, raw replace+export, 3D →
+**Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
@@ -74,8 +76,9 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
   (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
-  `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`
-  (read-only); typed JSON codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`,
+  `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
+  `DepsInfo`, `RLinkInfo`, `SrcInfo` (read-only); typed JSON codecs `PropsCodec`,
+  `ActionCodec`, `Mat2Codec`,
   `AnimCodec`,   `NegCodec`, `ObstCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
@@ -105,7 +108,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export (+ `.mtl` + local `tex` image, textured); `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
-| everything else (`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
+| `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
+| everything else (`skel`,`skan`,`boneoff`,`tileset2`,`clamb`,`foodev`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,
@@ -131,8 +135,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   PNG — was removed; the tool correctly rejects such files). Histograms confirm all
   image/tex/audio/font/props/action/**mat2**/**anim**/**neg** decode/round-trip
   exactly, all `vbuf2` re-encode byte-exact, all `mesh` decode, and all
-  `code`/`codeentry` decode. (Counts grow as more samples are added; `verify` is
-  the live oracle — keep it all-pass.)
+  `code`/`codeentry`/`deps`/`src`/`rlink` decode. (Counts grow as more samples are
+  added; `verify` is the live oracle — keep it all-pass.)
 
 ## 9. Conventions
 - Lossless-or-raw: never expose a typed editor unless decode→encode is byte-exact
@@ -155,6 +159,10 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
+- **Read-only dependency/reference view is now done** for `deps`/`rlink`/`src`
+  (`DepsInfo`/`RLinkInfo`/`SrcInfo`) — shows what other resources a `.res` references.
+  Possible follow-on: an aggregated cross-layer "all references" report (deps +
+  rlink + codeentry classpath + external `tex` from mat2/anim) per resource.
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)
 

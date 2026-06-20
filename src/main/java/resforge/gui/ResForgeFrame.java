@@ -686,6 +686,11 @@ public class ResForgeFrame extends JFrame {
             case "code":
                 buildCodePanel(content, idx, l);
                 break;
+            case "dependencies":
+            case "links":
+            case "source":
+                buildReferencePanel(content, idx, l);
+                break;
             default:
                 buildRawPanel(content, idx, l);
         }
@@ -1037,6 +1042,21 @@ public class ResForgeFrame extends JFrame {
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
         sp.setPreferredSize(new Dimension(420, 320));
         content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+    }
+
+    private void buildReferencePanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.referenceText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setCaretPosition(0);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(labeled("Read-only: this resource references the items above; preserved exactly on save."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(action("Export\u2026", () -> exportLayer(idx)))));
     }

@@ -5,6 +5,7 @@ import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
+import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
@@ -12,6 +13,8 @@ import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
+import resforge.layers.RLinkInfo;
+import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
 import resforge.res.Layer;
@@ -48,6 +51,9 @@ public final class GuiSupport {
             case "mat2":    return "material";
             case "code":
             case "codeentry": return "code";
+            case "deps":    return "dependencies";
+            case "rlink":   return "links";
+            case "src":     return "source";
             default:        return "raw";
         }
     }
@@ -134,6 +140,22 @@ public final class GuiSupport {
                     CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
                     return ce.entries.size() + " entry pt" + (ce.entries.size() == 1 ? "" : "s")
                             + ", " + ce.classpath.size() + " dep" + (ce.classpath.size() == 1 ? "" : "s");
+                }
+                case "deps": {
+                    DepsInfo di = DepsInfo.parse(l.data);
+                    if(!di.recognized)
+                        return "dependencies";
+                    return di.deps.size() + " dependenc" + (di.deps.size() == 1 ? "y" : "ies");
+                }
+                case "rlink": {
+                    RLinkInfo ri = RLinkInfo.parse(l.data);
+                    if(!ri.recognized && ri.links.isEmpty())
+                        return "resource links";
+                    return ri.links.size() + " link" + (ri.links.size() == 1 ? "" : "s");
+                }
+                case "src": {
+                    SrcInfo si = SrcInfo.parse(l.data);
+                    return si.recognized ? si.fileName : "source file";
                 }
                 default:
                     return l.data.length + " bytes";
@@ -232,6 +254,47 @@ public final class GuiSupport {
             if(ce.entries.isEmpty() && ce.classpath.isEmpty())
                 sb.append("\n(empty)\n");
             return sb.toString();
+        }
+        return null;
+    }
+
+    /** A read-only, human-readable view of a deps/rlink/src layer, else null. */
+    public static String referenceText(Layer l) {
+        if(l.name.equals("deps")) {
+            DepsInfo di = DepsInfo.parse(l.data);
+            if(!di.recognized)
+                return "(unrecognized deps layer)";
+            StringBuilder sb = new StringBuilder("Resource dependencies (read-only).\n");
+            if(di.deps.isEmpty())
+                sb.append("\n(none)\n");
+            else {
+                sb.append('\n');
+                for(DepsInfo.Dep d : di.deps)
+                    sb.append("  ").append(d.name).append("  @ v").append(d.ver).append('\n');
+            }
+            return sb.toString();
+        }
+        if(l.name.equals("rlink")) {
+            RLinkInfo ri = RLinkInfo.parse(l.data);
+            if(ri.links.isEmpty())
+                return ri.recognized ? "Resource links (read-only).\n\n(none)\n"
+                        : "(unrecognized rlink layer)";
+            StringBuilder sb = new StringBuilder("Resource links (read-only).\n");
+            for(RLinkInfo.Link lk : ri.links) {
+                sb.append("\n  id ").append(lk.id).append("  ->  ")
+                  .append(lk.res).append(" @ v").append(lk.ver).append('\n');
+                if(lk.spec != null)
+                    sb.append("      spec: ").append(lk.spec).append('\n');
+            }
+            if(!ri.recognized)
+                sb.append("\n(\u2026remaining entries use an unrecognized form and were skipped)\n");
+            return sb.toString();
+        }
+        if(l.name.equals("src")) {
+            SrcInfo si = SrcInfo.parse(l.data);
+            if(!si.recognized)
+                return "(unrecognized src layer)";
+            return "// " + si.fileName + "  (embedded source, read-only)\n\n" + si.text();
         }
         return null;
     }
@@ -402,6 +465,21 @@ public final class GuiSupport {
                     return new Export(ci.code, "class", "Java class file");
                 break;
             }
+            case "src": {
+                SrcInfo si = SrcInfo.parse(l.data);
+                if(si.recognized) {
+                    String ext = extensionOf(si.fileName, "java");
+                    return new Export(si.source, ext, "Source file");
+                }
+                break;
+            }
+            case "deps":
+            case "rlink": {
+                String t = referenceText(l);
+                if(t != null)
+                    return new Export(t.getBytes(StandardCharsets.UTF_8), "txt", "Reference listing");
+                break;
+            }
             default:
                 break;
         }
@@ -411,5 +489,15 @@ public final class GuiSupport {
     private static String preview(String s, int max) {
         s = s.replaceAll("\\s+", " ").strip();
         return s.length() > max ? s.substring(0, max) + "\u2026" : s;
+    }
+
+    /** The lower-cased file extension of a name, or {@code fallback} if none. */
+    private static String extensionOf(String name, String fallback) {
+        if(name != null) {
+            int dot = name.lastIndexOf('.');
+            if(dot >= 0 && dot < name.length() - 1)
+                return name.substring(dot + 1).toLowerCase();
+        }
+        return fallback;
     }
 }

@@ -215,8 +215,11 @@ collision (`obst`: polygons) as JSON, and text. The 3D vertex buffers (`vbuf2`) 
 inspected read-only (vertex count + attribute formats shown by `info`/`verify`),
 and `code`/`codeentry` layers are decoded read-only (class names and the
 entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).
-Deeper typed editing (mesh/skeleton geometry, animations, collision) can be
-layered on incrementally using the same parts model.
+A read-only **dependency / reference view** surfaces what other resources a `.res`
+points to: the explicit dependency list (`deps`: name + version), resource links
+and their decoded specs (`rlink`), and embedded source files (`src`, exportable as
+`.java`). Deeper typed editing (mesh/skeleton geometry, animations, collision) can
+be layered on incrementally using the same parts model.
 
 ## How this was built ("vibe coded")
 

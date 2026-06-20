@@ -5,6 +5,7 @@ import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
+import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
@@ -12,6 +13,8 @@ import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
+import resforge.layers.RLinkInfo;
+import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
 import resforge.model.Vbuf2Codec;
@@ -59,6 +62,9 @@ public class Verifier {
         public final Map<String, Integer> obstHist = new TreeMap<>();
         public final Map<String, Integer> codeHist = new TreeMap<>();
         public final Map<String, Integer> codeEntryHist = new TreeMap<>();
+        public final Map<String, Integer> depsHist = new TreeMap<>();
+        public final Map<String, Integer> srcHist = new TreeMap<>();
+        public final Map<String, Integer> rlinkHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
@@ -120,6 +126,9 @@ public class Verifier {
         printHist(out, "Obst histogram", sum.obstHist);
         printHist(out, "Code histogram", sum.codeHist);
         printHist(out, "CodeEntry histogram", sum.codeEntryHist);
+        printHist(out, "Deps histogram", sum.depsHist);
+        printHist(out, "Src histogram", sum.srcHist);
+        printHist(out, "RLink histogram", sum.rlinkHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
@@ -196,6 +205,19 @@ public class Verifier {
             else if(l.name.equals("codeentry")) {
                 CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
                 sum.codeEntryHist.merge(!ce.recognized ? "unrecognized" : ce.reachedEnd ? "decoded" : "partial",
+                        1, Integer::sum);
+            }
+            else if(l.name.equals("deps")) {
+                DepsInfo di = DepsInfo.parse(l.data);
+                sum.depsHist.merge(!di.recognized ? "unrecognized" : "decoded", 1, Integer::sum);
+            }
+            else if(l.name.equals("src")) {
+                SrcInfo si = SrcInfo.parse(l.data);
+                sum.srcHist.merge(si.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
+            }
+            else if(l.name.equals("rlink")) {
+                RLinkInfo ri = RLinkInfo.parse(l.data);
+                sum.rlinkHist.merge(ri.recognized ? "decoded" : ri.links.isEmpty() ? "unrecognized" : "partial",
                         1, Integer::sum);
             }
             else if(l.name.equals("font")) {
