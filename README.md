@@ -226,6 +226,10 @@ Point `JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for either bu
 
 ## Extending
 
+New here (or an AI assistant resuming work)? Read **`docs/AI-CONTEXT.md`** first —
+a one-file primer on the architecture, builds, feature set, per-layer status and
+open work. **`docs/DESIGN-notes.md`** has the deep format/reverse-engineering log.
+
 Typed decoders live in `hafen.resedit.layers`. To make another layer
 human-editable, add a part-splitting rule in `res/Unpacker.java` (and the
 inverse is automatic, since `pack` just concatenates parts). The `io`
