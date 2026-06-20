@@ -9,6 +9,8 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
@@ -38,6 +40,7 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
@@ -71,6 +74,7 @@ public class ResEditFrame extends JFrame {
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
     private AudioPlayerPanel currentPlayer;
+    private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
 
     private static final int UNDO_LIMIT = 100;
     private final Deque<Snapshot> undoStack = new ArrayDeque<>();
@@ -111,7 +115,10 @@ public class ResEditFrame extends JFrame {
         add(buildToolBar(), BorderLayout.NORTH);
 
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        table.setRowHeight(36);
         table.getColumnModel().getColumn(0).setMaxWidth(40);
+        table.getColumnModel().getColumn(1).setMaxWidth(44);
+        table.getColumnModel().getColumn(1).setMinWidth(44);
         table.getSelectionModel().addListSelectionListener(e -> {
             if(!e.getValueIsAdjusting()) {
                 showSelected();
@@ -430,6 +437,7 @@ public class ResEditFrame extends JFrame {
             this.res = parsed;
             this.file = p;
             this.dirty = false;
+            thumbCache.clear();
             updatingVersion = true;
             versionSpinner.setValue(res.version);
             versionSpinner.setEnabled(true);
@@ -799,7 +807,7 @@ public class ResEditFrame extends JFrame {
     /* ---------------------------------------------------------- table + d-and-d */
 
     private class LayerTableModel extends AbstractTableModel {
-        private final String[] cols = {"#", "Kind", "Layer", "Size", "Summary"};
+        private final String[] cols = {"#", "Img", "Kind", "Layer", "Size", "Summary"};
 
         public int getRowCount() {
             return res == null ? 0 : res.layers.size();
@@ -813,25 +821,56 @@ public class ResEditFrame extends JFrame {
             return cols[c];
         }
 
+        public Class<?> getColumnClass(int c) {
+            return c == 1 ? Icon.class : Object.class;
+        }
+
         public Object getValueAt(int row, int col) {
             Layer l = res.layers.get(row);
             switch(col) {
                 case 0: return row;
-                case 1: return GuiSupport.kind(l.name);
-                case 2: return l.name;
-                case 3: return l.data.length;
+                case 1: return thumbnail(l);
+                case 2: return GuiSupport.kind(l.name);
+                case 3: return l.name;
+                case 4: return l.data.length;
                 default: return GuiSupport.summary(l);
             }
         }
 
         public boolean isCellEditable(int row, int col) {
-            return col == 2;       // the "Layer" (type/name) column is editable
+            return col == 3;       // the "Layer" (type/name) column is editable
         }
 
         public void setValueAt(Object value, int row, int col) {
-            if(col == 2 && value != null)
+            if(col == 3 && value != null)
                 applyRename(row, String.valueOf(value));
         }
+    }
+
+    /** A cached, scaled thumbnail for icon/texture layers, else null. */
+    private Icon thumbnail(Layer l) {
+        if(thumbCache.containsKey(l))
+            return thumbCache.get(l);
+        Icon icon = makeThumbnail(l);
+        thumbCache.put(l, icon);
+        return icon;
+    }
+
+    private static Icon makeThumbnail(Layer l) {
+        String kind = GuiSupport.kind(l.name);
+        if(!kind.equals("icon") && !kind.equals("texture"))
+            return null;
+        java.awt.image.BufferedImage img = GuiSupport.preview(l);
+        if(img == null)
+            return null;
+        int max = 30;
+        int w = img.getWidth(), h = img.getHeight();
+        double s = Math.min((double) max / w, (double) max / h);
+        if(s > 1)
+            s = 1;
+        int dw = Math.max(1, (int) Math.round(w * s)), dh = Math.max(1, (int) Math.round(h * s));
+        Image scaled = img.getScaledInstance(dw, dh, Image.SCALE_SMOOTH);
+        return new ImageIcon(scaled);
     }
 
     private class FileDropHandler extends TransferHandler {
