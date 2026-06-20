@@ -330,6 +330,14 @@ public class Main {
         Files.writeString(out, r.obj);
         System.out.printf("Exported %d vertices, %d triangles (%d submeshes) -> %s%n",
                 r.vertices, r.triangles, r.submeshes, out);
+        if(r.mtl != null) {
+            Path mtlOut = out.resolveSibling(r.baseName + ".mtl");
+            Files.writeString(mtlOut, r.mtl);
+            for(ObjExport.TexFile tf : r.textures)
+                Files.write(out.resolveSibling(tf.name), tf.data);
+            System.out.printf("  + %s and %d texture file(s) (model opens textured)%n",
+                    mtlOut.getFileName(), r.textures.size());
+        }
     }
 
     private static void replace(String[] args) throws IOException {

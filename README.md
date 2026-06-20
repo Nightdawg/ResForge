@@ -23,7 +23,8 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
-and fonts; and an **Export 3D model as OBJ** action. You can also add,
+and fonts; and an **Export 3D model as OBJ** action (writes a `.mtl` + the
+texture image alongside it, so the model opens **textured**). You can also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
 offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and an
@@ -168,7 +169,7 @@ resforge replace menu.res  action newaction.json  menu.res    # keybind (JSON)
 resforge unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
 resforge pack   horse.resdir         # -> horse.res
 
-# Export a 3D model to a Wavefront OBJ (open in Blender / Windows 3D Viewer):
+# Export a 3D model to a Wavefront OBJ + .mtl + texture (opens textured in Blender):
 resforge obj    horse.res horse.obj
 
 # Validate round-trip + image splitting for one file or a whole folder:

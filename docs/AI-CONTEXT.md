@@ -81,7 +81,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
-  (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
+  (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ +
+  a `.mtl` and the local `tex` image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -101,7 +102,7 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 | `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
-| `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export; `transform` write path |
+| `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export (+ `.mtl` + local `tex` image, textured); `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | everything else (`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
 

@@ -234,7 +234,7 @@ resforge/
     layers/TtoSkip.java              # generic tto value skipper
     model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
     model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit)
-    model/ObjExport.java             # 3D geometry -> Wavefront OBJ
+    model/ObjExport.java             # 3D geometry -> Wavefront OBJ (+ .mtl + texture)
   src/test/java/resforge/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
