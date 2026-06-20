@@ -5,7 +5,10 @@
 #   kb\rag.ps1 list
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-if (-not $env:JAVA_HOME -or -not (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
-    $env:JAVA_HOME = 'C:\Program Files\Java\graalvm-jdk-21.0.9+7.1'
+$rag = Join-Path $root 'kb\Rag.java'
+# Prefer a valid JAVA_HOME, otherwise fall back to `java` on PATH.
+if ($env:JAVA_HOME -and (Test-Path (Join-Path $env:JAVA_HOME 'bin\java.exe'))) {
+    & (Join-Path $env:JAVA_HOME 'bin\java.exe') $rag @args
+} else {
+    & java $rag @args
 }
-& (Join-Path $env:JAVA_HOME 'bin\java.exe') (Join-Path $root 'kb\Rag.java') @args

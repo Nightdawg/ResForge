@@ -505,9 +505,11 @@ needs the in-game feedback loop.
 
 ---
 
-## 10. Environment gotcha
+## 10. Environment gotcha (generic)
 
-The dev machine's `JAVA_HOME` was set to `...\graalvm-jdk-21.0.9+7.1\bin`
-(includes `\bin`), which Gradle rejects. It must point at the **JDK root**
-(`...\graalvm-jdk-21.0.9+7.1`). IntelliJ's own configured JDK sidesteps this,
-but fix the env var for terminal `gradlew` use.
+Gradle and Maven require `JAVA_HOME` to point at the **JDK root** (the folder that
+*contains* `bin`), **not** the `\bin` sub-directory — a `\bin` JAVA_HOME is
+rejected. IntelliJ's own configured "Gradle JVM" sidesteps this; for terminal
+builds set `JAVA_HOME` to the JDK root. Any vendor's JDK 21 works. (This bit the
+original dev machine early on and has since been corrected — it is generic
+guidance, not a project-specific requirement.)
