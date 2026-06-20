@@ -6,6 +6,7 @@ import resforge.layers.AudioInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
+import resforge.layers.NegCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
 
@@ -101,6 +102,13 @@ public class Unpacker {
                 String part = LAYERS_SUBDIR + "/" + base + ".json";
                 Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
                 return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "anim");
+            }
+        } else if(layer.name.equals("neg")) {
+            String json = NegCodec.toJsonIfLossless(layer.data);
+            if(json != null) {
+                String part = LAYERS_SUBDIR + "/" + base + ".json";
+                Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
+                return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "neg");
             }
         } else if(layer.name.equals("mat2")) {
             String json = Mat2Codec.toJsonIfLossless(layer.data);
