@@ -790,37 +790,38 @@ public class ResForgeFrame extends JFrame {
         }
         int delay = ((Number) m.get("delay")).intValue();
         java.util.List<?> ids = (java.util.List<?>) m.get("frames");
-        java.util.List<java.awt.image.BufferedImage> frames = new java.util.ArrayList<>();
+        java.util.List<AnimView.Frame> frames = new java.util.ArrayList<>();
         for(Object o : ids) {
-            java.awt.image.BufferedImage bi = imageById(((Number) o).intValue());
-            if(bi != null)
-                frames.add(bi);
+            AnimView.Frame fr = frameById(((Number) o).intValue());
+            if(fr != null)
+                frames.add(fr);
         }
         if(frames.isEmpty()) {
             content.add(labeled("(no matching image frames in this resource to preview)"));
             content.add(Box.createVerticalStrut(8));
             return;
         }
-        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"));
-        ImageView view = new ImageView();
+        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
+                + " (true relative size & offset)"));
+        AnimView view = new AnimView();
         Dimension d = new Dimension(220, 180);
         view.setPreferredSize(d);
         view.setMaximumSize(d);
         view.setAlignmentX(Component.LEFT_ALIGNMENT);
-        view.setImage(frames.get(0));
+        view.setFrames(frames);
         content.add(view);
         content.add(Box.createVerticalStrut(8));
         int[] fi = {0};
         animTimer = new javax.swing.Timer(Math.max(20, delay), ev -> {
             fi[0] = (fi[0] + 1) % frames.size();
-            view.setImage(frames.get(fi[0]));
+            view.setCurrent(fi[0]);
         });
         animTimer.setInitialDelay(Math.max(20, delay));
         animTimer.start();
     }
 
-    /** Decodes the first image layer whose header id matches {@code id}, else null. */
-    private java.awt.image.BufferedImage imageById(int id) {
+    /** Resolves an animation frame id to its image + draw offset (first matching image layer), else null. */
+    private AnimView.Frame frameById(int id) {
         if(res == null)
             return null;
         for(Layer ly : res.layers) {
@@ -830,8 +831,11 @@ public class ResForgeFrame extends JFrame {
                 resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
                 if(ii.recognized && ii.id == id) {
                     java.awt.image.BufferedImage bi = GuiSupport.preview(ly);
-                    if(bi != null)
-                        return bi;
+                    if(bi != null) {
+                        int ox = ii.nooff ? 0 : ii.offX;
+                        int oy = ii.nooff ? 0 : ii.offY;
+                        return new AnimView.Frame(bi, ox, oy);
+                    }
                 }
             } catch(RuntimeException ignored) {
             }

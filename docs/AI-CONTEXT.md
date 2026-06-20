@@ -51,7 +51,8 @@ No args (with a display) → launches the GUI.
 Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
-sibling image layers), tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
+sibling image layers, composited at their true relative size + per-frame offset),
+tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer
 ops: **Add / Rename (button + inline cell edit) / Delete / Move up·down**.
@@ -75,7 +76,7 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
-  decoders), `ImageView`, `AudioPlayerPanel`.
+  decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback).
 
 ## 6. Per-layer status
 | Layer | Status |
