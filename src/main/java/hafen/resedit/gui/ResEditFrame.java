@@ -65,6 +65,7 @@ public class ResEditFrame extends JFrame {
     private ResContainer res;
     private Path file;
     private boolean dirty;
+    private String suggestedName;
 
     private final LayerTableModel model = new LayerTableModel();
     private final JTable table = new JTable(model);
@@ -473,14 +474,31 @@ public class ResEditFrame extends JFrame {
         try {
             ResContainer parsed = ResContainer.parse(data);
             applyLoaded(parsed, null, url, status);
+            this.suggestedName = remoteFileName(url);
         } catch(Exception e) {
             error("Downloaded data is not a valid .res:\n" + e.getMessage());
         }
     }
 
+    /** Derives a "name.res" save suggestion from a fetched resource URL/path. */
+    private static String remoteFileName(String url) {
+        String n = url;
+        int slash = n.lastIndexOf('/');
+        if(slash >= 0)
+            n = n.substring(slash + 1);
+        int q = n.indexOf('?');
+        if(q >= 0)
+            n = n.substring(0, q);
+        n = n.strip();
+        if(n.isEmpty())
+            n = "resource";
+        return n.toLowerCase().endsWith(".res") ? n : n + ".res";
+    }
+
     private void applyLoaded(ResContainer parsed, Path f, String pathText, String status) {
         this.res = parsed;
         this.file = f;
+        this.suggestedName = null;
         this.dirty = false;
         thumbCache.clear();
         updatingVersion = true;
@@ -577,13 +595,24 @@ public class ResEditFrame extends JFrame {
         fc.setFileFilter(new FileNameExtensionFilter("Haven resource (*.res)", "res"));
         if(file != null)
             fc.setSelectedFile(file.toFile());
+        else if(suggestedName != null)
+            fc.setSelectedFile(new java.io.File(suggestedName));
         if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            Path p = fc.getSelectedFile().toPath();
+            Path p = ensureResExtension(fc.getSelectedFile().toPath());
             writeRes(p);
             this.file = p;
             updateTitle();
             updatePath();
         }
+    }
+
+    /** Guarantees the chosen path ends with {@code .res} so saved files always
+     *  carry the extension (e.g. a fetched "male" becomes "male.res"). */
+    private static Path ensureResExtension(Path p) {
+        String n = p.getFileName().toString();
+        if(!n.toLowerCase().endsWith(".res"))
+            p = p.resolveSibling(n + ".res");
+        return p;
     }
 
     private void writeRes(Path p) {
