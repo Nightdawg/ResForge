@@ -63,6 +63,17 @@ final class M4 {
         return new float[]{(float) Math.cos(angle / 2.0), s * ax, s * ay, s * az};
     }
 
+    /** Quaternion product a·b, both {@code [w, x, y, z]}. */
+    static float[] qmul(float[] a, float[] b) {
+        float aw = a[0], ax = a[1], ay = a[2], az = a[3];
+        float bw = b[0], bx = b[1], by = b[2], bz = b[3];
+        return new float[]{
+                aw * bw - ax * bx - ay * by - az * bz,
+                aw * bx + ax * bw + ay * bz - az * by,
+                aw * by - ax * bz + ay * bw + az * bx,
+                aw * bz + ax * by - ay * bx + az * bw};
+    }
+
     /** Inverse of a rigid transform (orthonormal rotation + translation). */
     static float[] rigidInverse(float[] m) {
         float[] r = identity();

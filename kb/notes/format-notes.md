@@ -144,7 +144,16 @@ connected hierarchy is what makes the armature display cleanly **and** lets `ska
 animations target it. **Characters with an external skeleton** (male/female/bull —
 no local `skel`) fall back to identity-placed named joints (mesh + vertex groups
 still correct, armature un-posed). 4×4 maths are in `model/M4` (column-major).
-**Next:** `skan`→glTF animations, `manim`→morph targets; then glTF *import*.
+
+`skan` layers become glTF **animations** (`buildAnimations`): each skan = one
+animation, each per-bone track = a translation channel + a rotation channel
+targeting that bone's joint node. Values are composed onto the bind pose exactly
+as the client does — `translation = bindLocalPos + frameTrans`,
+`rotation = bindLocalRot · frameRot` (normalised) — and frame times become the
+sampler input (with the required min/max). `SkanInfo` now captures per-frame
+time/translation/rotation (fmt0 cpfloat, fmt1 quantised). Only bones in the local
+skel animate (so knarr's sails + lilypadlotus animate; external-skel characters
+do not). **Next:** `manim`→morph targets; then glTF *import*.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
