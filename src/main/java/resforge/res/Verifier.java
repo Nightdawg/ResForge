@@ -1,6 +1,7 @@
 package resforge.res;
 
 import resforge.layers.ActionCodec;
+import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
@@ -51,6 +52,7 @@ public class Verifier {
         public final Map<String, Integer> audioHist = new TreeMap<>();
         public final Map<String, Integer> actionHist = new TreeMap<>();
         public final Map<String, Integer> matHist = new TreeMap<>();
+        public final Map<String, Integer> animHist = new TreeMap<>();
         public final Map<String, Integer> codeHist = new TreeMap<>();
         public final Map<String, Integer> codeEntryHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
@@ -109,6 +111,7 @@ public class Verifier {
         printHist(out, "Audio histogram", sum.audioHist);
         printHist(out, "Action histogram", sum.actionHist);
         printHist(out, "Mat2 histogram", sum.matHist);
+        printHist(out, "Anim histogram", sum.animHist);
         printHist(out, "Code histogram", sum.codeHist);
         printHist(out, "CodeEntry histogram", sum.codeEntryHist);
         printHist(out, "Font histogram", sum.fontHist);
@@ -169,6 +172,9 @@ public class Verifier {
                         1, Integer::sum);
             else if(l.name.equals("mat2"))
                 sum.matHist.merge(Mat2Codec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
+            else if(l.name.equals("anim"))
+                sum.animHist.merge(AnimCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
                         1, Integer::sum);
             else if(l.name.equals("code")) {
                 CodeInfo ci = CodeInfo.parse(l.data);

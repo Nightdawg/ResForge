@@ -83,6 +83,7 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 | `props` | edit as JSON (tto list, lossless-or-raw) |
 | `action` | edit as JSON (deterministic AButton record) |
 | `mat2` | edit as JSON (id + per-command tto value lists; tagged-value form, lossless-or-raw) |
+| `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **read-only**: fully decoded; OBJ export; `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |

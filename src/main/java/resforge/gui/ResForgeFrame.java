@@ -685,6 +685,7 @@ public class ResForgeFrame extends JFrame {
             case "props":
             case "keybind":
             case "material":
+            case "animation":
                 buildJsonPanel(content, idx, l);
                 break;
             case "sound":

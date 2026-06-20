@@ -1,6 +1,7 @@
 package resforge.gui;
 
 import resforge.layers.ActionCodec;
+import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
@@ -35,6 +36,7 @@ public final class GuiSupport {
             case "midi":    return "music";
             case "action":  return "keybind";
             case "props":   return "props";
+            case "anim":    return "animation";
             case "tooltip":
             case "pagina":  return "text";
             case "vbuf2":
@@ -98,6 +100,11 @@ public final class GuiSupport {
                         return "code";
                     int dot = ci.name.lastIndexOf('.');
                     return (dot >= 0 ? ci.name.substring(dot + 1) : ci.name) + ".class";
+                }
+                case "anim": {
+                    java.util.Map<String, Object> m = AnimCodec.decode(l.data);
+                    java.util.List<?> fr = (java.util.List<?>) m.get("frames");
+                    return fr.size() + " frames @ " + m.get("delay") + "ms";
                 }
                 case "codeentry": {
                     CodeEntryInfo ce = CodeEntryInfo.parse(l.data);
@@ -163,6 +170,8 @@ public final class GuiSupport {
             return ActionCodec.toJsonIfLossless(l.data);
         if(l.name.equals("mat2"))
             return Mat2Codec.toJsonIfLossless(l.data);
+        if(l.name.equals("anim"))
+            return AnimCodec.toJsonIfLossless(l.data);
         return null;
     }
 
@@ -263,6 +272,12 @@ public final class GuiSupport {
                 break;
             }
             case "mat2": {
+                String j = editableJson(l);
+                if(j != null)
+                    return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "anim": {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");

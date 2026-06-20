@@ -2,6 +2,7 @@ package resforge.res;
 
 import resforge.io.Json;
 import resforge.layers.ActionCodec;
+import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
@@ -128,6 +129,8 @@ public class Replacer {
                 return encodeJson(nf, false);
             case "mat2":
                 return encodeMat2(nf);
+            case "anim":
+                return encodeAnim(nf);
             default:
                 throw new ReplaceException("layer '" + layer.name + "' is not replaceable");
         }
@@ -150,6 +153,17 @@ public class Replacer {
             @SuppressWarnings("unchecked")
             Map<String, Object> model = (Map<String, Object>) Json.parse(json);
             return Mat2Codec.encode(model);
+        } catch(RuntimeException e) {
+            throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
+        }
+    }
+
+    private static byte[] encodeAnim(byte[] nf) {
+        String json = new String(nf, StandardCharsets.UTF_8);
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+            return AnimCodec.encode(model);
         } catch(RuntimeException e) {
             throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
         }

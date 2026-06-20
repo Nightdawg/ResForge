@@ -68,6 +68,15 @@ tagged-value form (a string stays a plain JSON string; everything else is a
 single-tag object like `{"color":[204,204,204,255]}`, `{"f32":0.5}`, `{"u8":0}`)
 under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value-list".
 
+## anim layer (sprite animation)
+From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
+`uint16 n`, then `int16[n]` frame image-ids. Each frame references `image`
+layers in the same resource by id, so the pixels live in (separately editable)
+image layers. Fully deterministic, so **editable as JSON**
+`{"id":…,"delay":…,"frames":[…]}` (`AnimCodec`, codec `anim`, lossless-or-raw).
+Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
+`flex` (8 @75ms) — all `id=-1`, frame ids contiguous from 128.
+
 ## code / codeentry layers
 `code` (from `haven.Resource.Code`): `string name` (a fully-qualified Java class
 name) + the rest of the payload = a compiled `.class` file (magic `CAFEBABE`).

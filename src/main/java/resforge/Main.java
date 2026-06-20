@@ -175,6 +175,14 @@ public class Main {
                 if(mi.recognized)
                     System.out.printf("  %d tris vbuf=%d%s%s", mi.numTris, mi.vbufid,
                             mi.matid >= 0 ? " mat=" + mi.matid : "", mi.stripped ? " stripped" : "");
+            } else if(l.name.equals("anim")) {
+                try {
+                    java.util.Map<String, Object> m = resforge.layers.AnimCodec.decode(l.data);
+                    java.util.List<?> frames = (java.util.List<?>) m.get("frames");
+                    System.out.printf("  id=%s delay=%sms %d frames", m.get("id"), m.get("delay"), frames.size());
+                } catch(RuntimeException e) {
+                    /* opaque anim: leave as-is */
+                }
             } else if(l.name.equals("code")) {
                 resforge.layers.CodeInfo ci = resforge.layers.CodeInfo.parse(l.data);
                 if(ci.recognized)
