@@ -53,6 +53,7 @@ public class Main {
         }
         switch(args[0]) {
             case "gui":    gui(args);    break;
+            case "fetch":  fetch(args);  break;
             case "info":   info(args);   break;
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
@@ -71,6 +72,27 @@ public class Main {
             throw new RuntimeException("no graphical display available (headless environment)");
         Path initial = (args.length >= 2) ? Path.of(args[1]) : null;
         hafen.resedit.gui.ResEditFrame.launch(initial);
+    }
+
+    private static void fetch(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("fetch requires a resource path (e.g. gfx/borka/male)");
+        String path = args[1];
+        Path out = (args.length >= 3)
+                ? Path.of(args[2])
+                : Path.of(hafen.resedit.net.ResourceFetcher.baseName(path) + ".res");
+        byte[] data;
+        try {
+            data = hafen.resedit.net.ResourceFetcher.fetch(null, path);
+        } catch(InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("fetch interrupted");
+        }
+        ResContainer res = ResContainer.parse(data);   // validate it is a real .res
+        Files.write(out, data);
+        System.out.printf("Fetched %s (%d bytes, res-version %d, %d layers) -> %s%n",
+                hafen.resedit.net.ResourceFetcher.urlFor(null, path), data.length,
+                res.version, res.layers.size(), out);
     }
 
     private static void info(String[] args) throws IOException {
@@ -290,6 +312,7 @@ public class Main {
         System.out.println("Usage:");
         System.out.println("  (no args)                    Open the graphical editor (GUI)");
         System.out.println("  gui    [file.res]            Open the GUI, optionally with a file");
+        System.out.println("  fetch  <path> [out.res]      Download a resource from the server (e.g. gfx/borka/male)");
         System.out.println("  info   <file.res>            Show version and layer summary");
         System.out.println("  unpack <file.res> [outDir]   Decompile into an editable folder");
         System.out.println("  pack   <dir> [out.res]       Recompile a folder into a .res file");

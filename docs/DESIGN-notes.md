@@ -203,12 +203,13 @@ hafen-resedit/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: gui|info|unpack|pack|replace|obj|transform|catalog|verify
+    Main.java                        # CLI: gui|fetch|info|unpack|pack|replace|obj|transform|catalog|verify
     gui/ResEditFrame.java            # Swing editor window (layer table + preview/edit)
     gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
     gui/ImageView.java               # scaled/centred image preview component
     gui/AudioPlayerPanel.java        # in-app Ogg player (play/stop/seek)
     audio/OggVorbis.java             # Ogg Vorbis -> PCM decode (via bundled JOrbis)
+    net/ResourceFetcher.java         # download &lt;base&gt;/&lt;path&gt;.res from the game server
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -249,6 +250,11 @@ hafen-resedit/
 ```sh
 # Inspect
 ./gradlew run --args="info path/to/horse.res"
+
+# Download a resource from the game server by its in-game path
+#   (scheme from haven.Resource.HttpSource: <base>/<path>.res;
+#    base defaults to http://game.havenandhearth.com/res/)
+./gradlew run --args="fetch gfx/borka/male"
 
 # Decompile -> horse.resdir/
 ./gradlew run --args="unpack path/to/horse.res"
