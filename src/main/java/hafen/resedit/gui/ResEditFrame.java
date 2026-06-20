@@ -20,12 +20,14 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
 import javax.swing.WindowConstants;
@@ -61,6 +63,9 @@ public class ResEditFrame extends JFrame {
     private final JTable table = new JTable(model);
     private final JPanel detail = new JPanel(new BorderLayout());
     private final JLabel status = new JLabel(" ");
+    private final JSpinner versionSpinner =
+            new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
+    private boolean updatingVersion;
 
     public ResEditFrame() {
         super("hafen-resedit");
@@ -126,6 +131,21 @@ public class ResEditFrame extends JFrame {
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
+        tb.addSeparator();
+        JLabel vl = new JLabel("Resource version: ");
+        tb.add(vl);
+        versionSpinner.setToolTipText("Resource format version (0\u201365535). Saved into the file header.");
+        versionSpinner.setEnabled(false);
+        versionSpinner.setMaximumSize(new Dimension(90, 28));
+        versionSpinner.setPreferredSize(new Dimension(90, 28));
+        versionSpinner.addChangeListener(e -> {
+            if(updatingVersion || res == null)
+                return;
+            res.version = (Integer) versionSpinner.getValue();
+            markDirty();
+            setStatus("Resource version set to " + res.version);
+        });
+        tb.add(versionSpinner);
         return tb;
     }
 
@@ -159,6 +179,10 @@ public class ResEditFrame extends JFrame {
             this.res = parsed;
             this.file = p;
             this.dirty = false;
+            updatingVersion = true;
+            versionSpinner.setValue(res.version);
+            versionSpinner.setEnabled(true);
+            updatingVersion = false;
             model.fireTableDataChanged();
             if(model.getRowCount() > 0)
                 table.setRowSelectionInterval(0, 0);
