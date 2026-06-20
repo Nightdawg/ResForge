@@ -2,7 +2,25 @@
 
 A standalone tool to **decompile, edit, and recompile Haven & Hearth `.res`
 files** for modding. It unpacks a `.res` into an editable folder and repacks it
-back — byte-for-byte identical when nothing is changed.
+back — byte-for-byte identical when nothing is changed. It has both a **graphical
+editor** (the default when launched with no arguments) and a full command-line
+interface.
+
+## Graphical editor
+
+Double-click the jar, or run it with no arguments, to open the GUI:
+
+```sh
+java -jar build/libs/hafen-resedit-0.1.0.jar          # opens the editor
+java -jar build/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a file
+```
+
+Open a `.res` (toolbar button or drag-and-drop) to see its layers in a table.
+Selecting a layer shows the right tool for it: a **picture preview** with
+Replace/Export for icons and 3D textures; an editable **text box** for
+tooltips/pagina; an editable **JSON box** for properties and keybinds; Replace/
+Export for sounds and fonts; and an **Export 3D model as OBJ** action. Unchanged
+layers are preserved byte-for-byte on save, so edits can't corrupt a file.
 
 ## Quick start (common mods)
 

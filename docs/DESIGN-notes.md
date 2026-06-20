@@ -203,7 +203,10 @@ hafen-resedit/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
-    Main.java                        # CLI: info|unpack|pack|replace|obj|transform|catalog|verify
+    Main.java                        # CLI: gui|info|unpack|pack|replace|obj|transform|catalog|verify
+    gui/ResEditFrame.java            # Swing editor window (layer table + preview/edit)
+    gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
+    gui/ImageView.java               # scaled/centred image preview component
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer

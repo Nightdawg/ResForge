@@ -44,9 +44,15 @@ public class Main {
     }
 
     private static void run(String[] args) throws IOException {
-        if(args.length == 0)
+        if(args.length == 0) {
+            if(!java.awt.GraphicsEnvironment.isHeadless()) {
+                hafen.resedit.gui.ResEditFrame.launch(null);
+                return;
+            }
             throw new UsageException("no command given");
+        }
         switch(args[0]) {
+            case "gui":    gui(args);    break;
             case "info":   info(args);   break;
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
@@ -58,6 +64,13 @@ public class Main {
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
         }
+    }
+
+    private static void gui(String[] args) {
+        if(java.awt.GraphicsEnvironment.isHeadless())
+            throw new RuntimeException("no graphical display available (headless environment)");
+        Path initial = (args.length >= 2) ? Path.of(args[1]) : null;
+        hafen.resedit.gui.ResEditFrame.launch(initial);
     }
 
     private static void info(String[] args) throws IOException {
@@ -275,6 +288,8 @@ public class Main {
         System.out.println("hafen-resedit — Haven & Hearth .res mod tool");
         System.out.println();
         System.out.println("Usage:");
+        System.out.println("  (no args)                    Open the graphical editor (GUI)");
+        System.out.println("  gui    [file.res]            Open the GUI, optionally with a file");
         System.out.println("  info   <file.res>            Show version and layer summary");
         System.out.println("  unpack <file.res> [outDir]   Decompile into an editable folder");
         System.out.println("  pack   <dir> [out.res]       Recompile a folder into a .res file");
