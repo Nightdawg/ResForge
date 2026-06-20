@@ -18,6 +18,12 @@ public class Vbuf2Data {
     public int num;                                    // vertex count
     public final Map<String, float[]> attribs = new LinkedHashMap<>();   // name -> num*eln floats
 
+    // Skinning data (null if the buffer has no bones): per vertex up to 4 influences,
+    // sorted by weight descending and normalised, mirroring haven.PoseMorph.
+    public String[] boneNames;                         // influence-index -> bone name
+    public int[] vJoints;                              // num*4 influence-indices (into boneNames; padded with 0)
+    public float[] vWeights;                           // num*4 weights (padded with 0)
+
     private static final Map<String, Integer> ELN = Map.ofEntries(
             Map.entry("pos", 3), Map.entry("pos2", 3),
             Map.entry("nrm", 3), Map.entry("nrm2", 3),
@@ -54,12 +60,15 @@ public class Vbuf2Data {
                     if(ELN.containsKey(name)) {
                         MessageReader sub = new MessageReader(payload, at, sublen);
                         d.attribs.put(name, decodeAttr(sub, name, d.num));
+                    } else if(name.equals("bones") || name.equals("bones2")) {
+                        MessageReader sub = new MessageReader(payload, at, sublen);
+                        parseBones(d, sub, name.equals("bones2"), d.num);
                     }
                     in.skip(sublen);
                     continue;
                 }
                 if(name.equals("bones") || name.equals("bones2")) {
-                    skipBones(in, name.equals("bones2"));
+                    parseBones(d, in, name.equals("bones2"), d.num);
                     continue;
                 }
                 Integer eln = ELN.get(name);
@@ -148,24 +157,86 @@ public class Vbuf2Data {
         }
     }
 
-    private static void skipBones(MessageReader in, boolean v2) {
-        String wfmt = "f4";
-        if(v2) { in.uint8(); wfmt = in.string(); }
-        in.uint8();                  // mba
+    /**
+     * Parses a {@code bones}/{@code bones2} sub-buffer into per-vertex skinning
+     * influences, faithfully mirroring {@code haven.PoseMorph.read} (collect all
+     * influences, sort each vertex's by weight descending, keep the top 4, then
+     * normalise). The attribute name has already been consumed.
+     */
+    private static void parseBones(Vbuf2Data d, MessageReader in, boolean v2, int nv) {
+        String wfmt;
+        int mba;
+        if(v2) {
+            in.uint8();                 // data version (== 1)
+            wfmt = in.string();
+            mba = in.uint8();
+        } else {
+            mba = in.uint8();
+            wfmt = "f4";
+        }
         int wsz = wfmt.equals("f4") ? 4 : wfmt.equals("un2") ? 2 : wfmt.equals("un1") ? 1 : -1;
         if(wsz < 0)
             throw new IllegalStateException("unknown bone-weight format: " + wfmt);
+
+        int[] ba = new int[nv * mba];
+        java.util.Arrays.fill(ba, -1);
+        float[] bw = new float[nv * mba];
+        int[] na = new int[nv];
+        java.util.List<String> bones = new java.util.ArrayList<>();
         while(true) {
-            if(in.string().isEmpty())
+            String bone = in.string();
+            if(bone.isEmpty())
                 break;
+            int bidx = bones.size();
+            bones.add(bone);
             while(true) {
                 int run = in.uint16();
-                in.uint16();
+                int vn = in.uint16();
                 if(run == 0)
                     break;
-                in.skip(run * wsz);
+                for(int i = 0; i < run; i++, vn++) {
+                    float w = wfmt.equals("f4") ? in.float32()
+                            : wfmt.equals("un2") ? (in.uint16() / 65535.0f)
+                            : (in.uint8() / 255.0f);
+                    if(w == 0)
+                        continue;
+                    int cna = na[vn]++;
+                    if(cna >= mba)
+                        continue;
+                    bw[vn * mba + cna] = w;
+                    ba[vn * mba + cna] = bidx;
+                }
             }
         }
+
+        // Per vertex: sort influences by weight (desc), keep up to 4, normalise.
+        int[] j4 = new int[nv * 4];
+        float[] w4 = new float[nv * 4];
+        Integer[] order = new Integer[mba];
+        for(int v = 0; v < nv; v++) {
+            int base = v * mba;
+            int n = 0;
+            for(int o = 0; o < mba; o++)
+                if(ba[base + o] >= 0)
+                    order[n++] = o;
+            final int fb = base;
+            java.util.Arrays.sort(order, 0, n, (a, b) -> Float.compare(bw[fb + b], bw[fb + a]));
+            int keep = Math.min(n, 4);
+            float tw = 0;
+            for(int k = 0; k < keep; k++)
+                tw += bw[base + order[k]];
+            for(int k = 0; k < keep; k++) {
+                j4[v * 4 + k] = ba[base + order[k]];
+                w4[v * 4 + k] = (tw != 0) ? bw[base + order[k]] / tw : 0;
+            }
+            if(keep == 0) {             // unweighted vertex: bind fully to the first bone
+                j4[v * 4] = 0;
+                w4[v * 4] = 1;
+            }
+        }
+        d.boneNames = bones.toArray(new String[0]);
+        d.vJoints = j4;
+        d.vWeights = w4;
     }
 
     private static int sb(int v, int bits) {

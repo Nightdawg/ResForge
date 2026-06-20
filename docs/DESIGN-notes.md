@@ -492,15 +492,19 @@ needs the in-game feedback loop.
 
 - **3D round-trip via glTF** (format decided 2026-06-21 with the game dev loftar —
   glTF over Ogre XML, which has no modern Blender importer, and over OBJ, which
-  can't carry Haven's two UV sets or skeleton bindings). **Phase 1a is done:**
+  can't carry Haven's two UV sets or skeleton bindings). **Phases 1a + 1b are done:**
   `GltfExport` writes a static, textured binary glTF (`.glb`) — positions, normals,
   both UV sets (`tex`→`TEXCOORD_0`, `otex`→`TEXCOORD_1`), per-submesh materials with
-  embedded textures, Haven Z-up→glTF Y-up. Dependency-free (our `Json` + a binary
-  buffer). **Remaining:** skeleton (glTF skin + `JOINTS_0`/`WEIGHTS_0`, needs
-  `Vbuf2Data` to read bones), `skan`→glTF animations, `manim`→morph targets; then
-  the **glTF import** path (re-encode vbuf2/mesh with re-strip + re-quantise behind
-  lossless-or-raw). The Haven encode toolkit is fully in the client
-  (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
+  embedded textures, Haven Z-up→glTF Y-up — **plus skinning**: `Vbuf2Data` decodes
+  the `bones`/`bones2` weights (`PoseMorph` port: top-4, normalised) →
+  `JOINTS_0`/`WEIGHTS_0`, and a local `skel` becomes a glTF skin with per-joint bind
+  world matrices + inverse-bind matrices (`G = R·W·R⁻¹`, `IBM = G⁻¹`, `G·IBM = I`
+  verified). Characters whose skeleton is in another resource get identity-placed
+  named joints (mesh + vertex groups still correct). Dependency-free (our `Json` +
+  `model/M4` 4×4 maths). **Remaining:** `skan`→glTF animations, `manim`→morph
+  targets; then the **glTF import** path (re-encode vbuf2/mesh with re-strip +
+  re-quantise behind lossless-or-raw). The Haven encode toolkit is fully in the
+  client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
 - Eventually edit `vbuf2`/`mesh`/`manim` directly. (`mat2`, `anim`,
   `neg` and `obst` are done — editable JSON via

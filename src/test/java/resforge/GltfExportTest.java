@@ -64,6 +64,32 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    /** vbuf2 ver0 with pos2 + a bones2 attribute: one bone "root", full weight on all 3 verts. */
+    private static byte[] vbufBones() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0);
+        w.uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})
+            w.float32(v);
+        w.string("bones2").uint8(1).string("f4").uint8(1);   // data-ver 1, fmt f4, mba 1
+        w.string("root").uint16(3).uint16(0)                 // span: run 3 from vert 0
+                .float32(1f).float32(1f).float32(1f)
+                .uint16(0).uint16(0);                        // end spans
+        w.string("");                                        // end bones
+        return w.toByteArray();
+    }
+
+    /** skel (ver-1 sub-format) with a single root bone "root". */
+    private static byte[] skel() {
+        MessageWriter w = new MessageWriter();
+        w.string("\u0001");                                  // switch to ver-1 bone encoding
+        w.string("root").string("");
+        w.float32(0).float32(0).float32(0);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
     /* ----- glb parsing helpers ----- */
 
     private static int le32(byte[] b, int off) {
@@ -194,6 +220,57 @@ class GltfExportTest {
             int need = count * comps.get((String) ac.get("type")) * csz;
             assertTrue(need <= bvLen[bv], "accessor data fits its bufferView");
         }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void skinnedModelHasSkinJointsAndWeights() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel()));
+        res.layers.add(new Layer("vbuf2", vbufBones()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "rig.res").glb);
+        // a skin with one joint, and an inverseBindMatrices MAT4 accessor
+        List<Object> skins = (List<Object>) root.get("skins");
+        assertEquals(1, skins.size());
+        Map<String, Object> skin = (Map<String, Object>) skins.get(0);
+        assertEquals(1, ((List<Object>) skin.get("joints")).size());
+        int ibm = ((Number) skin.get("inverseBindMatrices")).intValue();
+        Map<String, Object> ibmAcc = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(ibm);
+        assertEquals("MAT4", ibmAcc.get("type"));
+        assertEquals(1L, ((Number) ibmAcc.get("count")).longValue());
+
+        // the primitive carries skinning attributes; the mesh node references the skin
+        Map<String, Object> attrs = (Map<String, Object>) firstPrimitive(root).get("attributes");
+        assertTrue(attrs.containsKey("JOINTS_0"));
+        assertTrue(attrs.containsKey("WEIGHTS_0"));
+        Map<String, Object> meshNode = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(0);
+        assertEquals(0L, ((Number) meshNode.get("skin")).longValue());
+
+        // a local skel poses the joint (it gets a node matrix)
+        int jointNode = ((Number) ((List<Object>) skin.get("joints")).get(0)).intValue();
+        Map<String, Object> jn = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(jointNode);
+        assertTrue(jn.containsKey("matrix"), "a local skel should pose the joint");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void skinWithoutLocalSkelUsesIdentityJoints() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufBones()));     // bones, but no skel layer
+        res.layers.add(new Layer("mesh", mesh(-1)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "rig.res").glb);
+        assertTrue(root.containsKey("skins"));               // weights still export
+        Map<String, Object> attrs = (Map<String, Object>) firstPrimitive(root).get("attributes");
+        assertTrue(attrs.containsKey("JOINTS_0"));
+        assertTrue(attrs.containsKey("WEIGHTS_0"));
+        // with no local skel the joint stays identity-placed (no matrix)
+        Map<String, Object> skin = (Map<String, Object>) ((List<Object>) root.get("skins")).get(0);
+        int jointNode = ((Number) ((List<Object>) skin.get("joints")).get(0)).intValue();
+        Map<String, Object> jn = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(jointNode);
+        assertFalse(jn.containsKey("matrix"));
     }
 
     @Test
