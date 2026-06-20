@@ -66,7 +66,7 @@ sibling image layers, composited at their true relative size + per-frame offset)
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
-`src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`
+`src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`/`manim`
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
@@ -87,7 +87,7 @@ report dialog), **resource-version spinner** (uint16).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
   `DepsInfo`, `RLinkInfo`, `SrcInfo`, `LightInfo`, `SkelInfo`, `SkanInfo`,
-  `BoneOffInfo` (read-only); typed JSON codecs `PropsCodec`,
+  `BoneOffInfo`, `MeshAnimInfo` (read-only); typed JSON codecs `PropsCodec`,
   `ActionCodec`, `Mat2Codec`,
   `AnimCodec`,   `NegCodec`, `ObstCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
@@ -121,6 +121,7 @@ report dialog), **resource-version spinner** (uint16).
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `light` | **read-only**: light source — type (point/spot/directional), id, ambient/diffuse/specular colours, attenuation/direction/exponent (cpfloat ver0, float32 ver1) |
 | `skel`/`skan`/`boneoff` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events), equip-point opcode program (`boneoff`) |
+| `manim` | **read-only**: mesh/morph animation — id, length, play order, per-frame vertex-morph format + counts |
 | everything else (`tileset2`,`clamb`,`foodev`,`rdesc`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
@@ -141,15 +142,17 @@ report dialog), **resource-version spinner** (uint16).
 ## 8. Reference & samples
 - `docs/reference/`: verbatim client sources `Resource.java`, `Message.java`,
   `NormNumber.java`, `TexR.java`, `VertexBuf.java`, `Skeleton.java`, `Light.java`,
-  and the dev's `mkres-fragment.py` (Ogre-XML→binary encoder). LGPL — keep notices.
-  (Full client also available locally at `..\hafen-client` as the format oracle.)
+  `MeshAnim.java`, and the dev's `mkres-fragment.py` (Ogre-XML→binary encoder).
+  LGPL — keep notices. (Full client also at `..\hafen-client` as the format oracle.)
 - `samples/` (gitignored, copyrighted game assets): real `.res` + raw png/wav.
   `verify samples` → **all pass** (a mislabeled non-resource — zero bytes + a raw
   PNG — was removed; the tool correctly rejects such files). Histograms confirm all
   image/tex/audio/font/props/action/**mat2**/**anim**/**neg** decode/round-trip
   exactly, all `vbuf2` re-encode byte-exact, all `mesh` decode, and all
-  `code`/`codeentry`/`deps`/`src`/`rlink`/`light`/`skel`/`skan`/`boneoff` decode.
-  (Counts grow as more samples are added; `verify` is the live oracle — keep it all-pass.)
+  `code`/`codeentry`/`deps`/`src`/`rlink`/`light`/`skel`/`skan`/`boneoff`/`manim`
+  decode. **Every layer type present in the samples is now decoded** (no raw
+  unknowns left). (Counts grow as more samples are added; `verify` is the live
+  oracle — keep it all-pass.)
 
 ## 9. Conventions
 - Lossless-or-raw: never expose a typed editor unless decode→encode is byte-exact
@@ -180,10 +183,12 @@ report dialog), **resource-version spinner** (uint16).
   values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
   (`anim` frames are local image-ids, so they contribute nothing.)
 - **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
-  (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`), ported from the client's
-  `Light.java`/`Skeleton.java`. Added the `cpfloat`/`mnorm16`/`snorm16`/`unorm16`/
-  `oct2uvec` io primitives they need. These same primitives + decoders are the
-  groundwork for an eventual **skeleton/animation write path** (would benefit from
+  (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`) and `manim`
+  (`MeshAnimInfo`, mesh/morph animation), ported from the client's
+  `Light.java`/`Skeleton.java`/`MeshAnim.java`. Added the `cpfloat`/`mnorm16`/
+  `snorm16`/`unorm16`/`oct2uvec` io primitives they need. **Every layer type in the
+  samples is now decoded** (read-only or editable). These decoders + primitives are
+  the groundwork for a future skeleton/animation **write** path (would benefit from
   the dev's `mkres` skeleton encoder — ask when starting that).
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)

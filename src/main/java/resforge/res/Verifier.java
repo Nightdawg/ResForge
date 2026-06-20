@@ -11,6 +11,7 @@ import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.LightInfo;
 import resforge.layers.Mat2Codec;
+import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
@@ -73,6 +74,7 @@ public class Verifier {
         public final Map<String, Integer> skelHist = new TreeMap<>();
         public final Map<String, Integer> skanHist = new TreeMap<>();
         public final Map<String, Integer> boneoffHist = new TreeMap<>();
+        public final Map<String, Integer> manimHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
@@ -141,6 +143,7 @@ public class Verifier {
         printHist(out, "Skel histogram", sum.skelHist);
         printHist(out, "Skan histogram", sum.skanHist);
         printHist(out, "BoneOff histogram", sum.boneoffHist);
+        printHist(out, "Manim histogram", sum.manimHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
@@ -247,6 +250,10 @@ public class Verifier {
             else if(l.name.equals("boneoff")) {
                 BoneOffInfo bo = BoneOffInfo.parse(l.data);
                 sum.boneoffHist.merge(bo.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
+            }
+            else if(l.name.equals("manim")) {
+                MeshAnimInfo mi = MeshAnimInfo.parse(l.data);
+                sum.manimHist.merge(mi.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
             }
             else if(l.name.equals("font")) {
                 FontInfo fi = FontInfo.parse(l.data);

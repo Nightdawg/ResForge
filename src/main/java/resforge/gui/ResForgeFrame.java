@@ -742,6 +742,7 @@ public class ResForgeFrame extends JFrame {
             case "skeleton":
             case "skeletal anim":
             case "equip point":
+            case "mesh anim":
                 buildRigPanel(content, idx, l);
                 break;
             default:
