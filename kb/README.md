@@ -54,13 +54,15 @@ small enough that on-the-fly indexing every run is instant. If we ever outgrow
 that, the upgrade path is embeddings + a vector index — but we don't need it yet.
 
 ## Maintaining the knowledge base
-Two documents serve different roles:
+**Keep the docs in lockstep with the code: every time you add or change a
+feature/format/convention, update the docs in the *same* commit.** This is a
+hard rule for this project, not a "when you feel like it." Two documents serve
+different roles:
 
 - **`docs/AI-CONTEXT.md`** — the canonical, *curated* resume primer (architecture,
-  builds, gotchas, per-layer status, conventions, open steps). Update it when the
-  shape of the project changes: a new feature/command, a new build fact, a
-  changed convention, or a finished/added next-step. Roughly **per meaningful
-  commit**, not every trivial one. Keep it tight and current.
+  builds, gotchas, per-layer status, conventions, open steps). Update it on **every
+  meaningful change**: a new feature/command, a new build fact, a changed
+  convention, or a finished/added next-step. Keep it tight and current.
 
 - **`kb/notes/*.md`** — the *append-only* lab notebook. Drop new facts, format
   discoveries, experiment results, and links here as you learn them. No reindex
@@ -68,6 +70,7 @@ Two documents serve different roles:
   immediately. Use one heading per atomic fact so retrieval can isolate it.
 
 Rule of thumb: if it's a durable, curated statement of "how the project is," edit
-`AI-CONTEXT.md`; if it's a new raw finding you might want to look up later, add it
-to `kb/notes/`. You don't need to touch either after *every* commit — only when
-you actually learned or changed something worth remembering.
+`AI-CONTEXT.md` (and the per-layer table / README where relevant); if it's a new
+raw finding you might want to look up later, add it to `kb/notes/`. A change isn't
+"done" until the docs that describe it have been updated to match — treat stale
+docs as a bug.
