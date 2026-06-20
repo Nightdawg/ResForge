@@ -75,7 +75,7 @@ public class ResForgeFrame extends JFrame {
     private final JSpinner versionSpinner =
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
-    private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
+    private JButton addBtn, delBtn, upBtn, downBtn;
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
@@ -160,15 +160,12 @@ public class ResForgeFrame extends JFrame {
         bar.setFloatable(false);
         addBtn = new JButton(action("Add\u2026", this::addLayer));
         addBtn.setToolTipText("Add a new layer (optionally from a file)");
-        rnBtn = new JButton(action("Rename\u2026", this::renameLayer));
-        rnBtn.setToolTipText("Change the selected layer's type/name (or double-click it in the table)");
         delBtn = new JButton(action("Delete", this::deleteLayer));
         upBtn = new JButton(action("Move \u2191", () -> moveLayer(-1)));
         upBtn.setToolTipText("Move the selected layer earlier (order is significant)");
         downBtn = new JButton(action("Move \u2193", () -> moveLayer(1)));
         downBtn.setToolTipText("Move the selected layer later (order is significant)");
         bar.add(addBtn);
-        bar.add(rnBtn);
         bar.add(delBtn);
         bar.addSeparator();
         bar.add(upBtn);
@@ -182,8 +179,6 @@ public class ResForgeFrame extends JFrame {
         boolean hasSel = hasFile && sel >= 0 && sel < res.layers.size();
         if(addBtn != null)
             addBtn.setEnabled(hasFile);
-        if(rnBtn != null)
-            rnBtn.setEnabled(hasSel);
         if(delBtn != null)
             delBtn.setEnabled(hasSel);
         if(upBtn != null)
@@ -332,39 +327,6 @@ public class ResForgeFrame extends JFrame {
         table.setRowSelectionInterval(target, target);
         markDirty();
         setStatus("Moved '" + l.name + "' to position " + target);
-    }
-
-    private void renameLayer() {
-        int sel = table.getSelectedRow();
-        if(res == null || sel < 0 || sel >= res.layers.size())
-            return;
-        Layer l = res.layers.get(sel);
-        Object input = JOptionPane.showInputDialog(this, "Layer type/name:", "Rename layer",
-                JOptionPane.PLAIN_MESSAGE, null, null, l.name);
-        if(input == null)
-            return;
-        applyRename(sel, String.valueOf(input));
-    }
-
-    /** Replaces a layer's name (keeping its bytes); the {@link Layer} is immutable. */
-    private void applyRename(int row, String newName) {
-        if(res == null || row < 0 || row >= res.layers.size())
-            return;
-        newName = newName.strip();
-        Layer l = res.layers.get(row);
-        if(newName.isEmpty()) {
-            error("Layer name cannot be empty.");
-            return;
-        }
-        if(newName.equals(l.name))
-            return;
-        pushUndo();
-        res.layers.set(row, new Layer(newName, l.data));
-        model.fireTableRowsUpdated(row, row);
-        markDirty();
-        if(table.getSelectedRow() == row)
-            showSelected();
-        setStatus("Renamed layer " + row + " to '" + newName + "'");
     }
 
     /* ------------------------------------------------------------------ menus */
@@ -1252,12 +1214,7 @@ public class ResForgeFrame extends JFrame {
         }
 
         public boolean isCellEditable(int row, int col) {
-            return col == 3;       // the "Layer" (type/name) column is editable
-        }
-
-        public void setValueAt(Object value, int row, int col) {
-            if(col == 3 && value != null)
-                applyRename(row, String.valueOf(value));
+            return false;          // the layer type/name is read-only
         }
     }
 

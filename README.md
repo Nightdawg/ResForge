@@ -23,7 +23,7 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
-and fonts; and an **Export 3D model as OBJ** action. You can also add, rename,
+and fonts; and an **Export 3D model as OBJ** action. You can also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
 offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and an
