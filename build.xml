@@ -7,17 +7,19 @@
   never clashes with Gradle's build/.
 
   Common targets:
-    ant compile   - compile main sources
-    ant jar       - build the runnable jar (build-ant/libs/)
+    ant           - (default) compile + build the jar, no tests
+    ant jar       - same as the default: build the runnable jar (build-ant/libs/)
+    ant compile   - compile main sources only
     ant test      - compile and run the JUnit 5 tests
-    ant build     - jar + test (default)
+    ant build     - jar + tests (the full verify)
+    ant gui       - compile and launch the graphical editor
     ant run -Dargs="info samples/apple.res"  - run the CLI
     ant clean     - remove build-ant/
 
   Requires JDK 21. If your JAVA_HOME is set, point it at the JDK *root*
   (not the \bin sub-directory).
 -->
-<project name="hafen-resedit" default="build" basedir=".">
+<project name="hafen-resedit" default="jar" basedir=".">
     <property name="version"         value="0.1.0"/>
     <property name="main.class"      value="hafen.resedit.Main"/>
     <property name="args"            value=""/>
