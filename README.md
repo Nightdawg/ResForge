@@ -57,6 +57,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `audio2`          | `*.audhdr` + `*.ogg`         | swap a sound (Ogg Vorbis) |
 | `props`           | `*.json`                     | edit typed properties as JSON |
 | `action`          | `*.json`                     | edit button/keybind metadata as JSON |
+| `mat2`            | `*.json`                     | edit material commands as JSON |
 | `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
 | `midi`            | `*.mid`                      | swap the MIDI music      |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
@@ -183,11 +184,11 @@ package mirrors `haven.Message` primitives for decoding payloads.
 
 v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
 for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
-(`font`), typed properties (`props`) and action/keybind metadata (`action`) as
-JSON, and text. The 3D vertex buffers (`vbuf2`) are inspected read-only (vertex
-count + attribute formats shown by `info`/`verify`). Deeper typed editing
-(mesh/skeleton geometry, animations, collision) can be layered on incrementally
-using the same parts model.
+(`font`), typed properties (`props`), action/keybind metadata (`action`) and
+materials (`mat2`) as JSON, and text. The 3D vertex buffers (`vbuf2`) are
+inspected read-only (vertex count + attribute formats shown by `info`/`verify`).
+Deeper typed editing (mesh/skeleton geometry, animations, collision) can be
+layered on incrementally using the same parts model.
 
 ## How this was built ("vibe coded")
 

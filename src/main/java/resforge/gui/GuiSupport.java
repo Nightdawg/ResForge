@@ -4,6 +4,7 @@ import resforge.layers.ActionCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
@@ -36,6 +37,7 @@ public final class GuiSupport {
             case "pagina":  return "text";
             case "vbuf2":
             case "mesh":    return "3D model";
+            case "mat2":    return "material";
             default:        return "raw";
         }
     }
@@ -80,6 +82,11 @@ public final class GuiSupport {
                 case "mesh": {
                     MeshInfo mi = MeshInfo.parse(l.data);
                     return mi.recognized ? mi.numTris + " triangles" : "mesh";
+                }
+                case "mat2": {
+                    java.util.Map<String, Object> m = Mat2Codec.decode(l.data);
+                    java.util.List<?> es = (java.util.List<?>) m.get("entries");
+                    return es.size() + " material command" + (es.size() == 1 ? "" : "s");
                 }
                 default:
                     return l.data.length + " bytes";
@@ -138,6 +145,8 @@ public final class GuiSupport {
             return PropsCodec.toJsonIfLossless(l.data);
         if(l.name.equals("action"))
             return ActionCodec.toJsonIfLossless(l.data);
+        if(l.name.equals("mat2"))
+            return Mat2Codec.toJsonIfLossless(l.data);
         return null;
     }
 
@@ -199,6 +208,12 @@ public final class GuiSupport {
                 break;
             }
             case "action": {
+                String j = editableJson(l);
+                if(j != null)
+                    return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "mat2": {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");

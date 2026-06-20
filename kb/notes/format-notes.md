@@ -58,8 +58,15 @@ decodes those 12 bytes as tl / br / oc offsets (top-left, bottom-right, object
 center) — likely `coord16` (int16 x/y) pairs. Lossy if re-encoded; preserve raw.
 
 ## mat2 layer (material)
-CarryGun's tool decodes it as an `id` plus a map of key -> list of tto values
-(material keyargs). We currently pass it through raw.
+`uint16 id`, then until EOF a sequence of material commands — each a
+NUL-terminated string key followed by a `tto` value list terminated by `T_END`
+(0x00). Confirmed on all 38 sample layers (each parses to the exact end); the
+value types seen are `str`, `u8`, `color` (RGBA) and `f32`; keys seen: `bump,
+cel, col, light, maskcol, masknorm, mlink, nofacecull, order, otex, tex,
+texrot`. **Now editable as JSON** (`Mat2Codec`, codec `mat2`) using an explicit
+tagged-value form (a string stays a plain JSON string; everything else is a
+single-tag object like `{"color":[204,204,204,255]}`, `{"f32":0.5}`, `{"u8":0}`)
+under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value-list".
 
 ## Server fetch
 The game client (and our `fetch`) downloads `<base>/<path>.res`. Base default is

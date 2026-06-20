@@ -29,6 +29,7 @@ public class Catalog {
         KIND.put("midi", "music");
         KIND.put("action", "keybind");
         KIND.put("props", "props");
+        KIND.put("mat2", "material");
         KIND.put("tooltip", "text");
         KIND.put("pagina", "text");
         KIND.put("vbuf2", "3D-model");
