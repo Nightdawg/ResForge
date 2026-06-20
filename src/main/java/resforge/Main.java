@@ -21,6 +21,7 @@ import java.nio.file.Path;
  *
  * Usage:
  *   info    <file.res>
+ *   refs    <file.res>
  *   unpack  <file.res> [outDir]
  *   pack    <dir> [out.res]
  *   replace <file.res> <selector> <newfile> [out.res]
@@ -55,6 +56,7 @@ public class Main {
             case "gui":    gui(args);    break;
             case "fetch":  fetch(args);  break;
             case "info":   info(args);   break;
+            case "refs":   refs(args);   break;
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
@@ -93,6 +95,14 @@ public class Main {
         System.out.printf("Fetched %s (%d bytes, res-version %d, %d layers) -> %s%n",
                 resforge.net.ResourceFetcher.urlFor(null, path), data.length,
                 res.version, res.layers.size(), out);
+    }
+
+    private static void refs(String[] args) throws IOException {
+        if(args.length < 2)
+            throw new UsageException("refs requires a .res file");
+        Path file = Path.of(args[1]);
+        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
+        System.out.print(resforge.res.References.scan(res).render(file.getFileName().toString()));
     }
 
     private static void info(String[] args) throws IOException {
@@ -387,6 +397,7 @@ public class Main {
         System.out.println("  gui    [file.res]            Open the GUI, optionally with a file");
         System.out.println("  fetch  <path> [out.res]      Download a resource from the server (e.g. gfx/borka/male)");
         System.out.println("  info   <file.res>            Show version and layer summary");
+        System.out.println("  refs   <file.res>            List the resources this file references");
         System.out.println("  unpack <file.res> [outDir]   Decompile into an editable folder");
         System.out.println("  pack   <dir> [out.res]       Recompile a folder into a .res file");
         System.out.println("  replace <file.res> <layer> <newfile> [out.res]");

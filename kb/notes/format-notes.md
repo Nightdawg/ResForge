@@ -139,6 +139,18 @@ These three are **read-only reference views** — they show which other resource
   map specs with nested `res()` to candle-flare64/flight). The reusable `tto`
   reader mirrors the one in `CodeEntryInfo`.
 
+### aggregated references (`res/References`, CLI `refs`, GUI References… dialog)
+One deduped report of every *external* resource a `.res` references, gathered from
+the layers that name others: `deps` (name@ver), `rlink` (`references()` = link
+target + nested `res()`), `codeentry` (classpath deps), and `mat2` material links.
+The `mat2` rule: collect string command-values that contain `/` (real resource
+paths). Observed string-bearing mat2 keys: `mlink` (always a resource path — the
+material include), external `tex`/`otex` (path), vs. mode/order names that have no
+slash and are ignored (`light="def"`, `order="eye"/"premap"/…`, local `tex="a"/"c"`).
+`anim` frames reference sibling `image` layers by local id, not other resources, so
+they add nothing. e.g. knarr → 9 distinct, villageidol → 10 (deps overlaps rlink +
+mat2; `codeentry` adds `spr`).
+
 ## code / codeentry layers
 `code` (from `haven.Resource.Code`): `string name` (a fully-qualified Java class
 name) + the rest of the payload = a compiled `.class` file (magic `CAFEBABE`).

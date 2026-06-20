@@ -43,7 +43,9 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Image;
+import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -389,6 +391,7 @@ public class ResForgeFrame extends JFrame {
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
+        tb.add(new JButton(action("References\u2026", this::doShowReferences)));
         tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
         tb.add(vl);
@@ -628,6 +631,50 @@ public class ResForgeFrame extends JFrame {
         } catch(Exception e) {
             error("OBJ export failed: " + e.getMessage());
         }
+    }
+
+    private void doShowReferences() {
+        if(res == null) {
+            info("Open a .res file first.");
+            return;
+        }
+        String name = file != null ? file.getFileName().toString() : (suggestedName != null ? suggestedName : "resource");
+        String report = resforge.res.References.scan(res).render(name);
+
+        JTextArea area = new JTextArea(report);
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setCaretPosition(0);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setPreferredSize(new Dimension(520, 420));
+
+        JButton copy = new JButton(action("Copy", () ->
+                Toolkit.getDefaultToolkit().getSystemClipboard()
+                        .setContents(new StringSelection(report), null)));
+        JButton save = new JButton(action("Save\u2026", () -> {
+            JFileChooser fc = new JFileChooser(dir());
+            fc.setFileFilter(new FileNameExtensionFilter("Text (*.txt)", "txt"));
+            fc.setSelectedFile(new File(baseName() + "-references.txt"));
+            if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                try {
+                    Files.writeString(fc.getSelectedFile().toPath(), report);
+                    setStatus("Saved reference list \u2192 " + fc.getSelectedFile().getName());
+                } catch(Exception e) {
+                    error("Save failed: " + e.getMessage());
+                }
+            }
+        }));
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttons.add(copy);
+        buttons.add(save);
+
+        JPanel panel = new JPanel(new BorderLayout(0, 8));
+        panel.add(sp, BorderLayout.CENTER);
+        panel.add(buttons, BorderLayout.SOUTH);
+
+        JOptionPane.showMessageDialog(this, panel, "References \u2014 " + name,
+                JOptionPane.PLAIN_MESSAGE);
     }
 
     /* ----------------------------------------------------------- detail panel */
