@@ -127,6 +127,10 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - Edits route through `Replacer` where possible (tested, format-checked).
 - Commit per feature with a `Co-authored-by: Copilot …` trailer; keep both builds
   green; verify on real `samples/` before claiming done.
+- **Keep docs in lockstep with code.** Every add/change updates the docs in the
+  *same* commit: this primer (`AI-CONTEXT.md`), the per-layer table, the `README`
+  where relevant, and a `kb/notes/` entry for new format findings. A change isn't
+  done until its docs match — treat stale docs as a bug.
 
 ## 10. Open / next steps
 - **In-game test of the `transform` write path** (user-side; the one thing not
