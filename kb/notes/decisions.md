@@ -13,7 +13,8 @@ layer just means giving it a friendlier on-disk form (`.png`, `.txt`, `.json`).
 A typed editor is only exposed when decode -> typed form -> encode reproduces the
 original bytes exactly. If a layer doesn't pass that self-check, it falls back to
 raw passthrough. This guarantees we never silently corrupt data the user didn't
-intend to change. It's why float16-bearing layers (neg/obst) stay raw.
+intend to change. It's why float16-bearing layers (e.g. `obst`) stay raw, while
+`neg` — which turned out to be all int16, exactly reversible — is editable JSON.
 
 ## Immutable layers + snapshot undo
 Editing replaces a layer object rather than mutating it. That makes GUI undo/redo

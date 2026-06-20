@@ -48,11 +48,13 @@ No args (with a display) → launches the GUI.
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+replace+export, **Ogg player**
-(play/stop/draggable seek), tooltip/pagina **text**, props/action **JSON**,
-font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer ops:
-**Add / Rename (button + inline cell edit) / Delete / Move up·down**. Toolbar:
-Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16). **Edit →
-Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
+(play/stop/draggable seek), **live animation playback** (anim frames resolved to
+sibling image layers), tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
+**JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
+export), font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer
+ops: **Add / Rename (button + inline cell edit) / Delete / Move up·down**.
+Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16).
+**Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
 ## 5. Architecture (packages under `src/main/java/resforge/`)
 - `Main` — CLI dispatch + GUI launch.
@@ -60,11 +62,12 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
   `Json` (dependency-free JSON).
 - `res/` — `ResContainer` (parse/serialize the container), `Layer` (name+bytes,
   immutable), `Manifest` (manifest.txt + per-layer codec), `Unpacker`/`Packer`
-  (the "parts" model; codecs `raw|tex|props|action`), `Replacer` (one-shot swap),
-  `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
+  (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
+  (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
-  `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`; typed codecs `PropsCodec`,
-  `ActionCodec`, `Mat2Codec` (tto/record ↔ JSON, lossless-or-raw).
+  `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`
+  (read-only); typed codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`, `AnimCodec`,
+  `NegCodec` (tto/record ↔ JSON, lossless-or-raw).
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
   (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
@@ -109,10 +112,13 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 - `docs/reference/`: verbatim client sources `Resource.java`, `Message.java`,
   `NormNumber.java`, `TexR.java`, `VertexBuf.java`, and the dev's
   `mkres-fragment.py` (Ogre-XML→binary encoder). LGPL — keep notices.
-- `samples/` (gitignored, copyrighted game assets): 661 real `.res` + raw png/wav.
-  `verify samples` → **660/661 pass** (the 1 "fail" is a mislabeled non-resource:
-  zero bytes + a raw PNG). Histograms confirm all image/tex/audio/font/props/
-  action and all 11 vbuf2 + 41 mesh decode exactly.
+- `samples/` (gitignored, copyrighted game assets): real `.res` + raw png/wav.
+  `verify samples` → **all pass** (a mislabeled non-resource — zero bytes + a raw
+  PNG — was removed; the tool correctly rejects such files). Histograms confirm all
+  image/tex/audio/font/props/action/**mat2**/**anim**/**neg** decode/round-trip
+  exactly, all `vbuf2` re-encode byte-exact, all `mesh` decode, and all
+  `code`/`codeentry` decode. (Counts grow as more samples are added; `verify` is
+  the live oracle — keep it all-pass.)
 
 ## 9. Conventions
 - Lossless-or-raw: never expose a typed editor unless decode→encode is byte-exact
@@ -128,8 +134,9 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 - **3D import** (edit in Blender → back to `.res`): port `mkres` (Ogre-XML or OBJ
   → vbuf2/mesh, re-strip + re-quantise) behind lossless-or-raw — needs the in-game
   loop. `Vbuf2Codec` is the structure-preserving foundation.
-- Typed editors for `neg`/`obst` (formats now known; both use lossy
-  float16/coord16 — preserve raw bits). (`mat2` is now done — editable JSON.)
+- Typed editor for `obst` (movement-collision polygons; uses lossy `float16`, so
+  needs a half-precision codec under the lossless-or-raw guard). (`mat2`, `anim`
+  and `neg` are now done — editable JSON; `code`/`codeentry` are read-only.)
 - GUI niceties: fetch path history/autocomplete, search/filter layers, batch
   re-skin a folder.
 
