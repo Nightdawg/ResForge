@@ -21,6 +21,7 @@ repositories {
 }
 
 dependencies {
+    implementation files('lib/jorbis-0.0.17.jar')
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
@@ -37,4 +38,9 @@ tasks.named('jar') {
     manifest {
         attributes 'Main-Class': 'hafen.resedit.Main'
     }
+    // Fat jar: fold the bundled Ogg-decoder (jorbis) classes in so `java -jar` works.
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

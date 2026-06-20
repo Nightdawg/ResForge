@@ -17,9 +17,11 @@ java -jar build-gradle/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a fi
 
 Open a `.res` (toolbar button or drag-and-drop) to see its layers in a table.
 Selecting a layer shows the right tool for it: a **picture preview** with
-Replace/Export for icons and 3D textures; an editable **text box** for
-tooltips/pagina; an editable **JSON box** for properties and keybinds; Replace/
-Export for sounds and fonts; and an **Export 3D model as OBJ** action. Unchanged
+Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
+Stop / draggable seek) for audio; an editable **text box** for tooltips/pagina;
+an editable **JSON box** for properties and keybinds; Replace/Export for sounds
+and fonts; and an **Export 3D model as OBJ** action. You can also add, rename,
+delete and reorder layers, edit the resource version, and undo/redo. Unchanged
 layers are preserved byte-for-byte on save, so edits can't corrupt a file.
 
 ## Quick start (common mods)

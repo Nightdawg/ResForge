@@ -115,6 +115,16 @@ public final class GuiSupport {
         return null;
     }
 
+    /** The embedded Ogg Vorbis bytes for an audio2 layer, else null. */
+    public static byte[] audioBytes(Layer l) {
+        if(l.name.equals("audio2")) {
+            AudioInfo ai = AudioInfo.parse(l.data);
+            if(ai.format != null && ai.audioOffset > 0)
+                return Arrays.copyOfRange(l.data, ai.audioOffset, l.data.length);
+        }
+        return null;
+    }
+
     /** Editable plain text for tooltip/pagina, else null. */
     public static String editableText(Layer l) {
         if(l.name.equals("tooltip") || l.name.equals("pagina"))

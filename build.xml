@@ -40,6 +40,11 @@
         <fileset dir="${lib.dir}" includes="*.jar"/>
     </path>
 
+    <!-- Runtime libraries bundled into the app: the JOrbis Ogg-Vorbis decoder. -->
+    <path id="runtime.libs">
+        <fileset dir="${lib.dir}" includes="jorbis-*.jar"/>
+    </path>
+
     <target name="clean" description="Remove the Ant build output">
         <delete dir="${build.dir}"/>
     </target>
@@ -48,13 +53,17 @@
         <mkdir dir="${classes.dir}"/>
         <javac srcdir="${src.dir}" destdir="${classes.dir}"
                includeantruntime="false" release="21" debug="true" encoding="UTF-8">
+            <classpath refid="runtime.libs"/>
             <compilerarg value="-Xlint:none"/>
         </javac>
     </target>
 
     <target name="jar" depends="compile" description="Build the runnable jar">
         <mkdir dir="${jar.dir}"/>
-        <jar destfile="${jar.file}" basedir="${classes.dir}">
+        <jar destfile="${jar.file}">
+            <fileset dir="${classes.dir}"/>
+            <!-- Fold the JOrbis decoder classes in so `java -jar` works standalone. -->
+            <zipgroupfileset dir="${lib.dir}" includes="jorbis-*.jar"/>
             <manifest>
                 <attribute name="Main-Class" value="${main.class}"/>
             </manifest>
@@ -95,6 +104,7 @@
         <java classname="${main.class}" fork="true" failonerror="true">
             <classpath>
                 <pathelement location="${classes.dir}"/>
+                <path refid="runtime.libs"/>
             </classpath>
             <arg line="${args}"/>
         </java>
@@ -104,6 +114,7 @@
         <java classname="${main.class}" fork="true" spawn="true">
             <classpath>
                 <pathelement location="${classes.dir}"/>
+                <path refid="runtime.libs"/>
             </classpath>
         </java>
         <echo message="Launched the hafen-resedit GUI."/>

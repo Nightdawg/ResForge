@@ -207,6 +207,8 @@ hafen-resedit/
     gui/ResEditFrame.java            # Swing editor window (layer table + preview/edit)
     gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
     gui/ImageView.java               # scaled/centred image preview component
+    gui/AudioPlayerPanel.java        # in-app Ogg player (play/stop/seek)
+    audio/OggVorbis.java             # Ogg Vorbis -> PCM decode (via bundled JOrbis)
     io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
     io/MessageWriter.java            # LE primitive encoder
     io/Json.java                     # tiny dependency-free JSON reader/writer
@@ -288,8 +290,12 @@ java -jar build-gradle/libs/hafen-resedit-0.1.0.jar info horse.res
   layer immediately (even ones we don't understand), while still exposing the
   high-value layers (images, text) for editing. Typed editors can be added later
   without changing the pack path (it just concatenates parts).
-- **No third-party runtime deps**: only JUnit for tests; manifest is a tiny
-  text format, so no JSON library is required and the tool builds offline.
+- **Minimal third-party deps**: the only runtime dependency is **JOrbis**
+  (`org.jcraft:jorbis`, ~97 KB, LGPL) — a pure-Java Ogg Vorbis decoder used by the
+  GUI's in-app sound player; it is vendored in `lib/` and folded into the runnable
+  jar (a "fat jar"), so the tool still builds and runs offline with no network
+  fetch. JUnit is test-only. The CLI uses none of this (no audio decoding), and
+  the manifest/JSON formats need no library.
 
 ---
 
