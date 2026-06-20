@@ -48,6 +48,9 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 
 /** A small Swing GUI for browsing and editing a Haven &amp; Hearth {@code .res}
@@ -67,6 +70,28 @@ public class ResEditFrame extends JFrame {
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
+
+    private static final int UNDO_LIMIT = 100;
+    private final Deque<Snapshot> undoStack = new ArrayDeque<>();
+    private final Deque<Snapshot> redoStack = new ArrayDeque<>();
+    private JMenuItem undoItem, redoItem;
+
+    /** An immutable snapshot of the document for undo/redo. Layers are themselves
+     *  immutable and only ever replaced (never mutated in place), so a copy of
+     *  the list is a complete, cheap snapshot. */
+    private static final class Snapshot {
+        final int version;
+        final List<Layer> layers;
+        final boolean dirty;
+        final int selectedRow;
+
+        Snapshot(int version, List<Layer> layers, boolean dirty, int selectedRow) {
+            this.version = version;
+            this.layers = layers;
+            this.dirty = dirty;
+            this.selectedRow = selectedRow;
+        }
+    }
 
     public ResEditFrame() {
         super("hafen-resedit");
@@ -148,6 +173,67 @@ public class ResEditFrame extends JFrame {
             downBtn.setEnabled(hasSel && sel < res.layers.size() - 1);
     }
 
+    /* ----------------------------------------------------------- undo / redo */
+
+    private Snapshot snapshot() {
+        return new Snapshot(res.version, new ArrayList<>(res.layers), dirty, table.getSelectedRow());
+    }
+
+    /** Records the current state as an undo point (call before a mutation). */
+    private void pushUndo() {
+        if(res != null)
+            commit(snapshot());
+    }
+
+    private void commit(Snapshot s) {
+        undoStack.push(s);
+        while(undoStack.size() > UNDO_LIMIT)
+            undoStack.removeLast();
+        redoStack.clear();
+        updateUndoState();
+    }
+
+    private void undo() {
+        if(res == null || undoStack.isEmpty())
+            return;
+        redoStack.push(snapshot());
+        restore(undoStack.pop());
+        setStatus("Undo");
+    }
+
+    private void redo() {
+        if(res == null || redoStack.isEmpty())
+            return;
+        undoStack.push(snapshot());
+        restore(redoStack.pop());
+        setStatus("Redo");
+    }
+
+    private void restore(Snapshot s) {
+        res.version = s.version;
+        res.layers.clear();
+        res.layers.addAll(s.layers);
+        dirty = s.dirty;
+        updatingVersion = true;
+        versionSpinner.setValue(res.version);
+        updatingVersion = false;
+        model.fireTableDataChanged();
+        if(!res.layers.isEmpty() && s.selectedRow >= 0 && s.selectedRow < res.layers.size())
+            table.setRowSelectionInterval(s.selectedRow, s.selectedRow);
+        else if(res.layers.isEmpty())
+            showPlaceholder("This file has no layers.");
+        updateTitle();
+        updateLayerButtons();
+        updateUndoState();
+    }
+
+    private void updateUndoState() {
+        if(undoItem != null)
+            undoItem.setEnabled(!undoStack.isEmpty());
+        if(redoItem != null)
+            redoItem.setEnabled(!redoStack.isEmpty());
+    }
+
     private void addLayer() {
         if(res == null)
             return;
@@ -174,6 +260,7 @@ public class ResEditFrame extends JFrame {
         }
         int sel = table.getSelectedRow();
         int at = (sel >= 0) ? sel + 1 : res.layers.size();
+        pushUndo();
         res.layers.add(at, new Layer(name, data));
         model.fireTableDataChanged();
         table.setRowSelectionInterval(at, at);
@@ -191,6 +278,7 @@ public class ResEditFrame extends JFrame {
                 "Delete layer", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         if(r != JOptionPane.YES_OPTION)
             return;
+        pushUndo();
         res.layers.remove(sel);
         model.fireTableDataChanged();
         if(res.layers.isEmpty()) {
@@ -211,6 +299,7 @@ public class ResEditFrame extends JFrame {
         int target = sel + delta;
         if(target < 0 || target >= res.layers.size())
             return;
+        pushUndo();
         Layer l = res.layers.remove(sel);
         res.layers.add(target, l);
         model.fireTableDataChanged();
@@ -243,6 +332,7 @@ public class ResEditFrame extends JFrame {
         }
         if(newName.equals(l.name))
             return;
+        pushUndo();
         res.layers.set(row, new Layer(newName, l.data));
         model.fireTableRowsUpdated(row, row);
         markDirty();
@@ -264,6 +354,15 @@ public class ResEditFrame extends JFrame {
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
         bar.add(fileMenu);
+
+        JMenu editMenu = new JMenu("Edit");
+        undoItem = item("Undo", KeyEvent.VK_Z, this::undo);
+        redoItem = item("Redo", KeyEvent.VK_Y, this::redo);
+        undoItem.setEnabled(false);
+        redoItem.setEnabled(false);
+        editMenu.add(undoItem);
+        editMenu.add(redoItem);
+        bar.add(editMenu);
 
         JMenu help = new JMenu("Help");
         help.add(menuItem("About", this::doAbout));
@@ -288,6 +387,7 @@ public class ResEditFrame extends JFrame {
         versionSpinner.addChangeListener(e -> {
             if(updatingVersion || res == null)
                 return;
+            pushUndo();
             res.version = (Integer) versionSpinner.getValue();
             markDirty();
             setStatus("Resource version set to " + res.version);
@@ -337,6 +437,9 @@ public class ResEditFrame extends JFrame {
                 showPlaceholder("This file has no layers.");
             updateTitle();
             updateLayerButtons();
+            undoStack.clear();
+            redoStack.clear();
+            updateUndoState();
             setStatus("Opened " + p.getFileName() + " \u2014 res-version " + res.version
                     + ", " + res.layers.size() + " layers");
         } catch(Exception e) {
@@ -557,16 +660,21 @@ public class ResEditFrame extends JFrame {
 
     /** Routes every in-memory edit through the tested Replacer (by absolute index). */
     private void applyBytes(int idx, byte[] bytes) {
+        if(res == null)
+            return;
+        Snapshot before = snapshot();
         try {
             Replacer.replace(res, "#" + idx, bytes);
-            markDirty();
-            int sel = table.getSelectedRow();
-            model.fireTableRowsUpdated(idx, idx);
-            if(sel == idx)
-                showSelected();
         } catch(Replacer.ReplaceException e) {
             error(e.getMessage());
+            return;
         }
+        commit(before);
+        markDirty();
+        int sel = table.getSelectedRow();
+        model.fireTableRowsUpdated(idx, idx);
+        if(sel == idx)
+            showSelected();
     }
 
     private void exportLayer(int idx) {
