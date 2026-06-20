@@ -1,14 +1,15 @@
 # ResForge
 
 A standalone tool to **decompile, edit, and recompile Haven & Hearth `.res`
-files** for modding. It unpacks a `.res` into an editable folder and repacks it
-back — byte-for-byte identical when nothing is changed. It has both a **graphical
-editor** (the default when launched with no arguments) and a full command-line
-interface.
+files** for modding. It opens a `.res` in a **graphical editor**, lets you swap
+textures, sounds, fonts, text and keybinds, and saves it back — byte-for-byte
+identical when nothing is changed. Everything is also available on the
+[command line](#command-line-interface) for scripting and batch work.
 
 ## Graphical editor
 
-Double-click the jar, or run it with no arguments, to open the GUI:
+The editor is the main way to use ResForge. Double-click the jar, or run it with
+no arguments, to open it:
 
 ```sh
 java -jar build-gradle/libs/resforge-0.1.0.jar          # opens the editor
@@ -24,48 +25,6 @@ an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and an **Export 3D model as OBJ** action. You can also add, rename,
 delete and reorder layers, edit the resource version, and undo/redo. Unchanged
 layers are preserved byte-for-byte on save, so edits can't corrupt a file.
-
-## Quick start (common mods)
-
-Build the tool once, then use the jar (handles paths with spaces):
-
-```sh
-./gradlew jar
-# the jar is at build-gradle/libs/resforge-0.1.0.jar
-alias resforge='java -jar build-gradle/libs/resforge-0.1.0.jar'
-```
-
-```sh
-# See what's inside a file, or what's moddable across a whole folder:
-resforge info   horse.res
-resforge catalog C:\Haven\res
-
-# Download a resource straight from the game server (by its in-game path):
-resforge fetch  gfx/borka/male            # -> male.res
-resforge fetch  gfx/borka/male male.res   # choose the output name
-
-# Swap a single asset in one command (the originals are format-checked):
-resforge replace horse.res image  newicon.png   horse.res   # 2D icon / sprite
-resforge replace horse.res tex    newskin.jpg    horse.res   # 3D model texture
-resforge replace theme.res audio2 newsound.ogg   theme.res   # sound
-resforge replace ui.res    font   myfont.ttf     ui.res      # UI font
-
-# Edit text / typed data: unpack, edit the file, pack:
-resforge unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
-resforge pack   horse.resdir         # -> horse.res
-
-# Look at a 3D model (opens in Blender / Windows 3D Viewer):
-resforge obj    horse.res horse.obj
-
-# Experimental write path: scale a model's geometry (then load in-game to check):
-resforge transform horse.res 2 2 2 horse-big.res
-```
-
-`replace` is the easy path for re-skinning; `unpack`/`pack` is for editing text
-(`tooltip`/`pagina`) and typed JSON (`props`, `action` keybinds). Editing can
-never silently corrupt a file — typed layers are only exposed when they
-re-encode byte-for-byte, otherwise they stay raw.
-
 
 ## The `.res` format
 
@@ -87,9 +46,9 @@ developer's `mkres` Python compiler is the encoder side (mostly 3D meshes).
 
 ## How this tool works — the "parts" model
 
-`unpack` writes a folder containing a `manifest.txt` plus a `layers/`
+Unpacking a `.res` writes a folder containing a `manifest.txt` plus a `layers/`
 sub-folder. Every layer becomes one or more **part files** whose concatenation
-equals the original payload, so `pack` can always rebuild the exact bytes.
+equals the original payload, so repacking can always rebuild the exact bytes.
 
 | Layer type        | Parts written                | Editable as              |
 |-------------------|------------------------------|--------------------------|
@@ -131,75 +90,6 @@ renaming a button or rebinding its hotkey.
 `*.fonthdr` + `*.ttf`/`*.otf` so you can swap the typeface. `midi` layers are a
 whole MIDI file, exposed as `*.mid`.
 
-## Usage
-
-```sh
-# Inspect a resource
-./gradlew run --args="info paths/to/horse.res"
-
-# Decompile -> horse.resdir/
-./gradlew run --args="unpack paths/to/horse.res"
-
-# ...edit layers/000_image.png, layers/001_tooltip.txt, etc...
-
-# Recompile -> horse.res
-./gradlew run --args="pack horse.resdir"
-```
-
-Swap a single asset in one shot, without unpacking the whole resource — pick a
-layer by name (`image`), name + occurrence (`tex#2`), or absolute index (`#5`):
-
-```sh
-# Replace an icon, a 3D texture, a sound, or a font:
-./gradlew run --args="replace horse.res image newicon.png horse.res"
-./gradlew run --args="replace horse.res tex newskin.jpg horse.res"
-./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
-./gradlew run --args="replace ui.res font myfont.ttf ui.res"
-
-# Replace text or typed JSON (tooltip/pagina, or props/action):
-./gradlew run --args="replace horse.res tooltip newtip.txt horse.res"
-./gradlew run --args="replace menu.res action newaction.json menu.res"
-```
-
-If the output path is omitted, `replace` overwrites the input file in place.
-Replacement media is format-checked (PNG/JPEG for images, `OggS` for audio,
-sfnt for fonts), so a wrong file type is rejected rather than written.
-
-Export a model's 3D geometry to a Wavefront **OBJ** you can open in Blender,
-MeshLab, or the Windows 3D Viewer:
-
-```sh
-./gradlew run --args="obj horse.res horse.obj"
-```
-
-This de-quantises the `vbuf2` vertex buffers (positions, normals, texture
-coords) and turns each `mesh` layer into an OBJ group. It is read-only — a
-viewing/inspection aid; editing geometry back into `.res` is future work.
-
-To see what is moddable across a whole folder of resources at a glance:
-
-```sh
-./gradlew run --args="catalog path/to/folder"
-```
-
-It prints one line per file listing its editable asset kinds (icon, texture,
-sound, font, music, keybind, props, text, 3D-model) plus an aggregate summary.
-
-Validate a file (or a whole folder, recursively) without unpacking — checks
-that parse/serialize and unpack/pack are byte-identical and that every `image`
-layer's embedded picture splits cleanly (decodable on its own):
-
-```sh
-./gradlew run --args="verify path/to/horse.res"
-./gradlew run --args="verify path/to/folder-of-res"
-```
-
-Build a runnable jar with `./gradlew jar` (output under `build-gradle/libs/`), then:
-
-```sh
-java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
-```
-
 ## Building / testing
 
 Requires JDK 21. There are two equivalent builds:
@@ -216,13 +106,64 @@ Requires JDK 21. There are two equivalent builds:
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
 ant jar              # -> build-ant/libs/resforge-0.1.0.jar
-ant run -Dargs="info samples/apple.res"
 ```
 
 The Ant build has no internet dependency — the JUnit 5 jars live in `lib/` and
 output goes to `build-ant/`, while Gradle writes to `build-gradle/`, so the two
 never clash. Requires Ant 1.10+ (for the native JUnit 5 `junitlauncher` task).
 Point `JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for either build.
+
+## Command-line interface
+
+The graphical editor is the recommended way to use ResForge, but every operation
+is also available on the command line — handy for scripting or batch-modding a
+whole folder. Build the jar once, then (optionally) alias it (the jar handles
+paths with spaces):
+
+```sh
+./gradlew jar
+# the jar is at build-gradle/libs/resforge-0.1.0.jar
+alias resforge='java -jar build-gradle/libs/resforge-0.1.0.jar'
+```
+
+```sh
+# Inspect a file, or see what's moddable across a whole folder:
+resforge info    horse.res
+resforge catalog C:\Haven\res
+
+# Download a resource straight from the game server (by its in-game path):
+resforge fetch   gfx/borka/male            # -> male.res
+resforge fetch   gfx/borka/male male.res   # choose the output name
+
+# Swap a single asset in one command (the originals are format-checked):
+resforge replace horse.res image  newicon.png    horse.res   # 2D icon / sprite
+resforge replace horse.res tex    newskin.jpg     horse.res   # 3D model texture
+resforge replace theme.res audio2 newsound.ogg    theme.res   # sound
+resforge replace ui.res    font   myfont.ttf      ui.res      # UI font
+resforge replace menu.res  action newaction.json  menu.res    # keybind (JSON)
+
+# Edit text / typed data: unpack, edit the files, then pack:
+resforge unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
+resforge pack   horse.resdir         # -> horse.res
+
+# Export a 3D model to a Wavefront OBJ (open in Blender / Windows 3D Viewer):
+resforge obj    horse.res horse.obj
+
+# Validate round-trip + image splitting for one file or a whole folder:
+resforge verify path/to/folder-of-res
+
+# Experimental write path: scale a model's geometry (then load in-game to check):
+resforge transform horse.res 2 2 2 horse-big.res
+```
+
+`replace` is the easy path for re-skinning; pick the layer by name (`image`),
+name + occurrence (`tex#2`), or absolute index (`#5`). If the output path is
+omitted it overwrites the input in place, and the replacement media is
+format-checked (PNG/JPEG for images, `OggS` for audio, sfnt for fonts), so a
+wrong file type is rejected rather than written. `unpack`/`pack` is the route for
+editing text (`tooltip`/`pagina`) and typed JSON (`props`, `action`); as in the
+GUI, typed layers are only exposed when they re-encode byte-for-byte, otherwise
+they stay raw. Run with no arguments to open the editor instead.
 
 ## Extending
 
@@ -247,3 +188,18 @@ JSON, and text. The 3D vertex buffers (`vbuf2`) are inspected read-only (vertex
 count + attribute formats shown by `info`/`verify`). Deeper typed editing
 (mesh/skeleton geometry, animations, collision) can be layered on incrementally
 using the same parts model.
+
+## How this was built ("vibe coded")
+
+ResForge was written entirely by an AI coding assistant — **Claude Opus 4.8**,
+driven through the **GitHub Copilot CLI** — under human direction, i.e. "vibe
+coded." The `.res` format was reverse-engineered mainly from the Haven & Hearth
+game client, with additional context from **CarryGun's** (a.k.a. **Kerrigan**)
+[**HafenResourceTool**](https://gitlab.com/CarryGun/HafenResourceTool) (used as a
+format reference; no code taken) and the server-side **`mkres` Python scripts**
+shared by the game's developer (**loftar**) — kept for reference as
+[`docs/reference/mkres-fragment.py`](docs/reference/mkres-fragment.py). All the
+code, tests and docs were produced by prompting the assistant and validating the
+results against real game files (the round-trip oracle in `verify`). Commits
+reflect this with a `Co-authored-by: Copilot` trailer and a `Powered by Claude
+Opus 4.8` note.
