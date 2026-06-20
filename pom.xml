@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Apache Maven build for ResForge (a third option alongside Gradle and Ant).
+
+  This mirrors what the Gradle and Ant builds do: compile the same sources with
+  JDK 21, run the JUnit 5 tests, and produce a runnable "fat" jar that bundles
+  the JOrbis Ogg-Vorbis decoder. Output goes to build-maven/ (not Maven's usual
+  target/) so it never clashes with build-gradle/ or build-ant/.
+
+  Common commands (Maven fetches its plugins + dependencies from Maven Central):
+    mvn package         compile + run tests + build the jar -> build-maven/resforge-0.1.0.jar
+    mvn test            compile and run the JUnit 5 tests
+    mvn compile         compile main sources only
+    mvn clean           remove build-maven/
+    mvn exec:java -Dexec.mainClass=resforge.Main -Dexec.args="info samples/apple.res"
+
+  Requires JDK 21. Point JAVA_HOME at the JDK *root* (not the \bin sub-directory).
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>resforge</groupId>
+    <artifactId>resforge</artifactId>
+    <version>0.1.0</version>
+    <packaging>jar</packaging>
+
+    <properties>
+        <maven.compiler.release>21</maven.compiler.release>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+        <!-- The only runtime dependency: the JOrbis Ogg-Vorbis decoder (GUI sound player). -->
+        <dependency>
+            <groupId>org.jcraft</groupId>
+            <artifactId>jorbis</artifactId>
+            <version>0.0.17</version>
+        </dependency>
+        <!-- Tests only. -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <!-- Keep Maven's output beside (not clashing with) the Gradle/Ant outputs. -->
+        <directory>build-maven</directory>
+        <finalName>resforge-${project.version}</finalName>
+
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+
+            <!-- Fat jar: fold the JOrbis classes in so `java -jar` works standalone. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.3</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <createDependencyReducedPom>false</createDependencyReducedPom>
+                            <transformers>
+                                <transformer
+                                    implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>resforge.Main</mainClass>
+                                </transformer>
+                            </transformers>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -23,18 +23,23 @@ a sibling project at `../hafen-client`).
 
 ## 2. Build & run (IMPORTANT gotchas)
 - **JAVA_HOME must be the JDK *root*** `C:\Program Files\Java\graalvm-jdk-21.0.9+7.1`
-  (the machine's env var wrongly includes `\bin` — both builds reject that).
-- **Two equivalent builds, separate output dirs (both gitignored):**
+  (the machine's env var wrongly includes `\bin` — all builds reject that).
+- **Three equivalent builds, separate output dirs (all gitignored):**
   - Gradle → `build-gradle/`: `./gradlew build` (compile+test), `./gradlew jar`.
+  - Maven → `build-maven/`: `mvn package` (compile+test+jar); output redirected
+    from the usual `target/` via `<build><directory>`. Fat jar via shade plugin;
+    jorbis + JUnit fetched from Maven Central. (`mvn` not installed on this box —
+    a past run used Apache Maven 3.9.9 downloaded to a temp dir to verify.)
   - Ant → `build-ant/`: `ant` or `ant jar` (no tests, default target), `ant build`
     (jar+tests), `ant gui` (launch GUI detached), `ant test`, `ant clean`.
     JUnit jars are vendored in `lib/`; Ant needs 1.10+ (native `junitlauncher`).
-- **Runnable jar:** `<build>/libs/resforge-0.1.0.jar`. Use the jar (not
-  `gradlew/ant run`) for paths with spaces — `--args`/`-Dargs` mangle them.
+- **Runnable jar:** `build-gradle/libs/` or `build-ant/libs/` or `build-maven/`,
+  all `resforge-0.1.0.jar`. Use the jar (not `gradlew/ant run`) for paths with
+  spaces — `--args`/`-Dargs` mangle them.
 - **One runtime dependency:** `org.jcraft:jorbis` 0.0.17 (LGPL, ~97 KB, bundles
-  `jogg`+`jorbis`) — the GUI's Ogg player. Vendored in `lib/`, folded into the
-  jar by both builds (Gradle fat-jar via runtimeClasspath; Ant `zipgroupfileset`).
-  The CLI never uses it.
+  `jogg`+`jorbis`) — the GUI's Ogg player. Vendored in `lib/` (Gradle/Ant) or
+  pulled from Central (Maven), folded into the jar by all three (Gradle fat-jar
+  via runtimeClasspath; Ant `zipgroupfileset`; Maven shade). The CLI never uses it.
 - Verifying the GUI: launch the jar, screenshot the screen, view the PNG. GUI
   mouse/keys automation is flaky — prefer screenshotting + trusting shared code
   paths. Always `Stop-Process -Id <PID>` test windows (never kill IntelliJ).
@@ -132,8 +137,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   (verified). Untouched layers always pass through unchanged.
 - `Layer` is immutable; edits *replace* it (enables cheap snapshot undo).
 - Edits route through `Replacer` where possible (tested, format-checked).
-- Commit per feature with a `Co-authored-by: Copilot …` trailer; keep both builds
-  green; verify on real `samples/` before claiming done.
+- Commit per feature with a `Co-authored-by: Copilot …` trailer; keep all three
+  builds green (Gradle/Maven/Ant); verify on real `samples/` before claiming done.
 - **Keep docs in lockstep with code.** Every add/change updates the docs in the
   *same* commit: this primer (`AI-CONTEXT.md`), the per-layer table, the `README`
   where relevant, and a `kb/notes/` entry for new format findings. A change isn't

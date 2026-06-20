@@ -199,6 +199,7 @@ re-encodes JSON to a `tto` stream (see §3).
 ```
 resforge/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
+  pom.xml                            # Maven build (alternative); deps+plugins from Central, output build-maven/
   build.xml                          # Ant build (alternative); JUnit jars vendored in lib/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
