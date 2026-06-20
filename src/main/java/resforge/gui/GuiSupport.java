@@ -68,7 +68,9 @@ public final class GuiSupport {
                 }
                 case "audio2": {
                     AudioInfo ai = AudioInfo.parse(l.data);
-                    return ai.format != null ? "Ogg Vorbis" : "audio";
+                    if(ai.format == null)
+                        return "audio";
+                    return (ai.recognized && !ai.id.isEmpty() ? "\"" + ai.id + "\" " : "") + "Ogg Vorbis";
                 }
                 case "font": {
                     FontInfo fi = FontInfo.parse(l.data);
