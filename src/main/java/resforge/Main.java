@@ -183,6 +183,16 @@ public class Main {
                 } catch(RuntimeException e) {
                     /* opaque anim: leave as-is */
                 }
+            } else if(l.name.equals("neg")) {
+                try {
+                    java.util.Map<String, Object> m = resforge.layers.NegCodec.decode(l.data);
+                    java.util.List<?> c = (java.util.List<?>) m.get("center");
+                    java.util.List<?> eps = (java.util.List<?>) m.get("endpoints");
+                    System.out.printf("  center=(%s,%s) %d endpoint group%s", c.get(0), c.get(1),
+                            eps.size(), eps.size() == 1 ? "" : "s");
+                } catch(RuntimeException e) {
+                    /* opaque neg: leave as-is */
+                }
             } else if(l.name.equals("code")) {
                 resforge.layers.CodeInfo ci = resforge.layers.CodeInfo.parse(l.data);
                 if(ci.recognized)

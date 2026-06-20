@@ -51,11 +51,16 @@ From `haven.FastMesh`: `uint8 fl`; old form (fl & 0x80 == 0): `uint16` numTris,
 `int16` matid, optional id/ref/rdat/vbufid, then indices — raw `uint16`*3*num or
 **delta-stripped** (`unstrip`/`decdelta`). References a vbuf2 by id.
 
-## neg layer (collision / boundary)
-From the client: `coord cc`, then 12 bytes the client just skips, then `uint8`
-endpoint count and per endpoint `[uint8 id, uint16 n, n coords]`. CarryGun's tool
-decodes those 12 bytes as tl / br / oc offsets (top-left, bottom-right, object
-center) — likely `coord16` (int16 x/y) pairs. Lossy if re-encoded; preserve raw.
+## neg layer (click hitbox / interaction geometry)
+From `haven.Resource.Neg`: `coord cc` (the click hotspot center), then 12 bytes
+the client skips (CarryGun reads them as 3 coords — tl/br/oc: top-left,
+bottom-right, object-center), then `uint8` endpoint-group count and per group
+`[uint8 id, uint16 n, n coords]` (connection/attachment points). `cdec` is
+`(int16 x, int16 y)`, so **every field is int16/uint8 — exactly reversible, NOT
+lossy** (unlike `obst`'s float16). **Editable as JSON**
+`{center, bounds, endpoints}` (`NegCodec`, codec `neg`, lossless-or-raw). Samples
+(cleave/flex/jump) all have 0 endpoint groups; the endpoint path is covered by a
+synthetic unit test (a placeable/linkable object would exercise it in the wild).
 
 ## mat2 layer (material)
 `uint16 id`, then until EOF a sequence of material commands — each a

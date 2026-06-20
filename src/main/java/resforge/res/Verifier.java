@@ -9,6 +9,7 @@ import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
+import resforge.layers.NegCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
@@ -53,6 +54,7 @@ public class Verifier {
         public final Map<String, Integer> actionHist = new TreeMap<>();
         public final Map<String, Integer> matHist = new TreeMap<>();
         public final Map<String, Integer> animHist = new TreeMap<>();
+        public final Map<String, Integer> negHist = new TreeMap<>();
         public final Map<String, Integer> codeHist = new TreeMap<>();
         public final Map<String, Integer> codeEntryHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
@@ -112,6 +114,7 @@ public class Verifier {
         printHist(out, "Action histogram", sum.actionHist);
         printHist(out, "Mat2 histogram", sum.matHist);
         printHist(out, "Anim histogram", sum.animHist);
+        printHist(out, "Neg histogram", sum.negHist);
         printHist(out, "Code histogram", sum.codeHist);
         printHist(out, "CodeEntry histogram", sum.codeEntryHist);
         printHist(out, "Font histogram", sum.fontHist);
@@ -175,6 +178,9 @@ public class Verifier {
                         1, Integer::sum);
             else if(l.name.equals("anim"))
                 sum.animHist.merge(AnimCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
+            else if(l.name.equals("neg"))
+                sum.negHist.merge(NegCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
                         1, Integer::sum);
             else if(l.name.equals("code")) {
                 CodeInfo ci = CodeInfo.parse(l.data);

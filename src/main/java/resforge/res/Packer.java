@@ -4,6 +4,7 @@ import resforge.io.Json;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.Mat2Codec;
+import resforge.layers.NegCodec;
 import resforge.layers.PropsCodec;
 
 import java.io.ByteArrayOutputStream;
@@ -80,6 +81,19 @@ public class Packer {
                 return AnimCodec.encode(model);
             } catch(RuntimeException ex) {
                 throw new IOException("Failed to encode anim layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
+        }
+        if(e.codec.equals("neg")) {
+            if(e.parts.size() != 1)
+                throw new IOException("neg codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return NegCodec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode neg layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
         if(e.codec.equals("mat2")) {
