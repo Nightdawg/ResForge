@@ -248,10 +248,16 @@ class GltfExportTest {
         Map<String, Object> meshNode = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(0);
         assertEquals(0L, ((Number) meshNode.get("skin")).longValue());
 
-        // a local skel poses the joint (it gets a node matrix)
+        // a local skel poses the joint via a connected hierarchy under a ROOT node
         int jointNode = ((Number) ((List<Object>) skin.get("joints")).get(0)).intValue();
         Map<String, Object> jn = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(jointNode);
-        assertTrue(jn.containsKey("matrix"), "a local skel should pose the joint");
+        assertTrue(jn.containsKey("translation") || jn.containsKey("rotation"),
+                "a local skel should give the joint a local transform");
+        boolean hasRoot = false;
+        for(Object o : (List<Object>) root.get("nodes"))
+            if("ROOT".equals(((Map<String, Object>) o).get("name")))
+                hasRoot = true;
+        assertTrue(hasRoot, "a conversion ROOT node should parent the skeleton");
     }
 
     @Test
