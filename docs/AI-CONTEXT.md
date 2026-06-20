@@ -56,7 +56,7 @@ sibling image layers, composited at their true relative size + per-frame offset)
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer
-ops: **Add / Rename (button + inline cell edit) / Delete / Move up·down**.
+ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
