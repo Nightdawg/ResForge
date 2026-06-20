@@ -946,12 +946,50 @@ public class ResForgeFrame extends JFrame {
                 content.add(currentPlayer);
                 content.add(Box.createVerticalStrut(8));
             }
+            addAudioHeaderEditor(content, idx, l);
         }
         content.add(labeled(GuiSupport.summary(l)));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Replace\u2026", () -> replaceFromFile(idx, l.name))),
                 new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+    }
+
+    /** Shows the audio clip id + volume, with an editable volume for ver-2 clips. */
+    private void addAudioHeaderEditor(JPanel content, int idx, Layer l) {
+        resforge.layers.AudioHeaderCodec h = resforge.layers.AudioHeaderCodec.parse(l.data);
+        if(!h.editable) {
+            resforge.layers.AudioInfo ai = resforge.layers.AudioInfo.parse(l.data);
+            if(ai.recognized)
+                content.add(labeled("id=\"" + ai.id + "\"   volume=" + String.format("%.3f", ai.bvol)));
+            return;
+        }
+        JTextField idField = new JTextField(h.id, 10);
+        JPanel row = headerRow();
+        row.add(new JLabel("id"));
+        row.add(idField);
+        final JSpinner volSp;
+        if(h.hasVol) {
+            volSp = new JSpinner(new SpinnerNumberModel(h.bvol(), 0.0, 65.535, 0.05));
+            ((JSpinner.DefaultEditor) volSp.getEditor()).getTextField().setColumns(6);
+            row.add(new JLabel("  volume"));
+            row.add(volSp);
+        } else {
+            volSp = null;
+        }
+        row.add(new JButton(action("Apply", () -> {
+            try {
+                byte[] payload = (volSp != null)
+                        ? h.encodeWithBvol(idField.getText(), (Double) volSp.getValue())
+                        : h.encodeWith(idField.getText(), 0);
+                setLayerPayload(idx, payload);
+                setStatus("Updated audio header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                error(ex.getMessage());
+            }
+        })));
+        content.add(row);
+        content.add(Box.createVerticalStrut(8));
     }
 
     private void buildModelPanel(JPanel content, Layer l) {

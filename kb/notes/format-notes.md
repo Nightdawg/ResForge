@@ -36,7 +36,10 @@ when the texture is swapped, so a replacement of any size repacks correctly.
 ## audio2 layer
 `uint8 ver` (1..3), `string id`, `uint16 vol` (ver 2, bvol = vol*0.001), optional
 tto metadata (ver 3), then an Ogg Vorbis stream to the end. We split into header
-+ `.ogg`; the GUI decodes it with JOrbis and plays it.
++ `.ogg`; the GUI decodes it with JOrbis and plays it. `AudioHeaderCodec`
+re-encodes the ver 1–2 header so the GUI can edit the clip **id** and (ver 2)
+**volume** (lossless-or-raw: Ogg kept verbatim, offered only when re-encode is
+byte-exact). Ver 3 (typed metadata) stays read-only.
 
 ## font layer
 `uint8 ver` (==1), `uint8 type` (==0 TrueType), then the sfnt font program to the

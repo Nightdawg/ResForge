@@ -83,9 +83,9 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 ## 6. Per-layer status
 | Layer | Status |
 |-------|--------|
-| `image` | edit: swap embedded PNG/JPEG (header preserved); old + new(tto) header |
+| `image` | edit: swap embedded PNG/JPEG; **edit header** (id/z/sub-z/offset/nooff) for old-style; new image layers get a wrapped header |
 | `tex` | edit: swap 3D texture; `tex` codec recomputes embedded int32 length |
-| `audio2` | edit: swap Ogg; GUI plays it. header + Ogg tail |
+| `audio2` | edit: swap Ogg; **edit clip id + volume** (ver-2 header); GUI plays it |
 | `font` | edit: swap TTF/OTF (sfnt). 2-byte header + font tail |
 | `midi` | edit: swap `.mid` (whole payload) |
 | `props` | edit as JSON (tto list, lossless-or-raw) |
