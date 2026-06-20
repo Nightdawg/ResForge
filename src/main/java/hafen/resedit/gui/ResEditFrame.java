@@ -27,6 +27,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JToolBar;
+import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SpinnerNumberModel;
@@ -75,6 +76,7 @@ public class ResEditFrame extends JFrame {
     private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
     private AudioPlayerPanel currentPlayer;
     private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
+    private final JTextField pathField = new JTextField("(no file open)");
 
     private static final int UNDO_LIMIT = 100;
     private final Deque<Snapshot> undoStack = new ArrayDeque<>();
@@ -112,7 +114,10 @@ public class ResEditFrame extends JFrame {
         });
 
         setJMenuBar(buildMenuBar());
-        add(buildToolBar(), BorderLayout.NORTH);
+        JPanel north = new JPanel(new BorderLayout());
+        north.add(buildToolBar(), BorderLayout.NORTH);
+        north.add(buildPathBar(), BorderLayout.SOUTH);
+        add(north, BorderLayout.NORTH);
 
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.setRowHeight(36);
@@ -381,6 +386,25 @@ public class ResEditFrame extends JFrame {
         return bar;
     }
 
+    private JComponent buildPathBar() {
+        JPanel bar = new JPanel(new BorderLayout(6, 0));
+        bar.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+        JLabel lab = new JLabel("File: ");
+        lab.setFont(lab.getFont().deriveFont(Font.BOLD));
+        pathField.setEditable(false);
+        pathField.setBorder(BorderFactory.createEmptyBorder());
+        pathField.setOpaque(false);
+        pathField.setToolTipText("Full path of the open file (read-only; select to copy)");
+        bar.add(lab, BorderLayout.WEST);
+        bar.add(pathField, BorderLayout.CENTER);
+        return bar;
+    }
+
+    private void updatePath() {
+        pathField.setText(file != null ? file.toAbsolutePath().toString() : "(no file open)");
+        pathField.setCaretPosition(0);
+    }
+
     private JToolBar buildToolBar() {
         JToolBar tb = new JToolBar();
         tb.setFloatable(false);
@@ -448,6 +472,7 @@ public class ResEditFrame extends JFrame {
             else
                 showPlaceholder("This file has no layers.");
             updateTitle();
+            updatePath();
             updateLayerButtons();
             undoStack.clear();
             redoStack.clear();
@@ -489,6 +514,7 @@ public class ResEditFrame extends JFrame {
             writeRes(p);
             this.file = p;
             updateTitle();
+            updatePath();
         }
     }
 
