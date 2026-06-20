@@ -46,9 +46,10 @@ folder and are never committed. Validation runs locally; CI stays green without
 the assets.
 
 ## Environment gotcha: JAVA_HOME
-The machine's `JAVA_HOME` wrongly includes `\bin`. Gradle/Ant need the JDK *root*:
-`C:\Program Files\Java\graalvm-jdk-21.0.9+7.1`. Set it at the top of each build
-command. (`python` on this box is the Microsoft Store stub, not a real Python.)
+Gradle and Maven require `JAVA_HOME` to point at the **JDK root** (the folder that
+*contains* `bin`), not the `\bin` sub-directory — a `\bin` JAVA_HOME is rejected.
+This is generic JDK-21 guidance (any vendor's JDK works); machine-specific setup
+for a particular dev box doesn't belong in the repo.
 
 ## transform write path is the one unverified feature
 `transform <file> <sx> <sy> <sz>` scales vbuf2 positions. The encoder is proven

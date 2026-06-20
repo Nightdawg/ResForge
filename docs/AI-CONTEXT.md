@@ -22,14 +22,14 @@ byte-for-byte; typed editors are only offered when they re-encode exactly
 a sibling project at `../hafen-client`).
 
 ## 2. Build & run (IMPORTANT gotchas)
-- **JAVA_HOME must be the JDK *root*** `C:\Program Files\Java\graalvm-jdk-21.0.9+7.1`
-  (the machine's env var wrongly includes `\bin` — all builds reject that).
+- **JAVA_HOME must point at the JDK *root*** (the folder that *contains* `bin`),
+  **not** the `\bin` sub-directory — Gradle and Maven reject a `\bin` JAVA_HOME.
+  This is a common mistake; any vendor's JDK 21 root works.
 - **Three equivalent builds, separate output dirs (all gitignored):**
   - Gradle → `build-gradle/`: `./gradlew build` (compile+test), `./gradlew jar`.
   - Maven → `build-maven/`: `mvn package` (compile+test+jar); output redirected
     from the usual `target/` via `<build><directory>`. Fat jar via shade plugin;
-    jorbis + JUnit fetched from Maven Central. (`mvn` not installed on this box —
-    a past run used Apache Maven 3.9.9 downloaded to a temp dir to verify.)
+    jorbis + JUnit fetched from Maven Central.
   - Ant → `build-ant/`: `ant` or `ant jar` (no tests, default target), `ant build`
     (jar+tests), `ant gui` (launch GUI detached), `ant test`, `ant clean`.
     JUnit jars are vendored in `lib/`; Ant needs 1.10+ (native `junitlauncher`).
