@@ -2,6 +2,7 @@ package resforge.res;
 
 import resforge.io.Json;
 import resforge.layers.ActionCodec;
+import resforge.layers.Mat2Codec;
 import resforge.layers.PropsCodec;
 
 import java.io.ByteArrayOutputStream;
@@ -65,6 +66,19 @@ public class Packer {
                 return ActionCodec.encode(model);
             } catch(RuntimeException ex) {
                 throw new IOException("Failed to encode action layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
+        }
+        if(e.codec.equals("mat2")) {
+            if(e.parts.size() != 1)
+                throw new IOException("mat2 codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return Mat2Codec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode mat2 layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
         ByteArrayOutputStream payload = new ByteArrayOutputStream();

@@ -149,6 +149,16 @@ public class Main {
                 } catch(RuntimeException e) {
                     /* opaque action: leave as-is */
                 }
+            } else if(l.name.equals("mat2")) {
+                try {
+                    java.util.Map<String, Object> m = resforge.layers.Mat2Codec.decode(l.data);
+                    java.util.List<?> entries = (java.util.List<?>) m.get("entries");
+                    boolean editable = resforge.layers.Mat2Codec.toJsonIfLossless(l.data) != null;
+                    System.out.printf("  id=%s %d command%s%s", m.get("id"), entries.size(),
+                            entries.size() == 1 ? "" : "s", editable ? " (editable JSON)" : "");
+                } catch(RuntimeException e) {
+                    /* opaque mat2: leave as-is */
+                }
             } else if(l.name.equals("font")) {
                 resforge.layers.FontInfo fi = resforge.layers.FontInfo.parse(l.data);
                 if(fi.format != null)

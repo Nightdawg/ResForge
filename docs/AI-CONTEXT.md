@@ -64,7 +64,7 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
   `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`; typed codecs `PropsCodec`,
-  `ActionCodec` (tto/record ↔ JSON, lossless-or-raw).
+  `ActionCodec`, `Mat2Codec` (tto/record ↔ JSON, lossless-or-raw).
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
   (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
@@ -82,9 +82,10 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 | `midi` | edit: swap `.mid` (whole payload) |
 | `props` | edit as JSON (tto list, lossless-or-raw) |
 | `action` | edit as JSON (deterministic AButton record) |
+| `mat2` | edit as JSON (id + per-command tto value lists; tagged-value form, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **read-only**: fully decoded; OBJ export; `transform` write path |
-| everything else (`mat2`,`neg`,`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`code`,`codeentry`,`src`,…) | **raw passthrough** (lossless) |
+| everything else (`neg`,`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`code`,`codeentry`,`src`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,
@@ -124,8 +125,8 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
 - **3D import** (edit in Blender → back to `.res`): port `mkres` (Ogre-XML or OBJ
   → vbuf2/mesh, re-strip + re-quantise) behind lossless-or-raw — needs the in-game
   loop. `Vbuf2Codec` is the structure-preserving foundation.
-- Typed editors for `neg`/`obst`/`mat2` (formats now known; `obst`/`neg` use lossy
-  float16/coord16 — preserve raw bits).
+- Typed editors for `neg`/`obst` (formats now known; both use lossy
+  float16/coord16 — preserve raw bits). (`mat2` is now done — editable JSON.)
 - GUI niceties: fetch path history/autocomplete, search/filter layers, batch
   re-skin a folder.
 

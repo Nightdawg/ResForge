@@ -4,6 +4,7 @@ import resforge.layers.ActionCodec;
 import resforge.layers.AudioInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
@@ -47,6 +48,7 @@ public class Verifier {
         public final Map<String, Integer> propsHist = new TreeMap<>();
         public final Map<String, Integer> audioHist = new TreeMap<>();
         public final Map<String, Integer> actionHist = new TreeMap<>();
+        public final Map<String, Integer> matHist = new TreeMap<>();
         public final Map<String, Integer> fontHist = new TreeMap<>();
         public final Map<String, Integer> vbufHist = new TreeMap<>();
         public final Map<String, Integer> meshHist = new TreeMap<>();
@@ -102,6 +104,7 @@ public class Verifier {
         printHist(out, "Props histogram", sum.propsHist);
         printHist(out, "Audio histogram", sum.audioHist);
         printHist(out, "Action histogram", sum.actionHist);
+        printHist(out, "Mat2 histogram", sum.matHist);
         printHist(out, "Font histogram", sum.fontHist);
         printHist(out, "Vbuf2 histogram", sum.vbufHist);
         printHist(out, "Mesh histogram", sum.meshHist);
@@ -157,6 +160,9 @@ public class Verifier {
             }
             else if(l.name.equals("action"))
                 sum.actionHist.merge(ActionCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
+            else if(l.name.equals("mat2"))
+                sum.matHist.merge(Mat2Codec.toJsonIfLossless(l.data) != null ? "json" : "raw",
                         1, Integer::sum);
             else if(l.name.equals("font")) {
                 FontInfo fi = FontInfo.parse(l.data);
