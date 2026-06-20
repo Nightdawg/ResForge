@@ -15,8 +15,9 @@ java -jar build-gradle/libs/hafen-resedit-0.1.0.jar          # opens the editor
 java -jar build-gradle/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a file
 ```
 
-Open a `.res` (toolbar button or drag-and-drop) to see its layers in a table.
-Selecting a layer shows the right tool for it: a **picture preview** with
+Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
+download one straight from the game's resource server by its in-game path (e.g.
+`gfx/borka/male`). Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
@@ -38,6 +39,10 @@ alias resedit='java -jar build-gradle/libs/hafen-resedit-0.1.0.jar'
 # See what's inside a file, or what's moddable across a whole folder:
 resedit info   horse.res
 resedit catalog C:\Haven\res
+
+# Download a resource straight from the game server (by its in-game path):
+resedit fetch  gfx/borka/male            # -> male.res
+resedit fetch  gfx/borka/male male.res   # choose the output name
 
 # Swap a single asset in one command (the originals are format-checked):
 resedit replace horse.res image  newicon.png   horse.res   # 2D icon / sprite

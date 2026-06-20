@@ -363,6 +363,7 @@ public class ResEditFrame extends JFrame {
         JMenuBar bar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
         fileMenu.add(item("Open\u2026", KeyEvent.VK_O, this::doOpen));
+        fileMenu.add(menuItem("Fetch from server\u2026", this::doFetch));
         fileMenu.add(item("Save", KeyEvent.VK_S, this::doSave));
         fileMenu.add(menuItem("Save As\u2026", this::doSaveAs));
         fileMenu.addSeparator();
@@ -409,6 +410,7 @@ public class ResEditFrame extends JFrame {
         JToolBar tb = new JToolBar();
         tb.setFloatable(false);
         tb.add(new JButton(action("Open\u2026", this::doOpen)));
+        tb.add(new JButton(action("Fetch\u2026", this::doFetch)));
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
@@ -458,30 +460,96 @@ public class ResEditFrame extends JFrame {
     public void openFile(Path p) {
         try {
             ResContainer parsed = ResContainer.parse(Files.readAllBytes(p));
-            this.res = parsed;
-            this.file = p;
-            this.dirty = false;
-            thumbCache.clear();
-            updatingVersion = true;
-            versionSpinner.setValue(res.version);
-            versionSpinner.setEnabled(true);
-            updatingVersion = false;
-            model.fireTableDataChanged();
-            if(model.getRowCount() > 0)
-                table.setRowSelectionInterval(0, 0);
-            else
-                showPlaceholder("This file has no layers.");
-            updateTitle();
-            updatePath();
-            updateLayerButtons();
-            undoStack.clear();
-            redoStack.clear();
-            updateUndoState();
-            setStatus("Opened " + p.getFileName() + " \u2014 res-version " + res.version
-                    + ", " + res.layers.size() + " layers");
+            applyLoaded(parsed, p, p.toAbsolutePath().toString(),
+                    "Opened " + p.getFileName() + " \u2014 res-version " + parsed.version
+                            + ", " + parsed.layers.size() + " layers");
         } catch(Exception e) {
             error("Could not open " + p + ":\n" + e.getMessage());
         }
+    }
+
+    /** Loads already-fetched remote bytes (no local file yet; Save As will prompt). */
+    private void openRemote(byte[] data, String url, String status) {
+        try {
+            ResContainer parsed = ResContainer.parse(data);
+            applyLoaded(parsed, null, url, status);
+        } catch(Exception e) {
+            error("Downloaded data is not a valid .res:\n" + e.getMessage());
+        }
+    }
+
+    private void applyLoaded(ResContainer parsed, Path f, String pathText, String status) {
+        this.res = parsed;
+        this.file = f;
+        this.dirty = false;
+        thumbCache.clear();
+        updatingVersion = true;
+        versionSpinner.setValue(res.version);
+        versionSpinner.setEnabled(true);
+        updatingVersion = false;
+        model.fireTableDataChanged();
+        if(model.getRowCount() > 0)
+            table.setRowSelectionInterval(0, 0);
+        else
+            showPlaceholder("This file has no layers.");
+        updateTitle();
+        pathField.setText(pathText);
+        pathField.setCaretPosition(0);
+        updateLayerButtons();
+        undoStack.clear();
+        redoStack.clear();
+        updateUndoState();
+        setStatus(status);
+    }
+
+    private void doFetch() {
+        if(!confirmDiscard())
+            return;
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResEditFrame.class);
+        String base = prefs.get("resBaseUrl", hafen.resedit.net.ResourceFetcher.DEFAULT_BASE);
+
+        JTextField pathFld = new JTextField(24);
+        JTextField baseFld = new JTextField(base, 24);
+        JPanel form = new JPanel(new java.awt.GridLayout(0, 1, 0, 4));
+        form.add(new JLabel("Resource path (e.g. gfx/borka/male):"));
+        form.add(pathFld);
+        form.add(new JLabel("Server base URL:"));
+        form.add(baseFld);
+        int ok = JOptionPane.showConfirmDialog(this, form, "Fetch resource from server",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if(ok != JOptionPane.OK_OPTION)
+            return;
+        String path = pathFld.getText().strip();
+        String useBase = baseFld.getText().strip();
+        if(path.isEmpty()) {
+            error("Please enter a resource path.");
+            return;
+        }
+        prefs.put("resBaseUrl", useBase);
+
+        String url = hafen.resedit.net.ResourceFetcher.urlFor(useBase, path);
+        setStatus("Fetching " + url + " \u2026");
+        Thread t = new Thread(() -> {
+            byte[] data = null;
+            String err = null;
+            try {
+                data = hafen.resedit.net.ResourceFetcher.fetch(useBase, path);
+            } catch(Exception ex) {
+                err = ex.getMessage();
+            }
+            final byte[] result = data;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                if(result == null) {
+                    error("Fetch failed:\n" + error);
+                    setStatus("Fetch failed");
+                    return;
+                }
+                openRemote(result, url, "Fetched " + url + " (" + result.length + " bytes)");
+            });
+        }, "res-fetch");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void doOpen() {
