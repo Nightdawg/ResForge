@@ -117,6 +117,28 @@ image layers. Fully deterministic, so **editable as JSON**
 Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 `flex` (8 @75ms) — all `id=-1`, frame ids contiguous from 128.
 
+## dependency / reference layers (deps, rlink, src)
+These three are **read-only reference views** — they show which other resources a
+`.res` references; the layers stay raw/lossless.
+
+- **`deps`** (`DepsInfo`): `uint8 ver`, then `[string name, uint16 ver]` records to
+  EOM — the explicit list of resources this one needs at load time (the `ver` is
+  the minimum dependency version). Names repeat freely (one per actual use site).
+  Confirmed on knarr (28 records) and villageidol (17).
+- **`src`** (`SrcInfo`): `uint8 ver`, `string fileName` (e.g. `Tree.java`), then the
+  file's bytes to EOM. One source file per layer; resources that ship `code`
+  bytecode also carry the pre-processed Java source here. Exports as `.java`.
+  Confirmed on globfx/tree/vmat/reeling (16 layers).
+- **`rlink`** (`RLinkInfo`): `uint8 ver`, then entries to EOM, each `uint16 id`,
+  `uint8 type`; for `type==3`: `string res`, `uint16 ver` (the linked resource),
+  then a `tto` value list (the link's spec/args) read until a `0` tag or EOM. The
+  spec frequently nests `res(name@ver)` references (tto tag 34), which are
+  collected too. A redirect/parameterize mechanism: "serve <res> with this spec."
+  Parser is tolerant (unknown entry type stops cleanly, keeps prior links).
+  Confirmed on mulberry (1 link, EOM-terminated spec) and villageidol (4 links,
+  map specs with nested `res()` to candle-flare64/flight). The reusable `tto`
+  reader mirrors the one in `CodeEntryInfo`.
+
 ## code / codeentry layers
 `code` (from `haven.Resource.Code`): `string name` (a fully-qualified Java class
 name) + the rest of the payload = a compiled `.class` file (magic `CAFEBABE`).

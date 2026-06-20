@@ -217,6 +217,19 @@ public class Main {
                     for(resforge.layers.CodeEntryInfo.Dep d : ce.classpath)
                         System.out.printf("  use %s%s", d.name, d.ver >= 0 ? "@v" + d.ver : "");
                 }
+            } else if(l.name.equals("deps")) {
+                resforge.layers.DepsInfo di = resforge.layers.DepsInfo.parse(l.data);
+                if(di.recognized)
+                    for(resforge.layers.DepsInfo.Dep d : di.deps)
+                        System.out.printf("  dep %s@v%d", d.name, d.ver);
+            } else if(l.name.equals("src")) {
+                resforge.layers.SrcInfo si = resforge.layers.SrcInfo.parse(l.data);
+                if(si.recognized)
+                    System.out.printf("  %s (%d bytes)", si.fileName, si.source.length);
+            } else if(l.name.equals("rlink")) {
+                resforge.layers.RLinkInfo ri = resforge.layers.RLinkInfo.parse(l.data);
+                for(resforge.layers.RLinkInfo.Link lk : ri.links)
+                    System.out.printf("  link %s@v%d", lk.res, lk.ver);
             }
             System.out.println();
         }
