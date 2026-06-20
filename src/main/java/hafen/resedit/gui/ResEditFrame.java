@@ -70,6 +70,7 @@ public class ResEditFrame extends JFrame {
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn, rnBtn;
+    private AudioPlayerPanel currentPlayer;
 
     private static final int UNDO_LIMIT = 100;
     private final Deque<Snapshot> undoStack = new ArrayDeque<>();
@@ -98,8 +99,11 @@ public class ResEditFrame extends JFrame {
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
-                if(confirmDiscard())
+                if(confirmDiscard()) {
+                    if(currentPlayer != null)
+                        currentPlayer.dispose();
                     dispose();
+                }
             }
         });
 
@@ -516,6 +520,10 @@ public class ResEditFrame extends JFrame {
     /* ----------------------------------------------------------- detail panel */
 
     private void showSelected() {
+        if(currentPlayer != null) {
+            currentPlayer.dispose();
+            currentPlayer = null;
+        }
         int idx = table.getSelectedRow();
         if(res == null || idx < 0 || idx >= res.layers.size()) {
             showPlaceholder("Select a layer.");
@@ -617,6 +625,14 @@ public class ResEditFrame extends JFrame {
     }
 
     private void buildMediaPanel(JPanel content, int idx, Layer l) {
+        if(l.name.equals("audio2")) {
+            byte[] ogg = GuiSupport.audioBytes(l);
+            if(ogg != null) {
+                currentPlayer = new AudioPlayerPanel(ogg);
+                content.add(currentPlayer);
+                content.add(Box.createVerticalStrut(8));
+            }
+        }
         content.add(labeled(GuiSupport.summary(l)));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
