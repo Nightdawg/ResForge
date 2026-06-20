@@ -1,13 +1,13 @@
-# hafen-resedit — Design Notes & Session History
+# ResForge — Design Notes & Session History
 
 This document captures the reverse-engineering findings and design decisions
-behind `hafen-resedit`, exported from the chat session in which the tool was
+behind `ResForge`, exported from the chat session in which the tool was
 created. Keep it with the code so the context isn't lost.
 
 - **Created:** 2026-06-19
 - **Origin:** Built alongside the Haven & Hearth client repo (`hafen-client`),
   by reverse-engineering `src/haven/Resource.java` and `src/haven/Message.java`.
-- **Tool location:** `IdeaProjects/hafen-resedit` (standalone Gradle/Java project).
+- **Tool location:** `IdeaProjects/resforge` (standalone Gradle/Java project).
 - **Reference sources:** verbatim copies of the authoritative files live in
   [`reference/`](reference/) — `Resource.java`, `Message.java`,
   `NormNumber.java`, `TexR.java`, and `mkres-fragment.py` (see
@@ -177,7 +177,7 @@ JSON edit.
 `manifest.txt` example:
 
 ```
-# hafen-resedit manifest
+# ResForge manifest
 # Layer order is significant — do not reorder entries.
 res-version: 7
 layer	image	layers/000_image.imghdr,layers/000_image.png
@@ -197,14 +197,14 @@ re-encodes JSON to a `tto` stream (see §3).
 ## 4. Project layout
 
 ```
-hafen-resedit/
+resforge/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
   build.xml                          # Ant build (alternative); JUnit jars vendored in lib/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
-  src/main/java/hafen/resedit/
+  src/main/java/resforge/
     Main.java                        # CLI: gui|fetch|info|unpack|pack|replace|obj|transform|catalog|verify
-    gui/ResEditFrame.java            # Swing editor window (layer table + preview/edit)
+    gui/ResForgeFrame.java           # Swing editor window (layer table + preview/edit)
     gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
     gui/ImageView.java               # scaled/centred image preview component
     gui/AudioPlayerPanel.java        # in-app Ogg player (play/stop/seek)
@@ -234,7 +234,7 @@ hafen-resedit/
     model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
     model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit)
     model/ObjExport.java             # 3D geometry -> Wavefront OBJ
-  src/test/java/hafen/resedit/
+  src/test/java/resforge/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
     ReplaceTest.java                 # one-shot replace tests
@@ -280,7 +280,7 @@ hafen-resedit/
 
 # Or use the jar
 ./gradlew jar
-java -jar build-gradle/libs/hafen-resedit-0.1.0.jar info horse.res
+java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
 ```
 
 ---

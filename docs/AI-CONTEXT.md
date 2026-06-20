@@ -1,7 +1,7 @@
 # AI-CONTEXT — start here
 
 A dense, single-file primer so a fresh session (human or AI) can resume work on
-`hafen-resedit` quickly. For the deep reverse-engineering log and format details
+`ResForge` quickly. For the deep reverse-engineering log and format details
 see [`DESIGN-notes.md`](DESIGN-notes.md); for source provenance see
 [`reference/README.md`](reference/README.md). Update this file when the
 architecture, feature set, or "next steps" materially change.
@@ -27,7 +27,7 @@ a sibling project at `../hafen-client`).
   - Ant → `build-ant/`: `ant` or `ant jar` (no tests, default target), `ant build`
     (jar+tests), `ant gui` (launch GUI detached), `ant test`, `ant clean`.
     JUnit jars are vendored in `lib/`; Ant needs 1.10+ (native `junitlauncher`).
-- **Runnable jar:** `<build>/libs/hafen-resedit-0.1.0.jar`. Use the jar (not
+- **Runnable jar:** `<build>/libs/resforge-0.1.0.jar`. Use the jar (not
   `gradlew/ant run`) for paths with spaces — `--args`/`-Dargs` mangle them.
 - **One runtime dependency:** `org.jcraft:jorbis` 0.0.17 (LGPL, ~97 KB, bundles
   `jogg`+`jorbis`) — the GUI's Ogg player. Vendored in `lib/`, folded into the
@@ -37,7 +37,7 @@ a sibling project at `../hafen-client`).
   mouse/keys automation is flaky — prefer screenshotting + trusting shared code
   paths. Always `Stop-Process -Id <PID>` test windows (never kill IntelliJ).
 
-## 3. CLI commands (`hafen.resedit.Main`)
+## 3. CLI commands (`resforge.Main`)
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `unpack <file> [dir]` ·
 `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `obj <file> [out.obj]` · `transform <file> <sx> <sy> <sz> [out]` ·
@@ -45,7 +45,7 @@ a sibling project at `../hafen-client`).
 No args (with a display) → launches the GUI.
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
-## 4. GUI (`hafen.resedit.gui.ResEditFrame`)
+## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+replace+export, **Ogg player**
 (play/stop/draggable seek), tooltip/pagina **text**, props/action **JSON**,
@@ -54,7 +54,7 @@ font/midi replace+export, raw replace+export, 3D → **Export OBJ**. Layer ops:
 Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16). **Edit →
 Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
-## 5. Architecture (packages under `src/main/java/hafen/resedit/`)
+## 5. Architecture (packages under `src/main/java/resforge/`)
 - `Main` — CLI dispatch + GUI launch.
 - `io/` — `MessageReader`/`MessageWriter` (LE primitives mirroring `haven.Message`),
   `Json` (dependency-free JSON).
@@ -69,7 +69,7 @@ Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar
   (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
-- `gui/` — `ResEditFrame`, `GuiSupport` (per-layer preview/text/export, reuses
+- `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`.
 
 ## 6. Per-layer status

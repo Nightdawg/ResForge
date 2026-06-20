@@ -1,4 +1,4 @@
-# hafen-resedit
+# ResForge
 
 A standalone tool to **decompile, edit, and recompile Haven & Hearth `.res`
 files** for modding. It unpacks a `.res` into an editable folder and repacks it
@@ -11,8 +11,8 @@ interface.
 Double-click the jar, or run it with no arguments, to open the GUI:
 
 ```sh
-java -jar build-gradle/libs/hafen-resedit-0.1.0.jar          # opens the editor
-java -jar build-gradle/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a file
+java -jar build-gradle/libs/resforge-0.1.0.jar          # opens the editor
+java -jar build-gradle/libs/resforge-0.1.0.jar gui horse.res   # opens a file
 ```
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
@@ -31,34 +31,34 @@ Build the tool once, then use the jar (handles paths with spaces):
 
 ```sh
 ./gradlew jar
-# the jar is at build-gradle/libs/hafen-resedit-0.1.0.jar
-alias resedit='java -jar build-gradle/libs/hafen-resedit-0.1.0.jar'
+# the jar is at build-gradle/libs/resforge-0.1.0.jar
+alias resforge='java -jar build-gradle/libs/resforge-0.1.0.jar'
 ```
 
 ```sh
 # See what's inside a file, or what's moddable across a whole folder:
-resedit info   horse.res
-resedit catalog C:\Haven\res
+resforge info   horse.res
+resforge catalog C:\Haven\res
 
 # Download a resource straight from the game server (by its in-game path):
-resedit fetch  gfx/borka/male            # -> male.res
-resedit fetch  gfx/borka/male male.res   # choose the output name
+resforge fetch  gfx/borka/male            # -> male.res
+resforge fetch  gfx/borka/male male.res   # choose the output name
 
 # Swap a single asset in one command (the originals are format-checked):
-resedit replace horse.res image  newicon.png   horse.res   # 2D icon / sprite
-resedit replace horse.res tex    newskin.jpg    horse.res   # 3D model texture
-resedit replace theme.res audio2 newsound.ogg   theme.res   # sound
-resedit replace ui.res    font   myfont.ttf     ui.res      # UI font
+resforge replace horse.res image  newicon.png   horse.res   # 2D icon / sprite
+resforge replace horse.res tex    newskin.jpg    horse.res   # 3D model texture
+resforge replace theme.res audio2 newsound.ogg   theme.res   # sound
+resforge replace ui.res    font   myfont.ttf     ui.res      # UI font
 
 # Edit text / typed data: unpack, edit the file, pack:
-resedit unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
-resedit pack   horse.resdir         # -> horse.res
+resforge unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
+resforge pack   horse.resdir         # -> horse.res
 
 # Look at a 3D model (opens in Blender / Windows 3D Viewer):
-resedit obj    horse.res horse.obj
+resforge obj    horse.res horse.obj
 
 # Experimental write path: scale a model's geometry (then load in-game to check):
-resedit transform horse.res 2 2 2 horse-big.res
+resforge transform horse.res 2 2 2 horse-big.res
 ```
 
 `replace` is the easy path for re-skinning; `unpack`/`pack` is for editing text
@@ -197,7 +197,7 @@ layer's embedded picture splits cleanly (decodable on its own):
 Build a runnable jar with `./gradlew jar` (output under `build-gradle/libs/`), then:
 
 ```sh
-java -jar build-gradle/libs/hafen-resedit-0.1.0.jar info horse.res
+java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
 ```
 
 ## Building / testing
@@ -208,14 +208,14 @@ Requires JDK 21. There are two equivalent builds:
 
 ```sh
 ./gradlew build      # compile + run the tests
-./gradlew jar        # -> build-gradle/libs/hafen-resedit-0.1.0.jar
+./gradlew jar        # -> build-gradle/libs/resforge-0.1.0.jar
 ```
 
 **Ant** (for those who prefer it; JUnit jars are vendored in `lib/`):
 
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
-ant jar              # -> build-ant/libs/hafen-resedit-0.1.0.jar
+ant jar              # -> build-ant/libs/resforge-0.1.0.jar
 ant run -Dargs="info samples/apple.res"
 ```
 
@@ -233,7 +233,7 @@ For quick lookups there's a tiny local knowledge-base retriever in **`kb/`**:
 `java kb/Rag.java query "your question"` (BM25 over `kb/notes/` + `docs/`, no
 build, no dependencies — see `kb/README.md`).
 
-Typed decoders live in `hafen.resedit.layers`. To make another layer
+Typed decoders live in `resforge.layers`. To make another layer
 human-editable, add a part-splitting rule in `res/Unpacker.java` (and the
 inverse is automatic, since `pack` just concatenates parts). The `io`
 package mirrors `haven.Message` primitives for decoding payloads.

@@ -310,7 +310,7 @@ public class Rag {
     }
 
     static void usage() {
-        System.out.println("hafen-resedit knowledge-base retrieval (lexical BM25)\n");
+        System.out.println("ResForge knowledge-base retrieval (lexical BM25)\n");
         System.out.println("  java kb/Rag.java query \"your question\" [-k N] [-d dir-or-file]...");
         System.out.println("  java kb/Rag.java list");
         System.out.println("\nIndexes Markdown (.md, by heading) and Java (.java, by documented declaration).");

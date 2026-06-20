@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  Apache Ant build for hafen-resedit (an alternative to the Gradle build).
+  Apache Ant build for ResForge (an alternative to the Gradle build).
 
   This mirrors what the Gradle build does, using vendored JUnit 5 jars in lib/
   (Ant has no built-in dependency manager). Output goes to build-ant/ so it
@@ -19,9 +19,9 @@
   Requires JDK 21. If your JAVA_HOME is set, point it at the JDK *root*
   (not the \bin sub-directory).
 -->
-<project name="hafen-resedit" default="jar" basedir=".">
+<project name="resforge" default="jar" basedir=".">
     <property name="version"         value="0.1.0"/>
-    <property name="main.class"      value="hafen.resedit.Main"/>
+    <property name="main.class"      value="resforge.Main"/>
     <property name="args"            value=""/>
 
     <property name="src.dir"         value="src/main/java"/>
@@ -33,7 +33,7 @@
     <property name="test.classes.dir" value="${build.dir}/test-classes"/>
     <property name="jar.dir"         value="${build.dir}/libs"/>
     <property name="test.reports.dir" value="${build.dir}/test-results"/>
-    <property name="jar.file"        value="${jar.dir}/hafen-resedit-${version}.jar"/>
+    <property name="jar.file"        value="${jar.dir}/resforge-${version}.jar"/>
 
     <!-- Vendored JUnit 5 jars (copied from the Gradle cache). -->
     <path id="junit.classpath">
@@ -117,6 +117,6 @@
                 <path refid="runtime.libs"/>
             </classpath>
         </java>
-        <echo message="Launched the hafen-resedit GUI."/>
+        <echo message="Launched the ResForge GUI."/>
     </target>
 </project>
