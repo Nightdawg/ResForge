@@ -492,9 +492,13 @@ needs the in-game feedback loop.
 
 - Eventually edit `vbuf2`/`mesh`/`manim` (port `mkres`; see §8). (`mat2`, `anim`,
   `neg` and `obst` are done — editable JSON via
-  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`; `code`/`codeentry` and the
-  dependency layers `deps`/`rlink`/`src` are decoded read-only via
-  `CodeInfo`/`CodeEntryInfo`/`DepsInfo`/`RLinkInfo`/`SrcInfo`.)
+  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`; `code`/`codeentry`, the
+  dependency layers `deps`/`rlink`/`src`, and the rig/light layers
+  `light`/`skel`/`skan`/`boneoff` are decoded read-only via
+  `CodeInfo`/`CodeEntryInfo`/`DepsInfo`/`RLinkInfo`/`SrcInfo`/`LightInfo`/`SkelInfo`/
+  `SkanInfo`/`BoneOffInfo`.) The rig decoders + the new `cpfloat`/norm io primitives
+  are the groundwork for a future skeleton/animation **write** path (which would
+  benefit from the dev's `mkres` skeleton encoder).
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32, the
   last now possible via the new `float16`/`MessageWriter.float16` codec) using an
   explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.

@@ -66,7 +66,8 @@ sibling image layers, composited at their true relative size + per-frame offset)
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
-`src` exports as `.java`), font/midi replace+export, raw replace+export, 3D →
+`src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`
+(read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar: Open, Fetch, Save As, Export OBJ, **References…** (aggregated reference
@@ -76,7 +77,8 @@ report dialog), **resource-version spinner** (uint16).
 ## 5. Architecture (packages under `src/main/java/resforge/`)
 - `Main` — CLI dispatch + GUI launch.
 - `io/` — `MessageReader`/`MessageWriter` (LE primitives mirroring `haven.Message`,
-  incl. `float16` half-precision ↔ float), `Json` (dependency-free JSON).
+  incl. `float16` half-precision ↔ float, `cpfloat` custom-packed float, and
+  `mnorm16`/`snorm16`/`unorm16`/`oct2uvec` norm helpers), `Json` (dependency-free JSON).
 - `res/` — `ResContainer` (parse/serialize the container), `Layer` (name+bytes,
   immutable), `Manifest` (manifest.txt + per-layer codec), `Unpacker`/`Packer`
   (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
@@ -84,7 +86,8 @@ report dialog), **resource-version spinner** (uint16).
   listing), `References` (aggregate the external resources a `.res` references).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
-  `DepsInfo`, `RLinkInfo`, `SrcInfo` (read-only); typed JSON codecs `PropsCodec`,
+  `DepsInfo`, `RLinkInfo`, `SrcInfo`, `LightInfo`, `SkelInfo`, `SkanInfo`,
+  `BoneOffInfo` (read-only); typed JSON codecs `PropsCodec`,
   `ActionCodec`, `Mat2Codec`,
   `AnimCodec`,   `NegCodec`, `ObstCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
@@ -116,7 +119,9 @@ report dialog), **resource-version spinner** (uint16).
 | `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export (+ `.mtl` + local `tex` image, textured); `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
-| everything else (`skel`,`skan`,`boneoff`,`tileset2`,`clamb`,`foodev`,…) | **raw passthrough** (lossless) |
+| `light` | **read-only**: light source — type (point/spot/directional), id, ambient/diffuse/specular colours, attenuation/direction/exponent (cpfloat ver0, float32 ver1) |
+| `skel`/`skan`/`boneoff` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events), equip-point opcode program (`boneoff`) |
+| everything else (`tileset2`,`clamb`,`foodev`,`rdesc`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,
@@ -135,15 +140,16 @@ report dialog), **resource-version spinner** (uint16).
 
 ## 8. Reference & samples
 - `docs/reference/`: verbatim client sources `Resource.java`, `Message.java`,
-  `NormNumber.java`, `TexR.java`, `VertexBuf.java`, and the dev's
-  `mkres-fragment.py` (Ogre-XML→binary encoder). LGPL — keep notices.
+  `NormNumber.java`, `TexR.java`, `VertexBuf.java`, `Skeleton.java`, `Light.java`,
+  and the dev's `mkres-fragment.py` (Ogre-XML→binary encoder). LGPL — keep notices.
+  (Full client also available locally at `..\hafen-client` as the format oracle.)
 - `samples/` (gitignored, copyrighted game assets): real `.res` + raw png/wav.
   `verify samples` → **all pass** (a mislabeled non-resource — zero bytes + a raw
   PNG — was removed; the tool correctly rejects such files). Histograms confirm all
   image/tex/audio/font/props/action/**mat2**/**anim**/**neg** decode/round-trip
   exactly, all `vbuf2` re-encode byte-exact, all `mesh` decode, and all
-  `code`/`codeentry`/`deps`/`src`/`rlink` decode. (Counts grow as more samples are
-  added; `verify` is the live oracle — keep it all-pass.)
+  `code`/`codeentry`/`deps`/`src`/`rlink`/`light`/`skel`/`skan`/`boneoff` decode.
+  (Counts grow as more samples are added; `verify` is the live oracle — keep it all-pass.)
 
 ## 9. Conventions
 - Lossless-or-raw: never expose a typed editor unless decode→encode is byte-exact
@@ -173,6 +179,12 @@ report dialog), **resource-version spinner** (uint16).
   from `deps` + `rlink` + `codeentry` classpath + `mat2` links (string command
   values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
   (`anim` frames are local image-ids, so they contribute nothing.)
+- **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
+  (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`), ported from the client's
+  `Light.java`/`Skeleton.java`. Added the `cpfloat`/`mnorm16`/`snorm16`/`unorm16`/
+  `oct2uvec` io primitives they need. These same primitives + decoders are the
+  groundwork for an eventual **skeleton/animation write path** (would benefit from
+  the dev's `mkres` skeleton encoder — ask when starting that).
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)
 

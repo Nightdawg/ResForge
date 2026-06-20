@@ -240,6 +240,24 @@ public class Main {
                 resforge.layers.RLinkInfo ri = resforge.layers.RLinkInfo.parse(l.data);
                 for(resforge.layers.RLinkInfo.Link lk : ri.links)
                     System.out.printf("  link %s@v%d", lk.res, lk.ver);
+            } else if(l.name.equals("light")) {
+                resforge.layers.LightInfo li = resforge.layers.LightInfo.parse(l.data);
+                if(li.recognized)
+                    System.out.printf("  %s id=%d", li.kind(), li.id);
+            } else if(l.name.equals("skel")) {
+                resforge.layers.SkelInfo si = resforge.layers.SkelInfo.parse(l.data);
+                if(si.recognized)
+                    System.out.printf("  %d bones", si.bones.size());
+            } else if(l.name.equals("skan")) {
+                resforge.layers.SkanInfo si = resforge.layers.SkanInfo.parse(l.data);
+                if(si.recognized)
+                    System.out.printf("  id=%d %d tracks %ss %s", si.id, si.tracks.size(),
+                            (si.len == Math.rint(si.len)) ? Integer.toString((int) si.len) : Float.toString(si.len),
+                            si.mode);
+            } else if(l.name.equals("boneoff")) {
+                resforge.layers.BoneOffInfo bo = resforge.layers.BoneOffInfo.parse(l.data);
+                if(bo.recognized)
+                    System.out.printf("  \"%s\" %d ops", bo.name, bo.ops.size());
             }
             System.out.println();
         }
