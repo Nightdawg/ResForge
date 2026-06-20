@@ -155,6 +155,9 @@ alias resforge='java -jar build-gradle/libs/resforge-0.1.0.jar'
 resforge info    horse.res
 resforge catalog C:\Haven\res
 
+# List every resource a file references (deps + rlink + code + material links):
+resforge refs    horse.res
+
 # Download a resource straight from the game server (by its in-game path):
 resforge fetch   gfx/borka/male            # -> male.res
 resforge fetch   gfx/borka/male male.res   # choose the output name
@@ -218,7 +221,10 @@ entrypoint/classpath manifest shown; the embedded Java `.class` can be exported)
 A read-only **dependency / reference view** surfaces what other resources a `.res`
 points to: the explicit dependency list (`deps`: name + version), resource links
 and their decoded specs (`rlink`), and embedded source files (`src`, exportable as
-`.java`). Deeper typed editing (mesh/skeleton geometry, animations, collision) can
+`.java`). The **References…** toolbar button (and the `refs` CLI command) rolls all
+of this up into one deduplicated report of every resource a file references —
+gathered across `deps`, `rlink`, `code` classpaths and `mat2` material links.
+Deeper typed editing (mesh/skeleton geometry, animations, collision) can
 be layered on incrementally using the same parts model.
 
 ## How this was built ("vibe coded")

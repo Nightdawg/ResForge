@@ -45,11 +45,12 @@ a sibling project at `../hafen-client`).
   paths. Always `Stop-Process -Id <PID>` test windows (never kill IntelliJ).
 
 ## 3. CLI commands (`resforge.Main`)
-`gui [file]` · `fetch <path> [out.res]` · `info <file>` · `unpack <file> [dir]` ·
-`pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
+`gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
+`unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `obj <file> [out.obj]` · `transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
-No args (with a display) → launches the GUI.
+No args (with a display) → launches the GUI. (`refs` lists every resource a
+`.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
@@ -64,7 +65,8 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 `src` exports as `.java`), font/midi replace+export, raw replace+export, 3D →
 **Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
-Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16).
+Toolbar: Open, Fetch, Save As, Export OBJ, **References…** (aggregated reference
+report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
 ## 5. Architecture (packages under `src/main/java/resforge/`)
@@ -74,7 +76,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - `res/` — `ResContainer` (parse/serialize the container), `Layer` (name+bytes,
   immutable), `Manifest` (manifest.txt + per-layer codec), `Unpacker`/`Packer`
   (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
-  (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
+  (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder
+  listing), `References` (aggregate the external resources a `.res` references).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
   `DepsInfo`, `RLinkInfo`, `SrcInfo` (read-only); typed JSON codecs `PropsCodec`,
@@ -161,8 +164,11 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
 - **Read-only dependency/reference view is now done** for `deps`/`rlink`/`src`
   (`DepsInfo`/`RLinkInfo`/`SrcInfo`) — shows what other resources a `.res` references.
-  Possible follow-on: an aggregated cross-layer "all references" report (deps +
-  rlink + codeentry classpath + external `tex` from mat2/anim) per resource.
+  The **aggregated cross-layer reference report is also done** (`res/References`,
+  CLI `refs`, GUI **References…** toolbar dialog): collects every external resource
+  from `deps` + `rlink` + `codeentry` classpath + `mat2` links (string command
+  values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
+  (`anim` frames are local image-ids, so they contribute nothing.)
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)
 
