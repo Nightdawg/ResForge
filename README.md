@@ -102,7 +102,10 @@ whole MIDI file, exposed as `*.mid`.
 
 ## Building / testing
 
-Requires JDK 21. There are two equivalent builds:
+Requires JDK 21. There are three equivalent builds — use whichever you prefer;
+all compile the same sources, run the same JUnit 5 tests, and produce the same
+runnable fat jar (the JOrbis Ogg decoder folded in). Each writes to its own
+output directory so they never clash.
 
 **Gradle** (bundled wrapper, auto-downloads dependencies):
 
@@ -111,17 +114,26 @@ Requires JDK 21. There are two equivalent builds:
 ./gradlew jar        # -> build-gradle/libs/resforge-0.1.0.jar
 ```
 
-**Ant** (for those who prefer it; JUnit jars are vendored in `lib/`):
+**Maven** (auto-downloads dependencies + plugins from Maven Central):
+
+```sh
+mvn package          # compile + run the tests + build the jar
+                     # -> build-maven/resforge-0.1.0.jar
+```
+
+**Ant** (for those who prefer it; no internet needed — JUnit jars are vendored in `lib/`):
 
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
 ant jar              # -> build-ant/libs/resforge-0.1.0.jar
 ```
 
-The Ant build has no internet dependency — the JUnit 5 jars live in `lib/` and
-output goes to `build-ant/`, while Gradle writes to `build-gradle/`, so the two
-never clash. Requires Ant 1.10+ (for the native JUnit 5 `junitlauncher` task).
-Point `JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for either build.
+The Ant build has no internet dependency — the JUnit 5 jars live in `lib/`. Gradle
+and Maven fetch JUnit (and Maven its plugins) from Maven Central. Outputs go to
+`build-gradle/`, `build-maven/` and `build-ant/` respectively, so the three never
+clash. Ant requires 1.10+ (for the native JUnit 5 `junitlauncher` task); Maven
+output is redirected to `build-maven/` (not the usual `target/`). Point
+`JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for any of them.
 
 ## Command-line interface
 

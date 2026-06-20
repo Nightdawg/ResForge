@@ -1,6 +1,7 @@
 .gradle/
 build-gradle/
 build-ant/
+build-maven/
 .idea/
 *.iml
 out/

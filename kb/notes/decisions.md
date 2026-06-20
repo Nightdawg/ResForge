@@ -20,11 +20,19 @@ intend to change. It's why float16-bearing layers (e.g. `obst`) stay raw, while
 Editing replaces a layer object rather than mutating it. That makes GUI undo/redo
 cheap: snapshot the layer list before each edit and restore on undo.
 
-## Dual build (Gradle + Ant)
-Gradle (`./gradlew`, output `build-gradle/`) and Ant (`ant`, output `build-ant/`)
-build the same sources. Ant's default target is `jar` (no tests); `ant build`
-runs tests too (needs Ant 1.10+ for `junitlauncher`); `ant gui` launches the app.
-Both produce a fat jar that bundles JOrbis.
+## Triple build (Gradle + Maven + Ant)
+Gradle (`./gradlew`, output `build-gradle/`), Maven (`mvn package`, output
+`build-maven/`) and Ant (`ant`, output `build-ant/`) all build the same sources,
+run the same JUnit 5 tests, and produce the same runnable fat jar (JOrbis folded
+in). Each writes to its own directory so they never clash. Ant's default target
+is `jar` (no tests); `ant build` runs tests too (needs Ant 1.10+ for
+`junitlauncher`); `ant gui` launches the app. Gradle and Maven fetch JUnit (and
+Maven its plugins) from Maven Central; Ant uses the vendored `lib/` jars and needs
+no network. Maven's output is redirected from the usual `target/` to `build-maven/`
+via `<build><directory>`, and its fat jar is built by the shade plugin (with
+`createDependencyReducedPom=false` to avoid a stray pom). Three builds means a
+dep/version change must be applied to all three (`build.gradle`, `pom.xml`,
+`build.xml`/`lib/`).
 
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords
