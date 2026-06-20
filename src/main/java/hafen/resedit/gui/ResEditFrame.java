@@ -364,7 +364,7 @@ public class ResEditFrame extends JFrame {
         JMenuBar bar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
         fileMenu.add(item("Open\u2026", KeyEvent.VK_O, this::doOpen));
-        fileMenu.add(menuItem("Fetch from server\u2026", this::doFetch));
+        fileMenu.add(item("Fetch from server\u2026", KeyEvent.VK_R, this::doFetch));
         fileMenu.add(item("Save", KeyEvent.VK_S, this::doSave));
         fileMenu.add(menuItem("Save As\u2026", this::doSaveAs));
         fileMenu.addSeparator();
