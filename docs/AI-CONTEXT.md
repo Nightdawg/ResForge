@@ -49,7 +49,8 @@ No args (with a display) → launches the GUI.
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
-image/tex; per-layer editors: image/tex **preview**+replace+export, **Ogg player**
+image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
+offset)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
 sibling image layers, composited at their true relative size + per-frame offset),
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**

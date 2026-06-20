@@ -726,6 +726,9 @@ public class ResForgeFrame extends JFrame {
         } else {
             view.setPlaceholder("(image could not be decoded)");
         }
+        String meta = GuiSupport.imageMeta(l);
+        if(meta != null)
+            content.add(labeled(meta));
         view.setAlignmentX(Component.LEFT_ALIGNMENT);
         content.add(view);
         content.add(Box.createVerticalStrut(8));
