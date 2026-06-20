@@ -3,6 +3,7 @@ package resforge.model;
 import resforge.io.Json;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
+import resforge.layers.SkelInfo;
 import resforge.layers.TexInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
@@ -114,6 +115,16 @@ public final class GltfExport {
         List<TexMat> texMats = collectTextures(res);
         Map<Integer, Integer> matToTex = collectMatToTex(res, texMats.size());
 
+        // Unified joint list = the union of every bone-bearing vbuf's influence
+        // bones (JOINTS_0 is later remapped from a vbuf's local order to this).
+        List<String> joints = new ArrayList<>();
+        for(Vbuf2Data d : vbufs.values())
+            if(d.boneNames != null)
+                for(String n : d.boneNames)
+                    if(!joints.contains(n))
+                        joints.add(n);
+        Map<String, float[]> boneWorld = skeletonWorld(res);   // bone name -> native bind world matrix
+
         Buf bin = new Buf();
         List<Object> bufferViews = new ArrayList<>();
         List<Object> accessors = new ArrayList<>();
@@ -137,6 +148,10 @@ public final class GltfExport {
             float[] otex = d.get("otex");
             if(otex != null)
                 attribs.put("TEXCOORD_1", addVec2(bin, bufferViews, accessors, otex, d.num));
+            if(d.boneNames != null) {
+                attribs.put("JOINTS_0", addJoints(bin, bufferViews, accessors, d, joints));
+                attribs.put("WEIGHTS_0", addWeights(bin, bufferViews, accessors, d));
+            }
             vbufAttribs.put(e.getKey(), attribs);
             vertices += d.num;
         }
@@ -159,11 +174,55 @@ public final class GltfExport {
         }
 
         String base = baseName(sourceName);
+        List<Object> nodes = new ArrayList<>();
+        List<Object> sceneNodes = new ArrayList<>();
+
+        // node 0 = the (optionally skinned) mesh
+        Map<String, Object> meshNode = new LinkedHashMap<>();
+        meshNode.put("mesh", 0);
+        meshNode.put("name", base);
+        nodes.add(meshNode);
+        sceneNodes.add(0);
+
         Map<String, Object> root = new LinkedHashMap<>();
         root.put("asset", obj("version", "2.0", "generator", "ResForge"));
         root.put("scene", 0);
-        root.put("scenes", List.of(obj("nodes", List.of(0))));
-        root.put("nodes", List.of(obj("mesh", 0, "name", base)));
+
+        if(!joints.isEmpty()) {
+            // One flat joint node per unified bone (its bind world matrix, or
+            // identity when the skeleton lives in another resource), plus a skin.
+            float[] R = M4.fromQuat(0.70710677f, -0.70710677f, 0, 0);   // Haven Z-up -> glTF Y-up
+            float[] Rinv = M4.rigidInverse(R);
+            List<Object> jointIndices = new ArrayList<>();
+            float[] ibm = new float[joints.size() * 16];
+            for(int j = 0; j < joints.size(); j++) {
+                String name = joints.get(j);
+                Map<String, Object> jn = new LinkedHashMap<>();
+                jn.put("name", name);
+                float[] world = boneWorld.get(name);
+                float[] inv;
+                if(world != null) {
+                    float[] g = M4.mul(R, M4.mul(world, Rinv));
+                    jn.put("matrix", floatList(g));
+                    inv = M4.rigidInverse(g);
+                } else {
+                    inv = M4.identity();
+                }
+                System.arraycopy(inv, 0, ibm, j * 16, 16);
+                int nodeIdx = nodes.size();
+                nodes.add(jn);
+                sceneNodes.add(nodeIdx);
+                jointIndices.add(nodeIdx);
+            }
+            int ibmAccessor = addMat4(bin, bufferViews, accessors, ibm, joints.size());
+            meshNode.put("skin", 0);
+            root.put("skins", List.of(obj(
+                    "inverseBindMatrices", ibmAccessor,
+                    "joints", jointIndices)));
+        }
+
+        root.put("scenes", List.of(obj("nodes", sceneNodes)));
+        root.put("nodes", nodes);
         root.put("meshes", List.of(obj("name", base, "primitives", primitives)));
 
         if(!texMats.isEmpty()) {
@@ -274,6 +333,108 @@ public final class GltfExport {
         int off = bin.size();
         bin.bytes(image);
         return addBufferView(bvs, off, bin.size() - off, -1);
+    }
+
+    private static Integer addJoints(Buf bin, List<Object> bvs, List<Object> accs,
+                                     Vbuf2Data d, List<String> joints) {
+        int[] local2unified = new int[d.boneNames.length];
+        for(int i = 0; i < d.boneNames.length; i++)
+            local2unified[i] = Math.max(0, joints.indexOf(d.boneNames[i]));
+        bin.align4();
+        int off = bin.size();
+        for(int v = 0; v < d.num; v++)
+            for(int k = 0; k < 4; k++) {
+                int local = d.vJoints[v * 4 + k];
+                bin.u16(local2unified[local]);
+            }
+        int bv = addBufferView(bvs, off, bin.size() - off, ARRAY_BUFFER);
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", USHORT);
+        acc.put("count", d.num);
+        acc.put("type", "VEC4");
+        accs.add(acc);
+        return accs.size() - 1;
+    }
+
+    private static Integer addWeights(Buf bin, List<Object> bvs, List<Object> accs, Vbuf2Data d) {
+        bin.align4();
+        int off = bin.size();
+        for(int v = 0; v < d.num; v++)
+            for(int k = 0; k < 4; k++)
+                bin.f32(d.vWeights[v * 4 + k]);
+        int bv = addBufferView(bvs, off, bin.size() - off, ARRAY_BUFFER);
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", FLOAT);
+        acc.put("count", d.num);
+        acc.put("type", "VEC4");
+        accs.add(acc);
+        return accs.size() - 1;
+    }
+
+    private static int addMat4(Buf bin, List<Object> bvs, List<Object> accs, float[] data, int count) {
+        bin.align4();
+        int off = bin.size();
+        for(float v : data)
+            bin.f32(v);
+        int bv = addBufferView(bvs, off, bin.size() - off, -1);   // IBM: not a vertex/index target
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", FLOAT);
+        acc.put("count", count);
+        acc.put("type", "MAT4");
+        accs.add(acc);
+        return accs.size() - 1;
+    }
+
+    private static List<Object> floatList(float[] m) {
+        List<Object> l = new ArrayList<>(m.length);
+        for(float v : m)
+            l.add((double) v);
+        return l;
+    }
+
+    /**
+     * Computes each bone's native (Haven-space) bind world matrix from the first
+     * {@code skel} layer, or an empty map if the resource has no local skeleton
+     * (then bones live in another resource and joints stay identity-placed).
+     */
+    private static Map<String, float[]> skeletonWorld(ResContainer res) {
+        SkelInfo skel = null;
+        for(Layer l : res.layers)
+            if(l.name.equals("skel")) {
+                skel = SkelInfo.parse(l.data);
+                break;
+            }
+        Map<String, float[]> world = new LinkedHashMap<>();
+        if(skel == null || !skel.recognized)
+            return world;
+
+        Map<String, SkelInfo.Bone> byName = new LinkedHashMap<>();
+        for(SkelInfo.Bone b : skel.bones)
+            byName.put(b.name, b);
+
+        // Resolve parents-before-children (a bone's world needs its parent's).
+        boolean progress = true;
+        while(world.size() < byName.size() && progress) {
+            progress = false;
+            for(SkelInfo.Bone b : skel.bones) {
+                if(world.containsKey(b.name))
+                    continue;
+                float[] q = M4.quat(b.ax, b.ay, b.az, b.ang);
+                float[] local = M4.mul(M4.translate(b.px, b.py, b.pz),
+                        M4.fromQuat(q[0], q[1], q[2], q[3]));
+                if(b.parent.isEmpty()) {
+                    world.put(b.name, local);
+                    progress = true;
+                } else if(world.containsKey(b.parent)) {
+                    world.put(b.name, M4.mul(world.get(b.parent), local));
+                    progress = true;
+                }
+            }
+        }
+        return world;
     }
 
     private static int addBufferView(List<Object> bvs, int off, int len, int target) {

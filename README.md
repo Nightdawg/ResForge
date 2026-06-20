@@ -24,8 +24,9 @@ Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and **Export 3D model** actions — a Blender-ready binary **glTF**
-(`.glb`, carrying both of Haven's UV sets + textures in one file) and a simpler
-**OBJ** (writes a `.mtl` + the texture image, single UV). You can also add,
+(`.glb`, carrying both of Haven's UV sets, textures, and the **skeleton/skinning**
+in one file) and a simpler **OBJ** (writes a `.mtl` + the texture image, single
+UV). You can also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
 offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and an
@@ -174,7 +175,7 @@ resforge replace menu.res  action newaction.json  menu.res    # keybind (JSON)
 resforge unpack horse.res            # -> horse.resdir/ (edit layers/*.txt or *.json)
 resforge pack   horse.resdir         # -> horse.res
 
-# Export a 3D model to a Blender-ready binary glTF (both UV sets + textures, one file):
+# Export a 3D model to a Blender-ready binary glTF (UV sets + textures + skeleton, one file):
 resforge gltf   horse.res horse.glb
 
 # ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):

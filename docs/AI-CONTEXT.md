@@ -96,11 +96,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
-- `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
-  (structure-preserving vbuf2 encode), `GltfExport` (geometry → Blender-ready
-  binary glTF `.glb`, with both UV sets + embedded textures, dependency-free),
-  `ObjExport` (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex`
-  image(s), so models open textured).
+- `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
+  `Vbuf2Codec` (structure-preserving vbuf2 encode), `M4` (column-major 4×4 maths),
+  `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
+  embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
+  `WEIGHTS_0` — dependency-free), `ObjExport` (simpler geometry → Wavefront OBJ +
+  a `.mtl` and the local `tex` image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -175,14 +176,16 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - **In-game test of the `transform` write path** (user-side; the one thing not
   auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
 - **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
-  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1a
-  done** — `GltfExport` writes a static textured `.glb` (positions/normals + both UV
-  sets + per-submesh materials/textures, Z-up→Y-up). **Next:** add skeleton (skin +
-  `JOINTS_0`/`WEIGHTS_0` — needs `Vbuf2Data` to read bones), `skan`→glTF animations,
-  `manim`→morph targets; then **glTF import** to re-encode (vbuf2/mesh re-strip +
-  re-quantise, behind lossless-or-raw). The Haven *encode* toolkit is fully present
-  in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
-  `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
+  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phases 1a
+  + 1b done** — `GltfExport` writes a static textured `.glb` (positions/normals +
+  both UV sets + per-submesh materials/textures, Z-up→Y-up) **with skinning** (skel
+  → glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`; bind `G·IBM=I` verified;
+  external-skeleton characters get identity-placed named joints + vertex groups).
+  Both validated in Blender (knarr upright + textured). **Next:** `skan`→glTF
+  animations, `manim`→morph targets; then **glTF import** to re-encode (vbuf2/mesh
+  re-strip + re-quantise, behind lossless-or-raw). The Haven *encode* toolkit is
+  fully present in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`,
+  `NormNumber` encoders) + `mkres-fragment.py` for the mesh choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
