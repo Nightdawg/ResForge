@@ -56,11 +56,15 @@ public final class GuiSupport {
             switch(l.name) {
                 case "image": {
                     ImageInfo ii = ImageInfo.parse(l.data);
-                    return ii.imageFormat != null ? ii.imageFormat + " image" : "image";
+                    String fmt = ii.imageFormat != null ? ii.imageFormat : "image";
+                    return ii.recognized ? "id=" + ii.id + "  " + fmt : fmt;
                 }
                 case "tex": {
                     TexInfo ti = TexInfo.parse(l.data);
-                    return ti.found ? ti.szX + "x" + ti.szY + " " + ti.imageFormat : "texture";
+                    if(!ti.found)
+                        return "texture";
+                    return (ti.recognized ? "id=" + ti.id + "  " : "")
+                            + ti.szX + "x" + ti.szY + " " + ti.imageFormat;
                 }
                 case "audio2": {
                     AudioInfo ai = AudioInfo.parse(l.data);
@@ -214,6 +218,34 @@ public final class GuiSupport {
             if(ce.entries.isEmpty() && ce.classpath.isEmpty())
                 sb.append("\n(empty)\n");
             return sb.toString();
+        }
+        return null;
+    }
+
+    /** A read-only metadata line for an image/tex layer (id, z/sub-z, offset), else null. */
+    public static String imageMeta(Layer l) {
+        if(l.name.equals("image")) {
+            ImageInfo ii = ImageInfo.parse(l.data);
+            if(!ii.recognized)
+                return null;
+            StringBuilder sb = new StringBuilder("id=").append(ii.id);
+            if(ii.headerVer < 128) {
+                sb.append("   z=").append(ii.z).append("  sub-z=").append(ii.subz);
+                if(ii.nooff)
+                    sb.append("   (no offset)");
+                else
+                    sb.append("   offset=(").append(ii.offX).append(", ").append(ii.offY).append(")");
+            } else {
+                sb.append("   (typed header)");
+            }
+            return sb.toString();
+        }
+        if(l.name.equals("tex")) {
+            TexInfo ti = TexInfo.parse(l.data);
+            if(!ti.recognized)
+                return null;
+            return "id=" + ti.id + "   " + ti.szX + "\u00d7" + ti.szY
+                    + "   offset=(" + ti.offX + ", " + ti.offY + ")";
         }
         return null;
     }
