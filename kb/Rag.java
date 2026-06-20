@@ -14,7 +14,9 @@ import java.util.stream.Stream;
  * A tiny, dependency-free local RAG (retrieval) over the project's Markdown
  * notes AND Java source. Run directly with Java's single-file launcher (no build):
  *
- *   java kb/Rag.java query "how does the tex codec recompute length" [-k 5] [-d docs -d kb/notes]
+ *   java kb/Rag.java query "how does the tex codec recompute length" [-k 5] [-f] [-d docs -d kb/notes]
+ *   java kb/Rag.java "how does the tex codec recompute length"        # bare question, no "query"
+ *   java kb/Rag.java -f "what is the lossless-or-raw rule"            # print whole chunks, not snippets
  *   java kb/Rag.java list                       # show every indexed chunk
  *
  * Markdown (.md) is chunked at headings; Java (.java) is chunked into "documented
@@ -42,15 +44,16 @@ public class Rag {
             usage();
             return;
         }
-        String cmd = args[0];
         List<Path> dirs = new ArrayList<>();
         int k = 5;
-        List<String> rest = new ArrayList<>();
-        for(int i = 1; i < args.length; i++) {
+        boolean full = false;
+        List<String> words = new ArrayList<>();
+        for(int i = 0; i < args.length; i++) {
             switch(args[i]) {
                 case "-d": dirs.add(Path.of(args[++i])); break;
                 case "-k": k = Integer.parseInt(args[++i]); break;
-                default:   rest.add(args[i]);
+                case "-f": case "--full": full = true; break;
+                default:   words.add(args[i]);
             }
         }
         if(dirs.isEmpty()) {
@@ -61,25 +64,32 @@ public class Rag {
             dirs.add(Path.of("src/test/java"));
         }
 
-        List<Chunk> chunks = index(dirs);
-        switch(cmd) {
-            case "query": {
-                if(rest.isEmpty()) {
-                    System.err.println("query needs a question");
-                    return;
-                }
-                query(chunks, String.join(" ", rest), k);
-                break;
-            }
-            case "list":
-                for(Chunk c : chunks)
-                    System.out.printf("%-52s  %s  (%d terms)%n", c.file(), c.heading(), c.terms().size());
-                System.out.printf("%n%d chunks across %d file(s)%n", chunks.size(),
-                        chunks.stream().map(Chunk::file).distinct().count());
-                break;
-            default:
-                usage();
+        if(words.isEmpty()) {
+            usage();
+            return;
         }
+        String cmd = words.get(0);
+        if(cmd.equals("help") || cmd.equals("-h") || cmd.equals("--help")) {
+            usage();
+            return;
+        }
+
+        List<Chunk> chunks = index(dirs);
+        if(cmd.equals("list")) {
+            for(Chunk c : chunks)
+                System.out.printf("%-52s  %s  (%d terms)%n", c.file(), c.heading(), c.terms().size());
+            System.out.printf("%n%d chunks across %d file(s)%n", chunks.size(),
+                    chunks.stream().map(Chunk::file).distinct().count());
+            return;
+        }
+
+        // "query <words…>" or just a bare "<words…>" question.
+        List<String> q = cmd.equals("query") ? words.subList(1, words.size()) : words;
+        if(q.isEmpty()) {
+            System.err.println("query needs a question");
+            return;
+        }
+        query(chunks, String.join(" ", q), k, full);
     }
 
     /* --------------------------------------------------------------- indexing */
@@ -241,7 +251,7 @@ public class Rag {
 
     /* -------------------------------------------------------------- retrieval */
 
-    static void query(List<Chunk> chunks, String q, int k) {
+    static void query(List<Chunk> chunks, String q, int k, boolean full) {
         if(chunks.isEmpty()) {
             System.out.println("Nothing indexed. Add Markdown under kb/notes/ or pass -d <dir-or-file>.");
             return;
@@ -288,33 +298,74 @@ public class Rag {
         for(int i = 0; i < Math.min(k, scored.size()); i++) {
             Chunk c = chunks.get((int) scored.get(i)[0]);
             System.out.printf("[%.2f] %s  --  %s%n", scored.get(i)[1], c.file(), c.heading());
-            System.out.println("    " + snippet(c.text(), qterms));
+            if(full)
+                System.out.println(indent(c.text()));
+            else
+                System.out.println("    " + snippet(c.text(), qterms));
             System.out.println();
         }
     }
 
-    /** A short snippet around the first query-term hit (or the chunk start). */
+    /** Indents every line of a chunk's full text (used by the --full flag). */
+    static String indent(String text) {
+        StringBuilder sb = new StringBuilder();
+        for(String line : text.split("\n", -1))
+            sb.append("    ").append(line).append('\n');
+        return sb.toString().stripTrailing();
+    }
+
+    /** A short snippet around the densest cluster of query-term hits (or the start). */
     static String snippet(String text, List<String> qterms) {
         String flat = text.replaceAll("\\s+", " ").strip();
         String lower = flat.toLowerCase(Locale.ROOT);
-        int at = -1;
-        for(String qt : qterms) {
-            int p = lower.indexOf(qt);
-            if(p >= 0 && (at < 0 || p < at))
-                at = p;
+        final int win = 240, pad = 60;
+
+        // Collect every hit position of any distinct query term.
+        List<int[]> hits = new ArrayList<>();   // [pos, termId]
+        List<String> uniq = new ArrayList<>(new java.util.LinkedHashSet<>(qterms));
+        for(int t = 0; t < uniq.size(); t++) {
+            String qt = uniq.get(t);
+            for(int p = lower.indexOf(qt); p >= 0; p = lower.indexOf(qt, p + 1))
+                hits.add(new int[]{p, t});
         }
-        int start = Math.max(0, (at < 0 ? 0 : at) - 60);
-        int end = Math.min(flat.length(), start + 240);
+        int start;
+        if(hits.isEmpty()) {
+            start = 0;
+        } else {
+            // Pick the window (anchored a little before a hit) covering the most distinct terms.
+            int bestStart = 0, bestDistinct = -1;
+            for(int[] anchor : hits) {
+                int s = Math.max(0, anchor[0] - pad);
+                int e = Math.min(flat.length(), s + win);
+                java.util.Set<Integer> seen = new java.util.HashSet<>();
+                for(int[] h : hits)
+                    if(h[0] >= s && h[0] < e)
+                        seen.add(h[1]);
+                if(seen.size() > bestDistinct) {
+                    bestDistinct = seen.size();
+                    bestStart = s;
+                }
+            }
+            start = bestStart;
+        }
+        int end = Math.min(flat.length(), start + win);
         String s = flat.substring(start, end);
         return (start > 0 ? "..." : "") + s + (end < flat.length() ? "..." : "");
     }
 
     static void usage() {
         System.out.println("ResForge knowledge-base retrieval (lexical BM25)\n");
-        System.out.println("  java kb/Rag.java query \"your question\" [-k N] [-d dir-or-file]...");
+        System.out.println("  java kb/Rag.java [query] \"your question\" [-k N] [-f] [-d dir-or-file]...");
         System.out.println("  java kb/Rag.java list");
+        System.out.println("\nThe word \"query\" is optional — a bare question works too.");
+        System.out.println("Flags:");
+        System.out.println("  -k N            return the top N chunks (default 5)");
+        System.out.println("  -f, --full      print each matching chunk in full (not just a snippet)");
+        System.out.println("  -d dir-or-file  override the search sources (repeatable)");
         System.out.println("\nIndexes Markdown (.md, by heading) and Java (.java, by documented declaration).");
         System.out.println("Default sources: kb/notes, docs, README.md, src/main/java, src/test/java.");
         System.out.println("Add Markdown under kb/notes/ (or write code comments) to grow it.");
+        System.out.println("\nTip (AI assistants): start with `-f` to get full grounded context in one call,");
+        System.out.println("e.g.  java kb/Rag.java -f \"how does the tex codec recompute length\"");
     }
 }

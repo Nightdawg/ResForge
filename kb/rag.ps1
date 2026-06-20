@@ -1,6 +1,7 @@
 #!/usr/bin/env pwsh
 # Convenience wrapper: run the local knowledge-base retrieval tool.
-#   kb\rag.ps1 query "your question" [-k N] [-d dir]...
+#   kb\rag.ps1 "your question" [-k N] [-f] [-d dir]...
+#   kb\rag.ps1 -f "your question"      # print whole chunks
 #   kb\rag.ps1 list
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent

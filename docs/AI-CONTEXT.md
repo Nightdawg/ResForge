@@ -7,9 +7,11 @@ see [`DESIGN-notes.md`](DESIGN-notes.md); for source provenance see
 architecture, feature set, or "next steps" materially change.
 
 > Quick lookups: a tiny local retriever lives in [`../kb/`](../kb/README.md) —
-> `java kb/Rag.java query "your question"` runs BM25 over `kb/notes/` + `docs/`
-> (no build, no deps). Append new findings as Markdown under `kb/notes/`; keep
-> *this* file as the curated primer.
+> `java kb/Rag.java "your question"` runs BM25 over `kb/notes/` + `docs/` + the
+> Java source (no build, no deps). Add `-f` to print whole chunks (best for AI:
+> full grounded context in one call), e.g.
+> `java kb/Rag.java -f "how does the tex codec recompute length"`. Append new
+> findings as Markdown under `kb/notes/`; keep *this* file as the curated primer.
 
 ## 1. What this is
 A standalone **Java 21** tool to decompile, edit, and recompile Haven & Hearth

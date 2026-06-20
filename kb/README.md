@@ -18,25 +18,28 @@ No compile step — Java's single-file launcher runs the source directly (JDK 11
 we use 21). From the repo root:
 
 ```sh
-java kb/Rag.java query "how does the tex codec recompute the length"
-java kb/Rag.java query "what is the lossless-or-raw rule" -k 3
-java kb/Rag.java query "server fetch url" -d kb/notes
+java kb/Rag.java "how does the tex codec recompute the length"   # bare question
+java kb/Rag.java -f "what is the lossless-or-raw rule"            # whole chunks
+java kb/Rag.java query "what is the lossless-or-raw rule" -k 3    # explicit, top-3
+java kb/Rag.java "server fetch url" -d kb/notes
 java kb/Rag.java list
 ```
 
 On Windows you can use the wrappers:
 
 ```powershell
-kb\rag.ps1 query "vbuf2 attribute formats"
+kb\rag.ps1 "vbuf2 attribute formats"
 ```
 
 ```cmd
-kb\rag query "neg layer 12 bytes"
+kb\rag "neg layer click hotspot"
 ```
 
-Flags: `-k N` (top-N, default 5), `-d <dir-or-file>` (override the search sources;
-repeat for several). Defaults: `kb/notes`, `docs`, `README.md`, `src/main/java`,
-`src/test/java`.
+Flags: `-k N` (top-N, default 5), `-f`/`--full` (print whole matching chunks
+instead of a snippet — best for feeding an AI complete context in one call),
+`-d <dir-or-file>` (override the search sources; repeat for several). The word
+`query` is optional — a bare question works. Defaults: `kb/notes`, `docs`,
+`README.md`, `src/main/java`, `src/test/java`.
 
 ## How it works (briefly)
 - **Markdown** (`.md`) is split into chunks at heading lines (`#`, `##`, ...).
