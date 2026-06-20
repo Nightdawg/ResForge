@@ -366,7 +366,10 @@ public class ResEditFrame extends JFrame {
         fileMenu.add(item("Open\u2026", KeyEvent.VK_O, this::doOpen));
         fileMenu.add(item("Fetch from server\u2026", KeyEvent.VK_R, this::doFetch));
         fileMenu.add(item("Save", KeyEvent.VK_S, this::doSave));
-        fileMenu.add(menuItem("Save As\u2026", this::doSaveAs));
+        JMenuItem saveAsItem = menuItem("Save As\u2026", this::doSaveAs);
+        saveAsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,
+                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
+        fileMenu.add(saveAsItem);
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Export 3D model as OBJ\u2026", this::doExportObj));
         fileMenu.addSeparator();
