@@ -148,8 +148,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 - Typed editor for `obst` (movement-collision polygons; uses lossy `float16`, so
   needs a half-precision codec under the lossless-or-raw guard). (`mat2`, `anim`
   and `neg` are now done — editable JSON; `code`/`codeentry` are read-only.)
-- GUI niceties: fetch path history/autocomplete, search/filter layers, batch
-  re-skin a folder.
+- GUI niceties: fetch path history/autocomplete, batch
+  re-skin a folder. (No layer search/filter — explicitly declined.)
 
 ## 11. The other tool (context)
 CarryGun's **HafenResourceTool** (GitLab, Qt/C++): broader typed coverage +
