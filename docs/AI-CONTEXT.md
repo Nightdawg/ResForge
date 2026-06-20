@@ -70,9 +70,11 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`
-  (read-only), `ImageHeaderCodec` (edit image id/z/subz/offset + build new image
-  layers); typed codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`, `AnimCodec`,
-  `NegCodec` (tto/record ↔ JSON, lossless-or-raw).
+  (read-only); typed JSON codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`,
+  `AnimCodec`, `NegCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
+  codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
+  `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
+  lossless-or-raw, image/audio bytes kept verbatim.
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
   (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
@@ -84,7 +86,7 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 | Layer | Status |
 |-------|--------|
 | `image` | edit: swap embedded PNG/JPEG; **edit header** (id/z/sub-z/offset/nooff) for old-style; new image layers get a wrapped header |
-| `tex` | edit: swap 3D texture; `tex` codec recomputes embedded int32 length |
+| `tex` | edit: swap 3D texture (`tex` codec recomputes int32 length); **edit header** (id/offset/declared size) |
 | `audio2` | edit: swap Ogg; **edit clip id + volume** (ver-2 header); GUI plays it |
 | `font` | edit: swap TTF/OTF (sfnt). 2-byte header + font tail |
 | `midi` | edit: swap `.mid` (whole payload) |
@@ -94,7 +96,7 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
 | `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
-| `vbuf2`/`mesh` | **read-only**: fully decoded; OBJ export; `transform` write path |
+| `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export; `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | everything else (`obst`,`skel`,`skan`,`boneoff`,`rlink`,`tileset2`,`clamb`,`foodev`,`src`,…) | **raw passthrough** (lossless) |
 
