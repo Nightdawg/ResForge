@@ -229,6 +229,9 @@ Point `JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for either bu
 New here (or an AI assistant resuming work)? Read **`docs/AI-CONTEXT.md`** first —
 a one-file primer on the architecture, builds, feature set, per-layer status and
 open work. **`docs/DESIGN-notes.md`** has the deep format/reverse-engineering log.
+For quick lookups there's a tiny local knowledge-base retriever in **`kb/`**:
+`java kb/Rag.java query "your question"` (BM25 over `kb/notes/` + `docs/`, no
+build, no dependencies — see `kb/README.md`).
 
 Typed decoders live in `hafen.resedit.layers`. To make another layer
 human-editable, add a part-splitting rule in `res/Unpacker.java` (and the
