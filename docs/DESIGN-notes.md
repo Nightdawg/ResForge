@@ -272,7 +272,7 @@ hafen-resedit/
 
 # Or use the jar
 ./gradlew jar
-java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
+java -jar build-gradle/libs/hafen-resedit-0.1.0.jar info horse.res
 ```
 
 ---
