@@ -22,10 +22,16 @@ public final class SkanInfo {
     public static final class Track {
         public final String bone;
         public final int frames;
+        public final float[] times;        // per-frame time (seconds)
+        public final float[][] trans;      // per-frame local translation offset [x,y,z]
+        public final float[][] rot;        // per-frame local rotation quaternion [w,x,y,z]
 
-        Track(String bone, int frames) {
+        Track(String bone, float[] times, float[][] trans, float[][] rot) {
             this.bone = bone;
-            this.frames = frames;
+            this.frames = times.length;
+            this.times = times;
+            this.trans = trans;
+            this.rot = rot;
         }
     }
 
@@ -70,7 +76,7 @@ public final class SkanInfo {
                 if(bnm.equals("{ctl}"))
                     si.fxTracks.add(parseFx(si.fmt, si.len, in));
                 else
-                    si.tracks.add(new Track(bnm, parseFrames(si.fmt, in)));
+                    si.tracks.add(parseFrames(bnm, si.fmt, si.len, in));
             }
             si.recognized = true;
             si.reachedEnd = in.eom();
@@ -80,22 +86,33 @@ public final class SkanInfo {
         return si;
     }
 
-    private static int parseFrames(int fmt, MessageReader in) {
+    private static Track parseFrames(String bone, int fmt, float len, MessageReader in) {
         int n = in.uint16();
+        float[] times = new float[n];
+        float[][] trans = new float[n][];
+        float[][] rot = new float[n][];
         for(int i = 0; i < n; i++) {
+            float tm;
+            float[] tr = new float[3];
+            float ang;
+            float[] ax = new float[3];
             if(fmt == 0) {
-                in.cpfloat();                       // time
-                in.cpfloat(); in.cpfloat(); in.cpfloat();   // translation
-                in.cpfloat();                       // rotation angle
-                in.cpfloat(); in.cpfloat(); in.cpfloat();   // rotation axis
+                tm = (float) in.cpfloat();
+                tr[0] = (float) in.cpfloat(); tr[1] = (float) in.cpfloat(); tr[2] = (float) in.cpfloat();
+                ang = (float) in.cpfloat();
+                ax[0] = (float) in.cpfloat(); ax[1] = (float) in.cpfloat(); ax[2] = (float) in.cpfloat();
             } else {
-                in.uint16();                        // time (unorm16 * len)
-                in.int16(); in.int16(); in.int16(); // translation (half float)
-                in.uint16();                        // angle (mnorm16)
-                in.int16(); in.int16();             // axis (oct snorm16)
+                tm = in.unorm16() * len;
+                tr[0] = in.float16(); tr[1] = in.float16(); tr[2] = in.float16();
+                ang = in.mnorm16() * 2 * (float) Math.PI;
+                MessageReader.oct2uvec(ax, in.snorm16(), in.snorm16());
             }
+            times[i] = tm;
+            trans[i] = tr;
+            float s = (float) Math.sin(ang / 2.0), c = (float) Math.cos(ang / 2.0);
+            rot[i] = new float[]{c, s * ax[0], s * ax[1], s * ax[2]};
         }
-        return n;
+        return new Track(bone, times, trans, rot);
     }
 
     private static Fx parseFx(int fmt, float len, MessageReader in) {

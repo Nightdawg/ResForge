@@ -90,6 +90,18 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    /** skan (fmt 1, loop) animating bone "root" with a single keyframe. */
+    private static byte[] skan(int id) {
+        MessageWriter w = new MessageWriter();
+        w.int16(id);
+        w.uint8(2);                  // fl: fmt = (2&6)>>1 = 1, no nspeed
+        w.uint8(1);                  // mode = loop
+        w.float32(1.0f);             // length
+        w.string("root").uint16(1);  // one track "root", one frame
+        w.uint16(0).int16(0).int16(0).int16(0).uint16(0).int16(0).int16(0);  // fmt-1 frame
+        return w.toByteArray();
+    }
+
     /* ----- glb parsing helpers ----- */
 
     private static int le32(byte[] b, int off) {
@@ -277,6 +289,44 @@ class GltfExportTest {
         int jointNode = ((Number) ((List<Object>) skin.get("joints")).get(0)).intValue();
         Map<String, Object> jn = (Map<String, Object>) ((List<Object>) root.get("nodes")).get(jointNode);
         assertFalse(jn.containsKey("matrix"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void skanLayerBecomesGltfAnimation() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel()));
+        res.layers.add(new Layer("vbuf2", vbufBones()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("skan", skan(5)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "rig.res").glb);
+        List<Object> animations = (List<Object>) root.get("animations");
+        assertEquals(1, animations.size());
+
+        Map<String, Object> an = (Map<String, Object>) animations.get(0);
+        List<Object> channels = (List<Object>) an.get("channels");
+        List<Object> samplers = (List<Object>) an.get("samplers");
+        // one bone track -> a translation and a rotation channel/sampler
+        assertEquals(2, channels.size());
+        assertEquals(2, samplers.size());
+
+        int rootJoint = ((Number) ((List<Object>) ((Map<String, Object>)
+                ((List<Object>) root.get("skins")).get(0)).get("joints")).get(0)).intValue();
+        java.util.Set<String> paths = new java.util.HashSet<>();
+        for(Object c : channels) {
+            Map<String, Object> target = (Map<String, Object>) ((Map<String, Object>) c).get("target");
+            assertEquals(rootJoint, ((Number) target.get("node")).intValue());
+            paths.add((String) target.get("path"));
+        }
+        assertTrue(paths.contains("translation"));
+        assertTrue(paths.contains("rotation"));
+
+        // the sampler input is a SCALAR accessor with the required min/max
+        int input = ((Number) ((Map<String, Object>) samplers.get(0)).get("input")).intValue();
+        Map<String, Object> in = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(input);
+        assertEquals("SCALAR", in.get("type"));
+        assertTrue(in.containsKey("min") && in.containsKey("max"));
     }
 
     @Test

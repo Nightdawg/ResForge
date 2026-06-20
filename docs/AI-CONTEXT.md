@@ -177,14 +177,15 @@ References… (aggregated reference report dialog), **resource-version spinner**
   auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
 - **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
   XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phases 1a
-  + 1b done** — `GltfExport` writes a static textured `.glb` (positions/normals +
-  both UV sets + per-submesh materials/textures, Z-up→Y-up) **with skinning** (skel
-  → glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`; bind `G·IBM=I` verified;
-  external-skeleton characters get identity-placed named joints + vertex groups).
-  Both validated in Blender (knarr upright + textured). **Next:** `skan`→glTF
-  animations, `manim`→morph targets; then **glTF import** to re-encode (vbuf2/mesh
-  re-strip + re-quantise, behind lossless-or-raw). The Haven *encode* toolkit is
-  fully present in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`,
+  + 1b + 1c done** — `GltfExport` writes a static textured `.glb` (positions/normals
+  + both UV sets + per-submesh materials/textures, Z-up→Y-up), **skinning** (skel →
+  connected glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`; bind `G·IBM=I`
+  verified), **and animations** (`skan` → glTF translation/rotation channels per
+  bone, composed onto bind). External-skeleton characters get identity-placed named
+  joints (no pose/anim). All validated in Blender (knarr upright + textured + posable
+  + sail anim). **Next:** `manim`→morph targets; then **glTF import** to re-encode
+  (vbuf2/mesh re-strip + re-quantise, behind lossless-or-raw). The Haven *encode*
+  toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`,
   `NormNumber` encoders) + `mkres-fragment.py` for the mesh choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can

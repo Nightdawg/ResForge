@@ -3,6 +3,7 @@ package resforge.model;
 import resforge.io.Json;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshInfo;
+import resforge.layers.SkanInfo;
 import resforge.layers.SkelInfo;
 import resforge.layers.TexInfo;
 import resforge.res.Layer;
@@ -189,6 +190,7 @@ public final class GltfExport {
         root.put("asset", obj("version", "2.0", "generator", "ResForge"));
         root.put("scene", 0);
 
+        Map<String, Integer> boneNode = new LinkedHashMap<>();   // bone name -> glTF node index
         if(!joints.isEmpty()) {
             // Connected joint hierarchy: each skel bone is a node with its native
             // local transform, parented per the skeleton, all under a conversion
@@ -198,7 +200,6 @@ public final class GltfExport {
             float[] R = M4.fromQuat(0.70710677f, -0.70710677f, 0, 0);
             List<Object> rxyzw = List.of(-0.70710677, 0.0, 0.0, 0.70710677);   // R as [x,y,z,w]
 
-            Map<String, Integer> boneNode = new LinkedHashMap<>();
             if(skel != null && skel.recognized) {
                 for(SkelInfo.Bone b : skel.bones) {
                     float[] q = M4.quat(b.ax, b.ay, b.az, b.ang);       // [w,x,y,z]
@@ -257,6 +258,11 @@ public final class GltfExport {
                     "inverseBindMatrices", ibmAccessor,
                     "joints", jointIndices)));
         }
+
+        // skan layers -> glTF animations (only for bones in the local skeleton).
+        List<Object> animations = buildAnimations(res, skel, boneNode, bin, bufferViews, accessors);
+        if(!animations.isEmpty())
+            root.put("animations", animations);
 
         root.put("scenes", List.of(obj("nodes", sceneNodes)));
         root.put("nodes", nodes);
@@ -466,6 +472,115 @@ public final class GltfExport {
             if(l.name.equals("skel"))
                 return SkelInfo.parse(l.data);
         return null;
+    }
+
+    /**
+     * Builds glTF animations from the resource's {@code skan} layers. Each skan
+     * becomes one animation; each of its per-bone tracks becomes a translation and
+     * a rotation channel targeting that bone's joint node, with values composed
+     * onto the bind pose exactly as the client does (translation added, rotation
+     * post-multiplied). Tracks for bones not in the local skeleton are skipped.
+     */
+    private static List<Object> buildAnimations(ResContainer res, SkelInfo skel,
+                                                Map<String, Integer> boneNode,
+                                                Buf bin, List<Object> bvs, List<Object> accs) {
+        List<Object> animations = new ArrayList<>();
+        if(skel == null || !skel.recognized || boneNode.isEmpty())
+            return animations;
+        Map<String, SkelInfo.Bone> bind = new LinkedHashMap<>();
+        for(SkelInfo.Bone b : skel.bones)
+            bind.put(b.name, b);
+
+        for(Layer l : res.layers) {
+            if(!l.name.equals("skan"))
+                continue;
+            SkanInfo sa = SkanInfo.parse(l.data);
+            if(!sa.recognized)
+                continue;
+            List<Object> samplers = new ArrayList<>();
+            List<Object> channels = new ArrayList<>();
+            for(SkanInfo.Track t : sa.tracks) {
+                Integer node = boneNode.get(t.bone);
+                SkelInfo.Bone b = bind.get(t.bone);
+                if(node == null || b == null || t.frames == 0)
+                    continue;
+                int inAccessor = addScalar(bin, bvs, accs, t.times);
+
+                // translation = bind local position + per-frame offset
+                float[] tv = new float[t.frames * 3];
+                for(int i = 0; i < t.frames; i++) {
+                    tv[i * 3] = b.px + t.trans[i][0];
+                    tv[i * 3 + 1] = b.py + t.trans[i][1];
+                    tv[i * 3 + 2] = b.pz + t.trans[i][2];
+                }
+                int tAccessor = addVec3(bin, bvs, accs, tv, t.frames, false, false);
+                samplers.add(obj("input", inAccessor, "output", tAccessor, "interpolation", "LINEAR"));
+                channels.add(obj("sampler", samplers.size() - 1,
+                        "target", obj("node", node, "path", "translation")));
+
+                // rotation = bind local rotation · per-frame rotation (normalised)
+                float[] bq = M4.quat(b.ax, b.ay, b.az, b.ang);
+                float[] rv = new float[t.frames * 4];
+                for(int i = 0; i < t.frames; i++) {
+                    float[] q = normalizeQuat(M4.qmul(bq, t.rot[i]));
+                    rv[i * 4] = q[1];     // glTF order x,y,z,w
+                    rv[i * 4 + 1] = q[2];
+                    rv[i * 4 + 2] = q[3];
+                    rv[i * 4 + 3] = q[0];
+                }
+                int rAccessor = addVec4(bin, bvs, accs, rv, t.frames);
+                samplers.add(obj("input", inAccessor, "output", rAccessor, "interpolation", "LINEAR"));
+                channels.add(obj("sampler", samplers.size() - 1,
+                        "target", obj("node", node, "path", "rotation")));
+            }
+            if(!channels.isEmpty())
+                animations.add(obj("name", "skan_" + sa.id, "samplers", samplers, "channels", channels));
+        }
+        return animations;
+    }
+
+    private static float[] normalizeQuat(float[] q) {
+        double n = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+        if(n == 0)
+            return new float[]{1, 0, 0, 0};
+        return new float[]{(float) (q[0] / n), (float) (q[1] / n), (float) (q[2] / n), (float) (q[3] / n)};
+    }
+
+    /** SCALAR float accessor with the min/max glTF requires for animation inputs. */
+    private static int addScalar(Buf bin, List<Object> bvs, List<Object> accs, float[] data) {
+        bin.align4();
+        int off = bin.size();
+        double mn = Double.MAX_VALUE, mx = -Double.MAX_VALUE;
+        for(float v : data) {
+            bin.f32(v);
+            mn = Math.min(mn, v);
+            mx = Math.max(mx, v);
+        }
+        int bv = addBufferView(bvs, off, bin.size() - off, -1);
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", FLOAT);
+        acc.put("count", data.length);
+        acc.put("type", "SCALAR");
+        acc.put("min", List.of(mn));
+        acc.put("max", List.of(mx));
+        accs.add(acc);
+        return accs.size() - 1;
+    }
+
+    private static int addVec4(Buf bin, List<Object> bvs, List<Object> accs, float[] data, int count) {
+        bin.align4();
+        int off = bin.size();
+        for(float v : data)
+            bin.f32(v);
+        int bv = addBufferView(bvs, off, bin.size() - off, -1);
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", FLOAT);
+        acc.put("count", count);
+        acc.put("type", "VEC4");
+        accs.add(acc);
+        return accs.size() - 1;
     }
 
     private static int addBufferView(List<Object> bvs, int off, int len, int target) {
