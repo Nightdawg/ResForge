@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Apache Ant build for hafen-resedit (an alternative to the Gradle build).
+
+  This mirrors what the Gradle build does, using vendored JUnit 5 jars in lib/
+  (Ant has no built-in dependency manager). Output goes to build-ant/ so it
+  never clashes with Gradle's build/.
+
+  Common targets:
+    ant compile   - compile main sources
+    ant jar       - build the runnable jar (build-ant/libs/)
+    ant test      - compile and run the JUnit 5 tests
+    ant build     - jar + test (default)
+    ant run -Dargs="info samples/apple.res"  - run the CLI
+    ant clean     - remove build-ant/
+
+  Requires JDK 21. If your JAVA_HOME is set, point it at the JDK *root*
+  (not the \bin sub-directory).
+-->
+<project name="hafen-resedit" default="build" basedir=".">
+    <property name="version"         value="0.1.0"/>
+    <property name="main.class"      value="hafen.resedit.Main"/>
+    <property name="args"            value=""/>
+
+    <property name="src.dir"         value="src/main/java"/>
+    <property name="test.src.dir"    value="src/test/java"/>
+    <property name="lib.dir"         value="lib"/>
+
+    <property name="build.dir"       value="build-ant"/>
+    <property name="classes.dir"     value="${build.dir}/classes"/>
+    <property name="test.classes.dir" value="${build.dir}/test-classes"/>
+    <property name="jar.dir"         value="${build.dir}/libs"/>
+    <property name="test.reports.dir" value="${build.dir}/test-results"/>
+    <property name="jar.file"        value="${jar.dir}/hafen-resedit-${version}.jar"/>
+
+    <!-- Vendored JUnit 5 jars (copied from the Gradle cache). -->
+    <path id="junit.classpath">
+        <fileset dir="${lib.dir}" includes="*.jar"/>
+    </path>
+
+    <target name="clean" description="Remove the Ant build output">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="compile" description="Compile main sources">
+        <mkdir dir="${classes.dir}"/>
+        <javac srcdir="${src.dir}" destdir="${classes.dir}"
+               includeantruntime="false" release="21" debug="true" encoding="UTF-8">
+            <compilerarg value="-Xlint:none"/>
+        </javac>
+    </target>
+
+    <target name="jar" depends="compile" description="Build the runnable jar">
+        <mkdir dir="${jar.dir}"/>
+        <jar destfile="${jar.file}" basedir="${classes.dir}">
+            <manifest>
+                <attribute name="Main-Class" value="${main.class}"/>
+            </manifest>
+        </jar>
+    </target>
+
+    <target name="compile-tests" depends="compile" description="Compile test sources">
+        <mkdir dir="${test.classes.dir}"/>
+        <javac srcdir="${test.src.dir}" destdir="${test.classes.dir}"
+               includeantruntime="false" release="21" debug="true" encoding="UTF-8">
+            <classpath>
+                <pathelement location="${classes.dir}"/>
+                <path refid="junit.classpath"/>
+            </classpath>
+        </javac>
+    </target>
+
+    <target name="test" depends="compile-tests" description="Run the JUnit 5 tests">
+        <mkdir dir="${test.reports.dir}"/>
+        <junitlauncher printSummary="true" haltOnFailure="true">
+            <classpath>
+                <pathelement location="${classes.dir}"/>
+                <pathelement location="${test.classes.dir}"/>
+                <path refid="junit.classpath"/>
+            </classpath>
+            <testclasses outputdir="${test.reports.dir}">
+                <fileset dir="${test.classes.dir}">
+                    <include name="**/*Test.class"/>
+                </fileset>
+                <listener type="legacy-plain" sendSysOut="true"/>
+            </testclasses>
+        </junitlauncher>
+    </target>
+
+    <target name="build" depends="jar,test" description="Build the jar and run the tests"/>
+
+    <target name="run" depends="compile" description="Run the CLI; pass args with -Dargs=&quot;...&quot;">
+        <java classname="${main.class}" fork="true" failonerror="true">
+            <classpath>
+                <pathelement location="${classes.dir}"/>
+            </classpath>
+            <arg line="${args}"/>
+        </java>
+    </target>
+</project>

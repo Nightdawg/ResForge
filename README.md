@@ -177,11 +177,27 @@ java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
 
 ## Building / testing
 
-Requires JDK 21 (toolchain configured). Uses the bundled Gradle wrapper:
+Requires JDK 21. There are two equivalent builds:
+
+**Gradle** (bundled wrapper, auto-downloads dependencies):
 
 ```sh
-./gradlew build      # compile + run round-trip tests
+./gradlew build      # compile + run the tests
+./gradlew jar        # -> build/libs/hafen-resedit-0.1.0.jar
 ```
+
+**Ant** (for those who prefer it; JUnit jars are vendored in `lib/`):
+
+```sh
+ant build            # compile + jar + run the tests  -> build-ant/
+ant jar              # -> build-ant/libs/hafen-resedit-0.1.0.jar
+ant run -Dargs="info samples/apple.res"
+```
+
+The Ant build has no internet dependency — the JUnit 5 jars live in `lib/` and
+output goes to `build-ant/` so it never clashes with Gradle's `build/`. Requires
+Ant 1.10+ (for the native JUnit 5 `junitlauncher` task). Point `JAVA_HOME` at the
+JDK *root* (not the `\bin` sub-directory) for either build.
 
 ## Extending
 
