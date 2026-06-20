@@ -199,6 +199,8 @@ re-encodes JSON to a `tto` stream (see §3).
 ```
 hafen-resedit/
   build.gradle, settings.gradle      # Gradle, application plugin, JUnit 5, JDK 21 toolchain
+  build.xml                          # Ant build (alternative); JUnit jars vendored in lib/
+  lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/hafen/resedit/
     Main.java                        # CLI: info|unpack|pack|replace|obj|transform|catalog|verify
