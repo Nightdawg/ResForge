@@ -11,8 +11,8 @@ interface.
 Double-click the jar, or run it with no arguments, to open the GUI:
 
 ```sh
-java -jar build/libs/hafen-resedit-0.1.0.jar          # opens the editor
-java -jar build/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a file
+java -jar build-gradle/libs/hafen-resedit-0.1.0.jar          # opens the editor
+java -jar build-gradle/libs/hafen-resedit-0.1.0.jar gui horse.res   # opens a file
 ```
 
 Open a `.res` (toolbar button or drag-and-drop) to see its layers in a table.
@@ -28,8 +28,8 @@ Build the tool once, then use the jar (handles paths with spaces):
 
 ```sh
 ./gradlew jar
-# the jar is at build/libs/hafen-resedit-0.1.0.jar
-alias resedit='java -jar build/libs/hafen-resedit-0.1.0.jar'
+# the jar is at build-gradle/libs/hafen-resedit-0.1.0.jar
+alias resedit='java -jar build-gradle/libs/hafen-resedit-0.1.0.jar'
 ```
 
 ```sh
@@ -187,10 +187,10 @@ layer's embedded picture splits cleanly (decodable on its own):
 ./gradlew run --args="verify path/to/folder-of-res"
 ```
 
-Build a runnable jar with `./gradlew jar` (output under `build/libs/`), then:
+Build a runnable jar with `./gradlew jar` (output under `build-gradle/libs/`), then:
 
 ```sh
-java -jar build/libs/hafen-resedit-0.1.0.jar info horse.res
+java -jar build-gradle/libs/hafen-resedit-0.1.0.jar info horse.res
 ```
 
 ## Building / testing
@@ -201,7 +201,7 @@ Requires JDK 21. There are two equivalent builds:
 
 ```sh
 ./gradlew build      # compile + run the tests
-./gradlew jar        # -> build/libs/hafen-resedit-0.1.0.jar
+./gradlew jar        # -> build-gradle/libs/hafen-resedit-0.1.0.jar
 ```
 
 **Ant** (for those who prefer it; JUnit jars are vendored in `lib/`):
@@ -213,9 +213,9 @@ ant run -Dargs="info samples/apple.res"
 ```
 
 The Ant build has no internet dependency — the JUnit 5 jars live in `lib/` and
-output goes to `build-ant/` so it never clashes with Gradle's `build/`. Requires
-Ant 1.10+ (for the native JUnit 5 `junitlauncher` task). Point `JAVA_HOME` at the
-JDK *root* (not the `\bin` sub-directory) for either build.
+output goes to `build-ant/`, while Gradle writes to `build-gradle/`, so the two
+never clash. Requires Ant 1.10+ (for the native JUnit 5 `junitlauncher` task).
+Point `JAVA_HOME` at the JDK *root* (not the `\bin` sub-directory) for either build.
 
 ## Extending
 

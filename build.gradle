@@ -6,6 +6,10 @@ plugins {
 group = 'hafen'
 version = '0.1.0'
 
+// Use build-gradle/ (not the default build/) so it's clearly Gradle's output
+// and sits alongside the Ant build's build-ant/ without clashing.
+layout.buildDirectory = layout.projectDirectory.dir('build-gradle')
+
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
