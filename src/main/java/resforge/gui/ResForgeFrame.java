@@ -12,6 +12,7 @@ import javax.swing.BoxLayout;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -274,6 +275,13 @@ public class ResForgeFrame extends JFrame {
             } catch(Exception e) {
                 error("Could not read file: " + e.getMessage());
                 return;
+            }
+            // Adding an image from a raw picture: wrap it in a valid image header
+            // with the next free id, so it's a real (editable, animatable) image layer.
+            if(name.equals("image") && resforge.layers.ImageMagic.formatAt(data, 0) != null) {
+                int newId = nextImageId();
+                data = resforge.layers.ImageHeaderCodec.build(newId, 0, 0, false, data);
+                setStatus("Wrapped image as a new layer with id=" + newId);
             }
         }
         int sel = table.getSelectedRow();
@@ -726,15 +734,99 @@ public class ResForgeFrame extends JFrame {
         } else {
             view.setPlaceholder("(image could not be decoded)");
         }
-        String meta = GuiSupport.imageMeta(l);
-        if(meta != null)
-            content.add(labeled(meta));
+        resforge.layers.ImageHeaderCodec hdr =
+                l.name.equals("image") ? resforge.layers.ImageHeaderCodec.parse(l.data) : null;
+        if(hdr != null && hdr.editable) {
+            addImageHeaderEditor(content, idx, hdr);
+        } else {
+            String meta = GuiSupport.imageMeta(l);
+            if(meta != null)
+                content.add(labeled(meta));
+        }
         view.setAlignmentX(Component.LEFT_ALIGNMENT);
         content.add(view);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Replace image\u2026", () -> replaceFromFile(idx, l.name))),
                 new JButton(action("Export image\u2026", () -> exportLayer(idx)))));
+    }
+
+    /** Editable header fields (id, z, sub-z, offset, nooff) for an old-style image layer. */
+    private void addImageHeaderEditor(JPanel content, int idx, resforge.layers.ImageHeaderCodec h) {
+        JSpinner idSp = intSpinner(h.id);
+        JSpinner zSp = intSpinner(h.z);
+        JSpinner subzSp = intSpinner(h.subz);
+        JSpinner oxSp = intSpinner(h.offX);
+        JSpinner oySp = intSpinner(h.offY);
+        JCheckBox nooffBox = new JCheckBox("no offset", h.nooff);
+
+        JPanel row1 = headerRow();
+        row1.add(new JLabel("id")); row1.add(idSp);
+        row1.add(new JLabel("  z")); row1.add(zSp);
+        row1.add(new JLabel("  sub-z")); row1.add(subzSp);
+
+        JPanel row2 = headerRow();
+        row2.add(new JLabel("off.x")); row2.add(oxSp);
+        row2.add(new JLabel("  off.y")); row2.add(oySp);
+        row2.add(nooffBox);
+        row2.add(new JButton(action("Apply header", () -> {
+            try {
+                byte[] payload = h.encodeWith(
+                        (Integer) zSp.getValue(), (Integer) subzSp.getValue(),
+                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(),
+                        (Integer) oySp.getValue(), nooffBox.isSelected());
+                setLayerPayload(idx, payload);
+                setStatus("Updated image header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                error(ex.getMessage());
+            }
+        })));
+
+        content.add(row1);
+        content.add(row2);
+    }
+
+    private static JPanel headerRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        return row;
+    }
+
+    private static JSpinner intSpinner(int value) {
+        JSpinner s = new JSpinner(new SpinnerNumberModel(value, -32768, 32767, 1));
+        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
+        return s;
+    }
+
+    /** The next free image id (max existing image-layer id + 1, or 0 if none). */
+    private int nextImageId() {
+        int max = -1;
+        if(res != null) {
+            for(Layer ly : res.layers) {
+                if(!ly.name.equals("image"))
+                    continue;
+                resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
+                if(ii.recognized)
+                    max = Math.max(max, ii.id);
+            }
+        }
+        return max + 1;
+    }
+
+    /** Replaces a layer's entire payload directly (for header/whole-payload edits). */
+    private void setLayerPayload(int idx, byte[] payload) {
+        if(res == null)
+            return;
+        Snapshot before = snapshot();
+        Layer old = res.layers.get(idx);
+        res.layers.set(idx, new Layer(old.name, payload));
+        commit(before);
+        markDirty();
+        int sel = table.getSelectedRow();
+        model.fireTableRowsUpdated(idx, idx);
+        if(sel == idx)
+            showSelected();
     }
 
     private void buildTextPanel(JPanel content, int idx, Layer l) {

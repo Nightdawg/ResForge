@@ -50,7 +50,7 @@ No args (with a display) → launches the GUI.
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
-offset)+replace+export, **Ogg player**
+offset — **editable** for old-style image headers)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
 sibling image layers, composited at their true relative size + per-frame offset),
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
@@ -70,7 +70,8 @@ Toolbar: Open, Fetch, Save As, Export OBJ, **resource-version spinner** (uint16)
   (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder listing).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`
-  (read-only); typed codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`, `AnimCodec`,
+  (read-only), `ImageHeaderCodec` (edit image id/z/subz/offset + build new image
+  layers); typed codecs `PropsCodec`, `ActionCodec`, `Mat2Codec`, `AnimCodec`,
   `NegCodec` (tto/record ↔ JSON, lossless-or-raw).
 - `model/` — `Vbuf2Data` (de-quantise vertices for export), `Vbuf2Codec`
   (structure-preserving vbuf2 encode), `ObjExport` (geometry → Wavefront OBJ).
