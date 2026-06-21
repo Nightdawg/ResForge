@@ -541,7 +541,14 @@ feedback loop.
   *animation* (the glTF weight-animation is never read). Change-gated per manim
   (unchanged stays byte-identical; a no-op round-trips byte-for-byte on
   wisp/knarr/algaeblob/woodheart, each with two manims).
-  **Remaining:** Phase 2c skeleton + `skan` import, then arbitrary-topology import
+  **Phase 2c skeleton import is also done:** an edited `skel` rest pose re-imports —
+  each bone's new local transform is read from its glTF joint node by name (Blender
+  preserves bone names + node-local transforms; a plain round-trip drifts only ~0.04°,
+  verified by diffing knarr before/after Blender, so the change-gate keeps an unedited
+  skeleton byte-identical). A moved bone re-encodes the whole skeleton as version-1 via
+  `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos; the
+  client reads both versions, so ver-0 cpfloat needn't be reproduced).
+  **Remaining:** Phase 2c `skan` import, then arbitrary-topology import
   (re-strip + fresh encode).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus

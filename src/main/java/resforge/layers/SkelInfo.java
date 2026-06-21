@@ -1,6 +1,7 @@
 package resforge.layers;
 
 import resforge.io.MessageReader;
+import resforge.io.MessageWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -25,8 +26,8 @@ public final class SkelInfo {
         public final float ax, ay, az;
         public final float ang;
 
-        Bone(String name, String parent, float px, float py, float pz,
-             float ax, float ay, float az, float ang) {
+        public Bone(String name, String parent, float px, float py, float pz,
+                    float ax, float ay, float az, float ang) {
             this.name = name;
             this.parent = parent;
             this.px = px;
@@ -100,5 +101,47 @@ public final class SkelInfo {
             if(b.parent.isEmpty())
                 n++;
         return n;
+    }
+
+    /**
+     * Encodes a bone list as a version-1 {@code skel} layer (the client reads both
+     * versions, so an edited skeleton is always written in this form): a leading
+     * {@code "\u0001"} marker, then per bone its name, parent, {@code float32}
+     * position, the rotation angle as {@code mnorm16} ({@code angle/2π} mod 1) and the
+     * rotation axis octahedral-encoded into two {@code snorm16}s. Mirrors the
+     * version-1 branch of {@link #parse}.
+     */
+    public static byte[] encodeVer1(List<Bone> bones) {
+        MessageWriter w = new MessageWriter();
+        w.string("\u0001");
+        float[] oct = new float[2];
+        for(Bone b : bones) {
+            w.string(b.name).string(b.parent);
+            w.float32(b.px).float32(b.py).float32(b.pz);
+            double f = b.ang / (2 * Math.PI);
+            f -= Math.floor(f);                          // wrap to [0, 1)
+            w.uint16((int) Math.round(f * 0x10000) & 0xffff);
+            uvec2oct(oct, b.ax, b.ay, b.az);
+            w.int16(snorm16(oct[0])).int16(snorm16(oct[1]));
+        }
+        return w.toByteArray();
+    }
+
+    private static int snorm16(float v) {
+        int q = Math.round(Math.max(-1f, Math.min(1f, v)) * 0x7fff);
+        return Math.max(-0x7fff, Math.min(0x7fff, q));
+    }
+
+    /** Octahedral-encode a unit vector to two components in [-1, 1] (mirrors Utils.uvec2oct). */
+    private static void uvec2oct(float[] out, float x, float y, float z) {
+        float m = 1.0f / (Math.abs(x) + Math.abs(y) + Math.abs(z));
+        float hx = x * m, hy = y * m;
+        if(z >= 0) {
+            out[0] = hx;
+            out[1] = hy;
+        } else {
+            out[0] = (1 - Math.abs(hy)) * Math.copySign(1, hx);
+            out[1] = (1 - Math.abs(hx)) * Math.copySign(1, hy);
+        }
     }
 }

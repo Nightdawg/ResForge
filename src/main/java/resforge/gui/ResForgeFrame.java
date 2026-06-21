@@ -630,6 +630,7 @@ public class ResForgeFrame extends JFrame {
             if(r.otex) attrs.append(", UV1");
             if(r.bones) attrs.append(", skinning weights");
             if(r.morphs) attrs.append(", morph shapes");
+            if(r.skel) attrs.append(", skeleton");
             String coverage = (r.matched < r.vertices)
                     ? " (" + r.matched + " by id, " + (r.vertices - r.matched) + " coincident)"
                     : "";
