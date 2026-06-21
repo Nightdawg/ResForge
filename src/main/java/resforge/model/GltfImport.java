@@ -116,13 +116,14 @@ public final class GltfImport {
     public static final class RebuildResult {
         public final byte[] res;
         public final int vertices, triangles;
-        public final boolean skinned;
+        public final boolean skinned, skel;
 
-        RebuildResult(byte[] res, int vertices, int triangles, boolean skinned) {
+        RebuildResult(byte[] res, int vertices, int triangles, boolean skinned, boolean skel) {
             this.res = res;
             this.vertices = vertices;
             this.triangles = triangles;
             this.skinned = skinned;
+            this.skel = skel;
         }
     }
 
@@ -131,9 +132,11 @@ public final class GltfImport {
      * path that allows <em>adding or removing</em> vertices and triangles (Blender
      * reshaping, subdividing, deleting faces…). It regenerates the {@code vbuf2}
      * (positions/normals/UVs re-quantised into the original formats), the {@code mesh}
-     * triangle list, and — for skinned models — the {@code bones2} weights, all at the
+     * triangle list, and — for skinned models — the {@code bones2}/{@code bones}
+     * weights, all at the
      * glTF's vertex count, while keeping every other layer (textures, materials,
-     * skeleton, code…). Unlike {@link #apply}, it does not need {@code _VID} and gives
+     * code…) and re-posing the {@code skel} skeleton if a bone moved. Unlike
+     * {@link #apply}, it does not need {@code _VID} and gives
      * up byte-exactness, so it relies on in-game validation.
      *
      * <p>This version targets models with a single shared {@code vbuf2} and one or more
@@ -317,7 +320,9 @@ public final class GltfImport {
         }
         res.layers.clear();
         res.layers.addAll(outLayers);
-        return new RebuildResult(res.serialize(), total, totalTris, hasBones);
+        // Re-pose the skeleton too, if a bone moved (independent of the geometry rebuild).
+        boolean skelChanged = applySkel(g, res);
+        return new RebuildResult(res.serialize(), total, totalTris, hasBones, skelChanged);
     }
 
     /** Reads a required vertex attribute, with a clear error if the glTF is missing it. */

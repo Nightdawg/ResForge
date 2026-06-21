@@ -665,8 +665,8 @@ public class ResForgeFrame extends JFrame {
             GltfImport.RebuildResult r = GltfImport.rebuild(res.serialize(), glb);
             applyLoaded(ResContainer.parse(r.res), file, pathField.getText(),
                     "Rebuilt " + r.vertices + " vertices, " + r.triangles + " triangles"
-                            + (r.skinned ? " (with skinning)" : "") + " from "
-                            + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
+                            + (r.skinned ? " (with skinning)" : "") + (r.skel ? " (skeleton re-posed)" : "")
+                            + " from " + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
             markDirty();
         } catch(Exception e) {
             error("glTF rebuild failed: " + e.getMessage());

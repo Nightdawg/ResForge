@@ -431,8 +431,9 @@ public class Main {
         byte[] glb = Files.readAllBytes(glbFile);
         GltfImport.RebuildResult r = GltfImport.rebuild(orig, glb);
         Files.write(out, r.res);
+        String extra = (r.skinned ? " (with skinning)" : "") + (r.skel ? " (skeleton re-posed)" : "");
         System.out.printf("Rebuilt geometry: %d vertices, %d triangles%s from %s -> %s%n",
-                r.vertices, r.triangles, r.skinned ? " (with skinning)" : "", glbFile, out);
+                r.vertices, r.triangles, extra, glbFile, out);
     }
 
     private static void replace(String[] args) throws IOException {

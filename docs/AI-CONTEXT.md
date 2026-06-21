@@ -232,13 +232,19 @@ References… (aggregated reference report dialog), **resource-version spinner**
   byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
   becomes a submesh; the export now emits one material per matid (`rfmat_<matid>`) so
   rebuild recovers each part's id from its material name and Blender doesn't merge
-  parts sharing a texture. Handles positions/normals/UVs/bone-weights **and morph
+  parts sharing a texture. Handles positions/normals/UVs/bone-weights (both `bones2`
+  and the legacy `bones` v0 header) **and morph
   (`manim`) models** (frame shapes rebuilt from glTF morph targets, re-encoded at the
   new vertex count, frame count unchanged). Normal-mapped models (`tan`/`bit`) work
   too — the tangent basis is recomputed from the new positions/UVs (Lengyel + Gram-
-  Schmidt; Haven stores `bit` identical to `tan`, matched to ~1.3° median). Validated
-  no-op on male + mulberry/cutblade/fairystone + wisp/algaeblob + **knarr** (multi-part
-  + morph + skinned + normal-mapped); cutblade add/remove confirmed in-game. **Next:
+  Schmidt; Haven stores `bit` identical to `tan`, matched to ~1.3° median). **Rebuild
+  also re-poses the skeleton** (same `applySkel`/change-gate as the lossless import: a
+  plain reshape leaves `skel` byte-identical, a moved bone re-encodes it as ver1).
+  Validated
+  no-op on male + mulberry/cutblade/fairystone + wisp/algaeblob + stallion/lilypadlotus
+  (legacy `bones` v0 + skel) + **knarr** (multi-part
+  + morph + skinned + normal-mapped, `oar` bone +7 re-poses skel); cutblade add/remove
+  confirmed in-game. **Next:
   animation-keyframe editing.**
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
