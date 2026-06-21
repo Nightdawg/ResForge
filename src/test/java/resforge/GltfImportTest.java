@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -100,6 +101,78 @@ class GltfImportTest {
         w.float32(0).float32(0).float32(0);
         w.uint16(0).int16(0).int16(0);
         return w.toByteArray();
+    }
+
+    /** skel with two bones: "root" and its child "tip". */
+    private static byte[] skel2() {
+        MessageWriter w = new MessageWriter();
+        w.string("\u0001");
+        w.string("root").string("");
+        w.float32(0).float32(0).float32(0);
+        w.uint16(0).int16(0).int16(0);
+        w.string("tip").string("root");
+        w.float32(0).float32(0).float32(1);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
+    /**
+     * vbuf2 with two bones in {@code wfmt} weight format: vert0 root .7/tip .3,
+     * vert1 root .4/tip .6, vert2 root 1 (so each vertex has a distinct dominant).
+     */
+    private static byte[] vbufBones2(String wfmt) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0).uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})
+            w.float32(v);
+        w.string("bones2").uint8(1).string(wfmt).uint8(2);
+        w.string("root").uint16(3).uint16(0);
+        wt(w, wfmt, 0.7f); wt(w, wfmt, 0.4f); wt(w, wfmt, 1.0f);
+        w.uint16(0).uint16(0);
+        w.string("tip").uint16(2).uint16(0);
+        wt(w, wfmt, 0.3f); wt(w, wfmt, 0.6f);
+        w.uint16(0).uint16(0);
+        w.string("");
+        return w.toByteArray();
+    }
+
+    private static void wt(MessageWriter w, String fmt, float v) {
+        switch(fmt) {
+            case "f4": w.float32(v); break;
+            case "un2": w.uint16(Math.round(v * 65535)); break;
+            case "un1": w.uint8(Math.round(v * 255)); break;
+            default: throw new IllegalArgumentException(fmt);
+        }
+    }
+
+    /** Rewrites every WEIGHTS_0 vec4 in the glb to fully bind the first joint ([1,0,0,0]). */
+    @SuppressWarnings("unchecked")
+    private static byte[] bindFirstJoint(byte[] glb) {
+        int jlen = le32(glb, 12);
+        Map<String, Object> root =
+                (Map<String, Object>) Json.parse(new String(glb, 20, jlen, StandardCharsets.UTF_8));
+        Map<String, Object> mesh0 = (Map<String, Object>) ((List<Object>) root.get("meshes")).get(0);
+        Map<String, Object> prim = (Map<String, Object>) ((List<Object>) mesh0.get("primitives")).get(0);
+        int accIdx = ((Number) ((Map<String, Object>) prim.get("attributes")).get("WEIGHTS_0")).intValue();
+        Map<String, Object> acc = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(accIdx);
+        int count = ((Number) acc.get("count")).intValue();
+        int bvIdx = ((Number) acc.get("bufferView")).intValue();
+        Map<String, Object> bv = (Map<String, Object>) ((List<Object>) root.get("bufferViews")).get(bvIdx);
+        int bvOff = bv.get("byteOffset") == null ? 0 : ((Number) bv.get("byteOffset")).intValue();
+        int accOff = acc.get("byteOffset") == null ? 0 : ((Number) acc.get("byteOffset")).intValue();
+        int base = 20 + jlen + 8 + bvOff + accOff;
+        byte[] out = glb.clone();
+        for(int v = 0; v < count; v++)
+            for(int c = 0; c < 4; c++) {
+                int p = base + (v * 4 + c) * 4;
+                int b = Float.floatToIntBits(c == 0 ? 1f : 0f);
+                out[p] = (byte) b;
+                out[p + 1] = (byte) (b >>> 8);
+                out[p + 2] = (byte) (b >>> 16);
+                out[p + 3] = (byte) (b >>> 24);
+            }
+        return out;
     }
 
     private static byte[] mesh(int matid) {
@@ -260,6 +333,67 @@ class GltfImportTest {
     }
 
     /* ---------------------------------------------------------------- tests */
+
+    @Test
+    void skinnedNoOpKeepsBonesByteIdentical() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        GltfImport.Result r = GltfImport.apply(orig, GltfExport.toGlb(res, "rig.res").glb);
+        assertFalse(r.bones, "unchanged weights must not re-encode bones2");
+        assertArrayEquals(orig, r.res, "a skinned no-op must round-trip byte-for-byte");
+    }
+
+    @Test
+    void editedWeightsAreReEncoded() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+        Vbuf2Data d0 = Vbuf2Data.parse(vbufLayer(res));
+
+        // fully bind every vertex to its (originally dominant) first joint
+        byte[] glb = bindFirstJoint(GltfExport.toGlb(res, "rig.res").glb);
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        assertTrue(r.bones, "changed weights must re-encode bones2");
+
+        Vbuf2Data d1 = Vbuf2Data.parse(vbufLayer(ResContainer.parse(r.res)));
+        for(int v = 0; v < d1.num; v++) {
+            int nz = 0;
+            for(int k = 0; k < 4; k++)
+                if(d1.vWeights[v * 4 + k] > 0)
+                    nz++;
+            assertEquals(1, nz, "vertex " + v + " should now have a single influence");
+            assertEquals(d0.boneNames[d0.vJoints[v * 4]], d1.boneNames[d1.vJoints[v * 4]],
+                    "vertex " + v + " should bind to its originally dominant bone");
+            assertEquals(1f, d1.vWeights[v * 4], 1e-3f);
+        }
+    }
+
+    @Test
+    void setBones2EncodesUnormWeights() {
+        // re-encode a un1 bones2 directly: bind all vertices fully to bone "tip"
+        Vbuf2Codec codec = Vbuf2Codec.parse(vbufBones2("un1"));
+        int[] joints = new int[codec.num * 4];
+        float[] weights = new float[codec.num * 4];
+        java.util.Arrays.fill(joints, -1);
+        for(int v = 0; v < codec.num; v++) {
+            joints[v * 4] = 1;        // "tip"
+            weights[v * 4] = 1f;
+        }
+        codec.setBones2(new String[]{"root", "tip"}, joints, weights);
+
+        Vbuf2Data d = Vbuf2Data.parse(codec.encode());
+        for(int v = 0; v < d.num; v++) {
+            assertEquals("tip", d.boneNames[d.vJoints[v * 4]]);
+            assertEquals(1f, d.vWeights[v * 4], 1e-2f);
+        }
+    }
+
     @Test
     void unchangedRoundTripIsByteIdentical() {
         ResContainer res = new ResContainer(7);

@@ -522,9 +522,19 @@ feedback loop.
   sn/un/uvec round-trips are byte-exact at full scale, an *unchanged* model survives
   res→glb→res byte-identically (verified on male/knarr/mulberry/bull/stallion, 100%
   matched; the worst-case "all 199 seam dups merged" sim on male still reconstructs
-  every position exactly). Scope: topology-preserving edits (reshape/transform/
-  sculpt). **Remaining:** Phase 2b (re-import skinning weights to `bones2`) and Phase
-  2c (skeleton/animation), then arbitrary-topology import (re-strip + fresh encode).
+  every position exactly). User-confirmed end-to-end (enlarging male's head in
+  Blender re-imports and renders correctly in-game). **Phase 2b (skinning-weight
+  import) is also done:** edited bone weights re-import too — `GltfImport` scatters
+  `JOINTS_0`/`WEIGHTS_0` by `_VID`, maps each glTF joint to a bone *name* via the
+  skin (Blender reorders joints, so the name is the stable key), and re-encodes the
+  top-4 influences into `bones2` (`Vbuf2Codec.setBones2`, the run-length-per-bone
+  layout in the original f4/un2/un1 weight format). This is render-equivalent (the
+  client reduces to top-4 normalized anyway) and **change-gated** — a pure mesh edit
+  leaves `bones2` byte-identical; only actual weight-paint changes re-encode (a
+  skinned no-op round-trips byte-for-byte). Scope: topology-preserving edits
+  (reshape/transform/sculpt + re-weight; the skeleton is fixed, no new bones/geometry).
+  **Remaining:** Phase 2c (skeleton/animation import), then arbitrary-topology import
+  (re-strip + fresh encode).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.

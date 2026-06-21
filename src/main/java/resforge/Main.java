@@ -442,6 +442,7 @@ public class Main {
         if(r.nrm) attrs.append(", normals");
         if(r.tex) attrs.append(", UV0");
         if(r.otex) attrs.append(", UV1");
+        if(r.bones) attrs.append(", skinning weights");
         String coverage = (r.matched < r.vertices)
                 ? " (" + r.matched + " matched by id, " + (r.vertices - r.matched)
                         + " filled from coincident vertices)"

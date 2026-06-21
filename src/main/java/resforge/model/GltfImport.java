@@ -41,15 +41,16 @@ public final class GltfImport {
         public final byte[] res;
         public final int vertices;     // original vbuf2 vertex count
         public final int matched;      // how many were updated directly from the glTF
-        public final boolean nrm, tex, otex;
+        public final boolean nrm, tex, otex, bones;
 
-        Result(byte[] res, int vertices, int matched, boolean nrm, boolean tex, boolean otex) {
+        Result(byte[] res, int vertices, int matched, boolean nrm, boolean tex, boolean otex, boolean bones) {
             this.res = res;
             this.vertices = vertices;
             this.matched = matched;
             this.nrm = nrm;
             this.tex = tex;
             this.otex = otex;
+            this.bones = bones;
         }
     }
 
@@ -94,16 +95,16 @@ public final class GltfImport {
             }
 
         Result r = anyVid
-                ? applyById(g, prims, codec)
+                ? applyById(g, prims, codec, res.layers.get(vbufIndex).data)
                 : applyByOrder(g, prims, codec);
 
         res.layers.set(vbufIndex, new Layer("vbuf2", codec.encode()));
-        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex);
+        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex, r.bones);
     }
 
     /* -------------------------------------------------- id-based scatter (Blender) */
 
-    private static Result applyById(Glb g, List<Map<String, Object>> prims, Vbuf2Codec codec) {
+    private static Result applyById(Glb g, List<Map<String, Object>> prims, Vbuf2Codec codec, byte[] origVbuf) {
         int num = codec.num;
         float[] origPos = codec.decodeAttr("pos");
         float[] pos = origPos.clone();
@@ -173,8 +174,15 @@ public final class GltfImport {
         // Vertices whose id Blender merged away (seam duplicates) share a position
         // with a vertex that *was* matched and move together, so copy that new
         // position; their normal/UV stay as the original.
-        if(matched < num)
-            fillFromCoincident(origPos, pos, hit, num);
+        int[] coincident = (matched < num) ? coincidentSource(origPos, hit, num) : null;
+        if(coincident != null)
+            for(int k = 0; k < num; k++)
+                if(coincident[k] >= 0) {
+                    int i = coincident[k];
+                    pos[k * 3] = pos[i * 3];
+                    pos[k * 3 + 1] = pos[i * 3 + 1];
+                    pos[k * 3 + 2] = pos[i * 3 + 2];
+                }
 
         codec.setAttr("pos", pos);
         if(usedNrm)
@@ -183,25 +191,160 @@ public final class GltfImport {
             codec.setAttr("tex", tex);
         if(usedOtex)
             codec.setAttr("otex", otex);
-        return new Result(null, num, matched, usedNrm, usedTex, usedOtex);
+
+        boolean didBones = applyWeights(g, prims, codec, origVbuf, origPos);
+        return new Result(null, num, matched, usedNrm, usedTex, usedOtex, didBones);
     }
 
-    /** Copies the new position of a matched vertex onto un-matched coincident ones. */
-    private static void fillFromCoincident(float[] origPos, float[] pos, boolean[] hit, int num) {
+    /**
+     * Re-imports skinning weights (Phase 2b): scatters the glTF's JOINTS_0/WEIGHTS_0
+     * back to each vertex by {@code _VID}, mapping glTF joints to bone names via the
+     * skin (Blender reorders joints, so names are the stable key). It only re-encodes
+     * {@code bones2} when the weights actually changed from what the original would
+     * export, so a pure mesh edit leaves skinning byte-identical.
+     */
+    private static boolean applyWeights(Glb g, List<Map<String, Object>> prims, Vbuf2Codec codec,
+                                        byte[] origVbuf, float[] origPos) {
+        if(codec.bones2Format() == null)
+            return false;
+        Vbuf2Data sd = Vbuf2Data.parse(origVbuf);
+        if(sd == null || sd.boneNames == null || sd.vJoints == null)
+            return false;
+        String[] jointNames = skinJointNames(g.root);
+        if(jointNames == null)
+            return false;
+
+        int num = codec.num;
+        Map<String, Integer> nameToIdx = new HashMap<>();
+        for(int i = 0; i < sd.boneNames.length; i++)
+            nameToIdx.putIfAbsent(sd.boneNames[i], i);
+
+        int[] newJoints = sd.vJoints.clone();
+        float[] newWeights = sd.vWeights.clone();
+        boolean[] hitW = new boolean[num];
+        boolean sawWeights = false;
+
+        for(Map<String, Object> a : prims) {
+            String vk = vidKey(a);
+            if(vk == null || !a.containsKey("JOINTS_0") || !a.containsKey("WEIGHTS_0"))
+                continue;
+            sawWeights = true;
+            float[] vid = readAccessor(g, idx(a.get(vk)), 1);
+            float[] gj = readAccessor(g, idx(a.get("JOINTS_0")), 4);
+            float[] gw = readAccessor(g, idx(a.get("WEIGHTS_0")), 4);
+            for(int j = 0; j < vid.length; j++) {
+                int v = Math.round(vid[j]);
+                if(v < 0 || v >= num)
+                    continue;
+                float sum = gw[j * 4] + gw[j * 4 + 1] + gw[j * 4 + 2] + gw[j * 4 + 3];
+                if(sum <= 1e-6f)
+                    continue;                            // unweighted in glTF: keep original
+                hitW[v] = true;
+                for(int k = 0; k < 4; k++) {
+                    int ji = Math.round(gj[j * 4 + k]);
+                    float wt = gw[j * 4 + k];
+                    int bIdx = -1;
+                    if(wt > 0 && ji >= 0 && ji < jointNames.length && jointNames[ji] != null) {
+                        Integer bi = nameToIdx.get(jointNames[ji]);
+                        if(bi != null)
+                            bIdx = bi;
+                    }
+                    newJoints[v * 4 + k] = bIdx;
+                    newWeights[v * 4 + k] = (bIdx >= 0) ? wt : 0;
+                }
+            }
+        }
+        if(!sawWeights)
+            return false;
+
+        int matchedW = 0;
+        for(boolean b : hitW)
+            if(b)
+                matchedW++;
+        if(matchedW < num) {
+            int[] coincident = coincidentSource(origPos, hitW, num);
+            for(int k = 0; k < num; k++)
+                if(coincident[k] >= 0) {
+                    int i = coincident[k];
+                    System.arraycopy(newJoints, i * 4, newJoints, k * 4, 4);
+                    System.arraycopy(newWeights, i * 4, newWeights, k * 4, 4);
+                }
+        }
+
+        if(!weightsChanged(sd.vJoints, sd.vWeights, newJoints, newWeights, num))
+            return false;                                // unchanged: keep original bones2 byte-for-byte
+        codec.setBones2(sd.boneNames, newJoints, newWeights);
+        return true;
+    }
+
+    /** True if any vertex's influence set (bone→weight, nonzero) differs beyond tolerance. */
+    private static boolean weightsChanged(int[] j0, float[] w0, int[] j1, float[] w1, int num) {
+        for(int v = 0; v < num; v++) {
+            Map<Integer, Float> m0 = inflMap(j0, w0, v);
+            Map<Integer, Float> m1 = inflMap(j1, w1, v);
+            if(!m0.keySet().equals(m1.keySet()))
+                return true;
+            for(Map.Entry<Integer, Float> e : m0.entrySet())
+                if(Math.abs(e.getValue() - m1.get(e.getKey())) > 0.01f)
+                    return true;
+        }
+        return false;
+    }
+
+    private static Map<Integer, Float> inflMap(int[] joints, float[] weights, int v) {
+        Map<Integer, Float> m = new HashMap<>();
+        for(int k = 0; k < 4; k++) {
+            int b = joints[v * 4 + k];
+            float w = weights[v * 4 + k];
+            if(b >= 0 && w > 0)
+                m.merge(b, w, Float::sum);
+        }
+        return m;
+    }
+
+    /** glTF joint index → bone name, read from the mesh's skin (handles Blender's joint reorder). */
+    @SuppressWarnings("unchecked")
+    private static String[] skinJointNames(Map<String, Object> root) {
+        List<Object> skins = (List<Object>) root.get("skins");
+        List<Object> nodes = (List<Object>) root.get("nodes");
+        if(skins == null || skins.isEmpty() || nodes == null)
+            return null;
+        Map<String, Object> skin = (Map<String, Object>) skins.get(0);
+        for(Object no : nodes) {                         // prefer the skin actually used by a mesh node
+            Map<String, Object> n = (Map<String, Object>) no;
+            if(n.containsKey("mesh") && n.containsKey("skin")) {
+                skin = (Map<String, Object>) skins.get(idx(n.get("skin")));
+                break;
+            }
+        }
+        List<Object> joints = (List<Object>) skin.get("joints");
+        if(joints == null)
+            return null;
+        String[] names = new String[joints.size()];
+        for(int i = 0; i < joints.size(); i++) {
+            Map<String, Object> node = (Map<String, Object>) nodes.get(idx(joints.get(i)));
+            Object nm = node.get("name");
+            names[i] = (nm == null) ? null : nm.toString();
+        }
+        return names;
+    }
+
+    /** For each un-hit vertex, a hit vertex sharing its original position (or -1). */
+    private static int[] coincidentSource(float[] origPos, boolean[] hit, int num) {
         Map<Long, Integer> firstHit = new HashMap<>();
         for(int i = 0; i < num; i++)
             if(hit[i])
                 firstHit.putIfAbsent(posKey(origPos, i), i);
+        int[] src = new int[num];
         for(int k = 0; k < num; k++) {
-            if(hit[k])
-                continue;
-            Integer i = firstHit.get(posKey(origPos, k));
-            if(i != null) {
-                pos[k * 3] = pos[i * 3];
-                pos[k * 3 + 1] = pos[i * 3 + 1];
-                pos[k * 3 + 2] = pos[i * 3 + 2];
+            src[k] = -1;
+            if(!hit[k]) {
+                Integer i = firstHit.get(posKey(origPos, k));
+                if(i != null)
+                    src[k] = i;
             }
         }
+        return src;
     }
 
     private static long posKey(float[] p, int i) {
@@ -248,7 +391,7 @@ public final class GltfImport {
             codec.setAttr("otex", readAccessor(g, idx(a.get("TEXCOORD_1")), 2));
             didOtex = true;
         }
-        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex);
+        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex, false);
     }
 
     /* ----------------------------------------------------------- glb / accessors */
@@ -302,20 +445,56 @@ public final class GltfImport {
     private static float[] readAccessor(Glb g, int index, int comps) {
         List<Object> accessors = (List<Object>) g.root.get("accessors");
         Map<String, Object> acc = (Map<String, Object>) accessors.get(index);
-        if(((Number) acc.get("componentType")).intValue() != 5126)
-            throw new IllegalArgumentException("only FLOAT vertex attributes are supported on import");
+        int ct = ((Number) acc.get("componentType")).intValue();
+        boolean normalized = Boolean.TRUE.equals(acc.get("normalized"));
+        int compSize, max;
+        boolean signed, floats = false;
+        switch(ct) {
+            case 5126: compSize = 4; signed = true; floats = true; max = 0; break;     // FLOAT
+            case 5125: compSize = 4; signed = false; max = 0; break;                    // UNSIGNED_INT
+            case 5123: compSize = 2; signed = false; max = 65535; break;                // UNSIGNED_SHORT
+            case 5122: compSize = 2; signed = true; max = 32767; break;                 // SHORT
+            case 5121: compSize = 1; signed = false; max = 255; break;                  // UNSIGNED_BYTE
+            case 5120: compSize = 1; signed = true; max = 127; break;                   // BYTE
+            default: throw new IllegalArgumentException("unsupported accessor componentType: " + ct);
+        }
         int count = ((Number) acc.get("count")).intValue();
         int bvIndex = ((Number) acc.get("bufferView")).intValue();
         Map<String, Object> bv = (Map<String, Object>) ((List<Object>) g.root.get("bufferViews")).get(bvIndex);
         int bvOff = bv.get("byteOffset") == null ? 0 : ((Number) bv.get("byteOffset")).intValue();
         int accOff = acc.get("byteOffset") == null ? 0 : ((Number) acc.get("byteOffset")).intValue();
-        int stride = bv.get("byteStride") == null ? comps * 4 : ((Number) bv.get("byteStride")).intValue();
+        int stride = bv.get("byteStride") == null ? comps * compSize : ((Number) bv.get("byteStride")).intValue();
         int base = g.binStart + bvOff + accOff;
         float[] out = new float[count * comps];
         for(int i = 0; i < count; i++)
-            for(int c = 0; c < comps; c++)
-                out[i * comps + c] = Float.intBitsToFloat(le32(g.data, base + i * stride + c * 4));
+            for(int c = 0; c < comps; c++) {
+                int off = base + i * stride + c * compSize;
+                float val;
+                if(floats) {
+                    val = Float.intBitsToFloat(le32(g.data, off));
+                } else {
+                    long raw = leUint(g.data, off, compSize);
+                    long sv = signed ? signExtend(raw, compSize) : raw;
+                    val = normalized
+                            ? (signed ? Math.max(-1f, sv / (float) max) : raw / (float) max)
+                            : sv;
+                }
+                out[i * comps + c] = val;
+            }
         return out;
+    }
+
+    private static long leUint(byte[] b, int off, int size) {
+        long v = 0;
+        for(int i = 0; i < size; i++)
+            v |= (long) (b[off + i] & 0xff) << (8 * i);
+        return v;
+    }
+
+    private static long signExtend(long v, int size) {
+        int bits = size * 8;
+        long sign = 1L << (bits - 1);
+        return (v ^ sign) - sign;
     }
 
     /** glTF Y-up -> Haven Z-up: (gx, gy, gz) -> (gx, -gz, gy). */
