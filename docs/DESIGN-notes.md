@@ -554,8 +554,10 @@ feedback loop.
   **A separate "rebuild" mode now allows add/remove geometry** (`GltfImport.rebuild`,
   CLI `rebuild-gltf`, GUI **Rebuild from glTF**): instead of patching, it regenerates
   `vbuf2`+`mesh`(+`bones2`) from the glTF at its own vertex count (positions/normals/UVs
-  re-quantised into the original formats, weights via `setBones2`, a fresh raw-index
-  mesh), keeping all other layers. It needs no `_VID` and gives up byte-exactness
+  re-quantised into the original formats, weights via `setBones2` — which handles both
+  the modern `bones2` and the legacy `bones` v0 header — a fresh raw-index
+  mesh), keeping all other layers and **re-posing the skeleton** if a bone moved (same
+  `applySkel`/change-gate as the lossless import). It needs no `_VID` and gives up byte-exactness
   (in-game-validated), so it's a deliberate separate action; the lossless `import-gltf`
   stays the default. **Multi-submesh works**: each glTF primitive becomes a submesh,
   with each part's matid recovered from its material name — the export now emits one

@@ -206,12 +206,14 @@ public class Vbuf2Codec {
     }
 
     /**
-     * Re-encodes the {@code bones2} attribute from per-vertex skinning influences,
-     * mirroring the on-wire layout {@code haven.PoseMorph.read} parses: a version
-     * byte, the weight format, a max-influences byte, then per bone a name followed
-     * by {@code (run, startVertex, weights…)} spans, terminated by an empty name.
-     * Bones are emitted in {@code boneNames} order, skipping any with no influence;
-     * the client maps influences back to skeleton bones by name, so order is free.
+     * Re-encodes the skinning attribute from per-vertex influences, mirroring the
+     * on-wire layout {@code haven.PoseMorph.read} parses. Handles both the modern
+     * {@code bones2} format (a version byte, the weight format string, a max-influences
+     * byte, …) and the legacy {@code bones} format (just a max-influences byte, with
+     * {@code f4} weights). Either way the body is, per bone, a name followed by
+     * {@code (run, startVertex, weights…)} spans, terminated by an empty name. Bones
+     * are emitted in {@code boneNames} order, skipping any with no influence; the
+     * client maps influences back to skeleton bones by name, so order is free.
      *
      * @param boneNames the influence-index → bone-name table
      * @param vJoints    num*4 influence indices into {@code boneNames} (or -1 padding)
@@ -219,9 +221,10 @@ public class Vbuf2Codec {
      */
     public void setBones2(String[] boneNames, int[] vJoints, float[] vWeights) {
         Attr a = attr("bones");
-        if(a == null || !a.name.equals("bones2"))
-            throw new IllegalStateException("no bones2 attribute to re-encode");
-        String wfmt = bones2Format();
+        if(a == null || (!a.name.equals("bones2") && !a.name.equals("bones")))
+            throw new IllegalStateException("no bones/bones2 attribute to re-encode");
+        boolean v2 = a.name.equals("bones2");
+        String wfmt = v2 ? bones2Format() : "f4";
 
         int mba = 1;
         for(int v = 0; v < num; v++) {
@@ -250,7 +253,8 @@ public class Vbuf2Codec {
             }
 
         MessageWriter w = new MessageWriter();
-        w.uint8(1).string(wfmt).uint8(mba);
+        if(v2) w.uint8(1).string(wfmt).uint8(mba);
+        else   w.uint8(mba);
         for(int b = 0; b < boneNames.length; b++) {
             List<int[]> vs = verts.get(b);
             if(vs.isEmpty())

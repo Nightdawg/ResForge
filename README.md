@@ -31,7 +31,7 @@ re-UV, re-paint **skinning weights**, re-pose the **skeleton**, re-shape **morph
 matched vertex-for-vertex and re-quantised into the original on-wire formats);
 **Rebuild from glTF** to regenerate geometry so you can **add, remove or
 re-topologize vertices and faces** (multi-part, morph, skinned and normal-mapped
-models supported — tangents are recomputed). You can
+models supported — tangents are recomputed and the skeleton is re-posed). You can
 also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
@@ -132,8 +132,9 @@ glTF:
      Attributes** so the vertex ids survive (it's off by default).
    - **Rebuild from glTF** — *regenerates* the geometry, so you can **add, remove or
      re-topologize** vertices and faces (and whole parts). It re-encodes positions/
-     normals/UVs/weights into the original formats, recomputes tangents, and rebuilds
-     the submeshes/morphs. It isn't byte-lossless, so verify in-game. Multi-part,
+     normals/UVs/weights into the original formats, recomputes tangents, rebuilds
+     the submeshes/morphs, and **re-poses the skeleton** if you moved a bone. It isn't
+     byte-lossless, so verify in-game. Multi-part,
      skinned, morph-animated and normal-mapped models are all supported.
 
 What still can't be edited through the round-trip: the skeleton's *animation
@@ -263,7 +264,7 @@ edit-and-add/remove round-trip through Blender via glTF (see "Editing 3D models"
 above): export carries geometry, both UV sets, textures, skeleton, skinning and
 animations; **Import glTF** brings edits back losslessly (vertices, UVs, weights,
 skeleton pose, morph shapes) and **Rebuild from glTF** regenerates geometry so
-vertices/faces/parts can be added or removed (tangents recomputed). The
+vertices/faces/parts can be added or removed (tangents recomputed, skeleton re-posed). The
 `code`/`codeentry` layers are decoded read-only (class names and the
 entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).
 A read-only **dependency / reference view** surfaces what other resources a `.res`

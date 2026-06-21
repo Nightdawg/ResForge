@@ -971,6 +971,36 @@ class GltfImportTest {
     }
 
     @Test
+    void rebuildKeepsSkelByteIdenticalWhenUnchanged() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, GltfExport.toGlb(res, "rig.res").glb);
+        assertFalse(r.skel, "an unchanged skeleton must not be re-encoded on rebuild");
+        assertArrayEquals(skelLayer(res), skelLayer(ResContainer.parse(r.res)),
+                "a rebuild that leaves the skeleton untouched keeps the skel layer byte-identical");
+    }
+
+    @Test
+    void rebuildReposesEditedSkelBone() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        byte[] glb = moveBoneInGlb(GltfExport.toGlb(res, "rig.res").glb, "tip", 3, 0, 0);
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, glb);
+        assertTrue(r.skel, "moving a bone must re-pose the skeleton on rebuild");
+        SkelInfo.Bone tip = boneByName(SkelInfo.parse(skelLayer(ResContainer.parse(r.res))), "tip");
+        assertEquals(3f, tip.px, 1e-3f, "tip (orig x=0) should move to x=3 after rebuild re-posing");
+        assertEquals(1f, tip.pz, 1e-3f, "tip's other coords stay");
+    }
+
+    @Test
     void sparseMorphTargetIsReadAndReEncoded() {
         ResContainer res = new ResContainer(7);
         res.layers.add(new Layer("vbuf2", vbufF4(4)));

@@ -267,11 +267,16 @@ structure (which can't change vertex/triangle counts), it **regenerates** the mo
 geometry from the glTF, so you can add/remove/re-topologize vertices and faces in
 Blender. It rebuilds `vbuf2` at the glTF's vertex count — positions/normals/UVs
 re-quantised into the original attribute formats (via `Vbuf2Codec.setAttr` after
-setting `num`), and `bones2` from `JOINTS_0`/`WEIGHTS_0` (joints mapped to bone names
-via the skin, then `Vbuf2Codec.setBones2`) — and writes a fresh raw-index `mesh`
+setting `num`), and `bones2`/legacy `bones` from `JOINTS_0`/`WEIGHTS_0` (joints mapped
+to bone names via the skin, then `Vbuf2Codec.setBones2`, which re-encodes either the
+modern `bones2` header or the legacy `bones` header with `f4` weights) — and writes a
+fresh raw-index `mesh`
 (`fl=16` form: num, matid, [id], vbufid, then `num*3` uint16 indices) reusing the
-original mesh's matid/vbufid. All other layers (textures, materials, skeleton, code)
-are kept. No `_VID` is needed (vertex order = glTF order) and it gives up
+original mesh's matid/vbufid. All other layers (textures, materials, code) are kept,
+**and the skeleton is re-posed** if a bone moved in Blender (same `applySkel` /
+change-gate as the lossless import — so plain reshaping leaves `skel` byte-identical,
+while a moved bone is re-encoded as `skel` ver1). No `_VID` is needed (vertex order =
+glTF order) and it gives up
 byte-exactness, so it leans on in-game testing — exposed separately as CLI
 `rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning) so it's an
 explicit choice, leaving the safe lossless `import-gltf` as the default.
@@ -297,9 +302,12 @@ arbitrary perpendicular). Empirically Haven stores `bit` byte-identical to `tan`
 6 sampled normal-mapped models), so one tangent is computed and written to both; the
 recompute matches the original to ~1.3° median (verified on knarr/woodheart). Validated:
 no-op rebuilds of male (1 submesh), mulberry/cutblade/fairystone (2–7 submeshes),
-wisp/algaeblob (morph) and **knarr** (multi-part + morph + skinned + normal-mapped)
+wisp/algaeblob (morph), stallion/lilypadlotus (legacy `bones` v0 skinning + skel) and
+**knarr** (multi-part + morph + skinned + normal-mapped)
 reproduce exactly / faithfully (matid sequence + geometry diff 0 + morph deltas 0 +
-tangents within ~1.3°, valid containers); cutblade's add/remove edit confirmed in-game;
+tangents within ~1.3°, legacy-`bones` weights round-trip with 100% dominant-bone match
++ 0 weight error, valid containers); a moved bone re-poses `skel` on rebuild (knarr
+`oar` +7 verified); cutblade's add/remove edit confirmed in-game;
 synthetic glbs with added vertices / separate per-material blocks / a morph target /
 tangent recompute rebuild correctly. **Next:** animation-keyframe editing
 (`skan`/`manim` add/remove/retime frames).
