@@ -102,6 +102,18 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    /** manim (fmt 3 float16) with 2 frames each morphing vertex 0, over the 3-vert vbuf. */
+    private static byte[] manim(int id, float len) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(1).int16(id).uint8(0).float32(len);   // ver, id, rnd=0, len
+        // frame 0 @ t=0: vertex 0 delta (0.1, 0.2, 0.3)
+        w.uint8(3).float32(0f).uint16(1).uint16(0).uint16(1).float16(0.1f).float16(0.2f).float16(0.3f);
+        // frame 1 @ t=len/2: vertex 0 delta (-0.1, 0, 0)
+        w.uint8(3).float32(len / 2).uint16(1).uint16(0).uint16(1).float16(-0.1f).float16(0f).float16(0f);
+        w.uint8(0);                                   // end of frames
+        return w.toByteArray();
+    }
+
     /* ----- glb parsing helpers ----- */
 
     private static int le32(byte[] b, int off) {
@@ -327,6 +339,45 @@ class GltfExportTest {
         Map<String, Object> in = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(input);
         assertEquals("SCALAR", in.get("type"));
         assertTrue(in.containsKey("min") && in.containsKey("max"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void manimLayerBecomesMorphTargetsAndWeightAnimation() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbuf(false)));     // 3 vertices, pos + tex
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim(0, 1.0f)));  // 2 frames
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "morph.res").glb);
+        Map<String, Object> mesh0 = (Map<String, Object>) ((List<Object>) root.get("meshes")).get(0);
+
+        // mesh has weights, and the primitive has one morph target per frame
+        List<Object> weights = (List<Object>) mesh0.get("weights");
+        assertEquals(2, weights.size());
+        Map<String, Object> prim = firstPrimitive(root);
+        List<Object> targets = (List<Object>) prim.get("targets");
+        assertEquals(2, targets.size());
+        assertTrue(((Map<String, Object>) targets.get(0)).containsKey("POSITION"));
+
+        // a morph animation drives the mesh node's weights
+        List<Object> animations = (List<Object>) root.get("animations");
+        assertEquals(1, animations.size());
+        Map<String, Object> an = (Map<String, Object>) animations.get(0);
+        Map<String, Object> ch = (Map<String, Object>) ((List<Object>) an.get("channels")).get(0);
+        Map<String, Object> target = (Map<String, Object>) ch.get("target");
+        assertEquals("weights", target.get("path"));
+        assertEquals(0L, ((Number) target.get("node")).longValue());
+
+        // weight output count == keyframes (frames + loop close) * morph target count
+        Map<String, Object> sampler = (Map<String, Object>) ((List<Object>) an.get("samplers")).get(0);
+        List<Object> accessors = (List<Object>) root.get("accessors");
+        int inCount = ((Number) ((Map<String, Object>) accessors.get(
+                ((Number) sampler.get("input")).intValue())).get("count")).intValue();
+        int outCount = ((Number) ((Map<String, Object>) accessors.get(
+                ((Number) sampler.get("output")).intValue())).get("count")).intValue();
+        assertEquals(3, inCount);                 // 2 frames + 1 loop-close keyframe
+        assertEquals(inCount * 2, outCount);      // * 2 morph targets
     }
 
     @Test

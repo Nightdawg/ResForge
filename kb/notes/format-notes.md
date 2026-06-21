@@ -153,7 +153,14 @@ as the client does — `translation = bindLocalPos + frameTrans`,
 sampler input (with the required min/max). `SkanInfo` now captures per-frame
 time/translation/rotation (fmt0 cpfloat, fmt1 quantised). Only bones in the local
 skel animate (so knarr's sails + lilypadlotus animate; external-skel characters
-do not). **Next:** `manim`→morph targets; then glTF *import*.
+do not). `manim` (mesh/morph) layers also export as glTF **morph targets**: each
+frame's per-vertex position deltas become a morph target (deltas are *added* to the
+base and *linearly* interpolated — exactly glTF morph semantics, matching the
+client's `add(in, poff)` + `mix`), and a `weights` animation drives them (e_i per
+frame over the frame times, looping back to frame 0 at `len`). `MeshAnimInfo` now
+captures per-frame idx/deltas (fmt 1/3/4). So knarr exports both skeletal *and*
+morph animation; wisp's flicker and algaeblob's sway export as morphs. **Next:**
+glTF *import* (the round-trip's other half).
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

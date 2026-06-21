@@ -176,17 +176,18 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - **In-game test of the `transform` write path** (user-side; the one thing not
   auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
 - **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
-  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phases 1a
-  + 1b + 1c done** — `GltfExport` writes a static textured `.glb` (positions/normals
-  + both UV sets + per-submesh materials/textures, Z-up→Y-up), **skinning** (skel →
-  connected glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`; bind `G·IBM=I`
-  verified), **and animations** (`skan` → glTF translation/rotation channels per
-  bone, composed onto bind). External-skeleton characters get identity-placed named
-  joints (no pose/anim). All validated in Blender (knarr upright + textured + posable
-  + sail anim). **Next:** `manim`→morph targets; then **glTF import** to re-encode
-  (vbuf2/mesh re-strip + re-quantise, behind lossless-or-raw). The Haven *encode*
-  toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`, `Message.add*`,
-  `NormNumber` encoders) + `mkres-fragment.py` for the mesh choices — no dev code needed.
+  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1
+  (export) is complete** — `GltfExport` writes a static textured `.glb`
+  (positions/normals + both UV sets + per-submesh materials/textures, Z-up→Y-up),
+  **skinning** (skel → connected glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`),
+  **skeletal animations** (`skan` → translation/rotation channels), **and mesh-morph
+  animations** (`manim` → morph targets + weight animation). All Blender-confirmed
+  (knarr: upright, textured, posable, sails ripple). External-skeleton characters
+  get identity-placed named joints. **Next: Phase 2 — glTF import** to re-encode an
+  edited `.glb` back to `.res` (vbuf2/mesh re-strip + re-quantise, behind
+  lossless-or-raw). The Haven *encode* toolkit is fully in the client
+  (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
+  `mkres-fragment.py` for the mesh choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
