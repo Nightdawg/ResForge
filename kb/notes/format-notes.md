@@ -165,21 +165,38 @@ morph animation; wisp's flicker and algaeblob's sway export as morphs.
 `GltfImport` re-imports an edited `.glb` back into a model (CLI `import-gltf`, GUI
 **Import glTF**). It is a **patch, not a rebuild**: only the `vbuf2` vertex data is
 re-encoded; every other layer (`mesh` triangles, `skel`, `bones2` weights, `mat2`,
-`tex`, code…) is carried over byte-for-byte. It reads the first mesh's primitive
-attributes (POSITION/NORMAL/TEXCOORD_0/TEXCOORD_1, all FLOAT accessors out of the
-BIN chunk), inverts the axis convert (glTF Y-up→Haven Z-up, `(gx,gy,gz)→(gx,-gz,gy)`
-for positions *and* normals), and re-quantises each attribute into its **original**
+`tex`, code…) is carried over byte-for-byte. For each glTF vertex it reads
+POSITION/NORMAL/TEXCOORD_0/TEXCOORD_1 (FLOAT accessors out of the BIN chunk),
+inverts the axis convert (glTF Y-up→Haven Z-up, `(gx,gy,gz)→(gx,-gz,gy)` for
+positions *and* normals), and re-quantises each attribute into its **original**
 on-wire format via `Vbuf2Codec.decodeAttr`/`setAttr` — a general de/re-quantiser
 covering f4/f2/sn1-4/un1-4/uvec1-2 (`writeAny`: signed/unsigned NormNumber with a
-leading float32 max, and octahedral `uvec2oct` for normals). Because sn/un/uvec
-round-trip byte-exactly when a component sits at full scale, an **unchanged** model
-survives res→glb→res **byte-identically** (verified on male/knarr/mulberry/bull/
-stallion; `vbuf2` and all other layers identical). **Contract:** the glTF vertex
-count must equal the original `vbuf2` `num` (reshape/transform/sculpt without
-adding, removing or re-welding vertices) — a mismatch is a clear error, since
-Blender can split/reorder vertices at UV/normal seams and re-stripping arbitrary
-topology is a later phase. **Next:** Phase 2b (re-import skinning weights into the
-run-length `bones2` format) and Phase 2c (skeleton/animation import).
+leading float32 max, and octahedral `uvec2oct` for normals).
+
+**Vertex matching by stable id.** Blender (and most DCC tools) re-split vertices at
+UV/normal seams on export — the [glTF manual](https://docs.blender.org/manual/en/latest/addons/import_export/scene_gltf2.html)
+says "Discontinuous UVs and flat-shaded edges may result in moderately higher
+vertex counts", so the count almost never matches (e.g. male 1325→1326; male has
+only 1126 *distinct* positions, 199 seam dups). To survive that, `GltfExport` now
+tags every vertex with a custom scalar attribute **`_VID`** = its `vbuf2` index, and
+`GltfImport` scatters each glTF vertex back to slot `_VID` (so reordered /
+duplicated / re-split vertices all land correctly, count-independent). Vertices
+whose id Blender *merged* away (a seam dup folded into its twin) are filled from a
+coincident matched vertex (same original position → moves together); their
+normal/UV stay original. Guards: ids beyond `num` ⇒ "different .res" error; zero
+matches ⇒ error. `_VID` requires **"Data > Mesh > Attributes" enabled in Blender's
+glTF exporter** (`export_attributes`, default *off*); `export_normals`/`texcoords`/
+`skins` are default on. A glTF *without* `_VID` falls back to strict count+order
+matching (ResForge's own unedited export, or order-preserving tools).
+
+Because sn/un/uvec round-trip byte-exactly when a component sits at full scale, an
+**unchanged** model survives res→glb→res **byte-identically** (verified on
+male/knarr/mulberry/bull/stallion — 100% matched, `vbuf2` + all other layers
+identical; and the worst-case "Blender merged all 199 seam dups" sim on male
+reconstructs every position exactly via the coincident fallback). Scope is
+topology-preserving edits (reshape/transform/sculpt; no genuinely new geometry).
+**Next:** Phase 2b (re-import skinning weights into the run-length `bones2` format)
+and Phase 2c (skeleton/animation import).
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

@@ -158,8 +158,73 @@ class GltfImportTest {
         return out;
     }
 
-    /* ---------------------------------------------------------------- tests */
+    /** Builds a minimal .glb with one primitive carrying FLOAT POSITION + _VID accessors. */
+    private static byte[] miniGlb(float[] gpos, float[] gvid) {
+        int m = gvid.length;
+        int posLen = m * 12, vidLen = m * 4, total = posLen + vidLen;
+        MessageWriter bin = new MessageWriter();
+        for(float v : gpos) bin.float32(v);
+        for(float v : gvid) bin.float32(v);
+        String json = "{\"asset\":{\"version\":\"2.0\"},"
+                + "\"buffers\":[{\"byteLength\":" + total + "}],"
+                + "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + posLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + posLen + ",\"byteLength\":" + vidLen + "}],"
+                + "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"SCALAR\"}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"_VID\":1}}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        int len = 12 + 8 + jpad.length + 8 + bpad.length;
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(len);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
 
+    private static byte[] pad(byte[] b, byte fill) {
+        int rem = b.length % 4;
+        if(rem == 0) return b;
+        byte[] out = java.util.Arrays.copyOf(b, b.length + (4 - rem));
+        for(int i = b.length; i < out.length; i++) out[i] = fill;
+        return out;
+    }
+
+    @Test
+    void unmatchedCoincidentVertexIsFilledFromSibling() {
+        // vert 2 shares vert 0's position (a seam duplicate). The glTF only carries
+        // ids 0 and 1 (Blender merged vert 2 into vert 0), so vert 2 must inherit
+        // vert 0's new position via the coincident fallback.
+        MessageWriter w = new MessageWriter();
+        w.uint8(0).uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{5, 0, 0,  1, 2, 3,  5, 0, 0})
+            w.float32(v);
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", w.toByteArray()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+
+        float[][] newHaven = {{50, 0, 0}, {1, 2, 3}};
+        int[] order = {0, 1};
+        float[] gpos = new float[order.length * 3];
+        float[] gvid = new float[order.length];
+        for(int j = 0; j < order.length; j++) {
+            gvid[j] = order[j];
+            gpos[j * 3] = newHaven[order[j]][0];
+            gpos[j * 3 + 1] = newHaven[order[j]][2];
+            gpos[j * 3 + 2] = -newHaven[order[j]][1];
+        }
+        GltfImport.Result r = GltfImport.apply(res.serialize(), miniGlb(gpos, gvid));
+        assertEquals(2, r.matched);
+        float[] after = decoded(r.res, "pos");
+        assertEquals(50f, after[0], 1e-4f);
+        assertEquals(50f, after[6], 1e-4f, "coincident vert 2 should inherit vert 0's new position");
+        assertEquals(0f, after[7], 1e-4f);
+    }
+
+    /* ---------------------------------------------------------------- tests */
     @Test
     void unchangedRoundTripIsByteIdentical() {
         ResContainer res = new ResContainer(7);
@@ -221,7 +286,44 @@ class GltfImportTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> GltfImport.apply(small.serialize(), glb6));
-        assertTrue(ex.getMessage().contains("vertex count"), ex.getMessage());
+        assertTrue(ex.getMessage().contains("beyond this model"), ex.getMessage());
+    }
+
+    @Test
+    void reorderedAndDuplicatedVerticesMapByIdRegardlessOfCount() {
+        // Simulate Blender: same geometry re-exported with vertices reordered and
+        // one seam vertex duplicated, so the glTF vertex count differs (5 vs 4).
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        // new Haven positions we "edited" to (x scaled by 10)
+        float[][] newHaven = new float[4][];
+        for(int v = 0; v < 4; v++)
+            newHaven[v] = new float[]{v * 10f, v * 0.5f, -v};
+        // glTF vertices in reversed order, plus a duplicate of vid 0 (count = 5)
+        int[] order = {3, 2, 1, 0, 0};
+        float[] gpos = new float[order.length * 3];
+        float[] gvid = new float[order.length];
+        for(int j = 0; j < order.length; j++) {
+            int v = order[j];
+            gvid[j] = v;
+            // Haven -> glTF: (hx,hy,hz) -> (hx, hz, -hy)
+            gpos[j * 3] = newHaven[v][0];
+            gpos[j * 3 + 1] = newHaven[v][2];
+            gpos[j * 3 + 2] = -newHaven[v][1];
+        }
+        byte[] glb = miniGlb(gpos, gvid);
+
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        assertEquals(4, r.matched, "all four original vertices should be matched by id");
+        float[] after = decoded(r.res, "pos");
+        for(int v = 0; v < 4; v++) {
+            assertEquals(newHaven[v][0], after[v * 3], 1e-4f);
+            assertEquals(newHaven[v][1], after[v * 3 + 1], 1e-4f);
+            assertEquals(newHaven[v][2], after[v * 3 + 2], 1e-4f);
+        }
     }
 
     @Test
