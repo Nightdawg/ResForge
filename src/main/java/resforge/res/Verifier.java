@@ -9,7 +9,7 @@ import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
-import resforge.layers.LightInfo;
+import resforge.layers.LightCodec;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
@@ -235,10 +235,9 @@ public class Verifier {
                 sum.rlinkHist.merge(ri.recognized ? "decoded" : ri.links.isEmpty() ? "unrecognized" : "partial",
                         1, Integer::sum);
             }
-            else if(l.name.equals("light")) {
-                LightInfo li = LightInfo.parse(l.data);
-                sum.lightHist.merge(li.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
-            }
+            else if(l.name.equals("light"))
+                sum.lightHist.merge(LightCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
             else if(l.name.equals("skel")) {
                 SkelInfo si = SkelInfo.parse(l.data);
                 sum.skelHist.merge(si.recognized ? "decoded" : "unrecognized", 1, Integer::sum);

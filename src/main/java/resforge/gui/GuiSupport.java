@@ -10,6 +10,7 @@ import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.LightCodec;
 import resforge.layers.LightInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.MeshAnimInfo;
@@ -265,6 +266,8 @@ public final class GuiSupport {
             return ObstCodec.toJsonIfLossless(l.data);
         if(l.name.equals("boneoff"))
             return BoneOffCodec.toJsonIfLossless(l.data);
+        if(l.name.equals("light"))
+            return LightCodec.toJsonIfLossless(l.data);
         return null;
     }
 
@@ -604,6 +607,12 @@ public final class GuiSupport {
                 break;
             }
             case "boneoff": {
+                String j = editableJson(l);
+                if(j != null)
+                    return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "light": {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");

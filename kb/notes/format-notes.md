@@ -232,8 +232,8 @@ Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 
 ## rig / lighting layers (light, skel, skan, boneoff)
 Viewers ported from the client's `Light.java` and `Skeleton.java`
-(LGPL-3, in `docs/reference/`). `light`/`skel`/`skan` stay raw/lossless (we only
-surface structure); **`boneoff` is editable JSON** (see below).
+(LGPL-3, in `docs/reference/`). `skel`/`skan` stay raw/lossless (we only
+surface structure); **`boneoff` and `light` are editable JSON** (see below).
 They use number encodings beyond the basic primitives, now in `MessageReader`:
 - **`cpfloat`** — custom-packed float: `int8` exponent + LE `uint32` (top bit sign,
   low 31 bits mantissa); value = `2^e · (1 + m/2^31)`, with `e=-128,m=0` meaning 0.
@@ -246,10 +246,17 @@ They use number encodings beyond the basic primitives, now in `MessageReader`:
 - **`oct2uvec`** — decodes an octahedral-encoded unit vector from two snorm16s.
 
 Formats:
-- **`light`** (`LightInfo`): `u8 ver`. ver0: `int8 id`, 3 colours (each 4×`cpfloat`
+- **`light`** (`LightInfo` for the read-only summary; `LightCodec` for editing): `u8 ver`.
+  ver0: `int8 id`, 3 colours (each 4×`cpfloat`
   ×255 = RGBA), then tagged opts to EOM — `t1` attenuation (3 cpfloat), `t2`
   direction (3 cpfloat), `t3` spot exponent (cpfloat). ver1: `int16 id`, colours as
   4×`float32`, same tags with float32. Att ⇒ point/spot light; else directional.
+  **Editable as JSON** `{version, id, ambient, diffuse, specular, attenuation?,
+  direction?, exponent?}` (`LightCodec`, codec name `light`, lossless-or-raw): colours
+  are the **raw 0..1 fractions** (not ×255), cpfloat (ver0) / float32 (ver1) both
+  byte-exact; the optional tags are re-emitted in tag order (1/2/3), so a layer whose
+  tags are stored in that conventional order round-trips, else it stays raw. Both sample
+  lights (wisp ver0, villageidol ver1, both point lights) round-trip byte-exact.
 - **`skel`** (`SkelInfo`): the bone tree. Decoding starts in "ver 0" and a 1-char
   string whose code is <32 switches sub-version. ver0 bone: `string name`,
   3 `cpfloat` pos, 3 `cpfloat` axis (normalized), `cpfloat` angle, `string parent`.
@@ -274,7 +281,8 @@ Formats:
   storing the raw components keeps all 28 sample boneoffs losslessly editable, while the
   mnorm16 angle (exact) is exposed as a friendly turn-fraction `angleTurns`.
 Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28 (all 28
-boneoffs round-trip byte-exact, `verify` BoneOff histogram = `json 28`). e.g.
+boneoffs + both lights round-trip byte-exact, `verify` BoneOff histogram = `json 28`,
+Light histogram = `json 2`). e.g.
 knarr's skel = 11 bones (Main root + sails/oar), skan = 8 s loop, 11 tracks.
 
 ## manim layer (mesh / morph animation)
