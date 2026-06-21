@@ -3,6 +3,7 @@ package resforge;
 import resforge.io.Json;
 import resforge.io.MessageWriter;
 import resforge.layers.MeshAnimInfo;
+import resforge.layers.MeshInfo;
 import resforge.layers.SkelInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
@@ -538,12 +539,87 @@ class GltfImportTest {
         throw new AssertionError("no manim");
     }
 
+    /** Builds a dense glb with POSITION/NORMAL/TEXCOORD_0 + indices (for rebuild tests). */
+    private static byte[] geomGlb(float[] pos, float[] nrm, float[] tex, int[] indices) {
+        int m = pos.length / 3;
+        int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2;
+        MessageWriter bin = new MessageWriter();
+        for(float v : pos) bin.float32(v);
+        for(float v : nrm) bin.float32(v);
+        for(float v : tex) bin.float32(v);
+        for(int v : indices) bin.uint16(v);
+        if((idxLen & 3) != 0) bin.uint16(0);             // pad to 4
+        int po = 0, no = posLen, to = posLen + nrmLen, io = posLen + nrmLen + texLen;
+        int total = io + ((idxLen + 3) & ~3);
+        String json = "{\"asset\":{\"version\":\"2.0\"},"
+                + "\"buffers\":[{\"byteLength\":" + total + "}],"
+                + "\"bufferViews\":["
+                + "{\"buffer\":0,\"byteOffset\":" + po + ",\"byteLength\":" + posLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + no + ",\"byteLength\":" + nrmLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + to + ",\"byteLength\":" + texLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + io + ",\"byteLength\":" + idxLen + "}],"
+                + "\"accessors\":["
+                + "{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":2,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC2\"},"
+                + "{\"bufferView\":3,\"componentType\":5123,\"count\":" + indices.length + ",\"type\":\"SCALAR\"}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},"
+                + "\"indices\":3}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + jpad.length + 8 + bpad.length);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
+    @Test
+    void rebuildAcceptsAddedVertices() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", new byte[]{1, 2, 3}));
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(5)));
+        byte[] orig = res.serialize();
+
+        // a glb with FOUR vertices and two triangles (one more vertex than the original)
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0,  1, 1, 0};
+        float[] nrm = {0, 0, 1,  0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tex = {0, 0,  1, 0,  0, 1,  1, 1};
+        int[] indices = {0, 1, 2,  1, 3, 2};
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, geomGlb(pos, nrm, tex, indices));
+
+        assertEquals(4, r.vertices, "rebuild should accept the new vertex count");
+        assertEquals(2, r.triangles);
+        ResContainer out = ResContainer.parse(r.res);
+        Vbuf2Data d = Vbuf2Data.parse(vbufLayer(out));
+        assertEquals(4, d.num);
+        // positions are axis-inverted: glTF (gx,gy,gz) -> Haven (gx,-gz,gy)
+        assertEquals(1f, d.get("pos")[3], 1e-4f);        // vertex 1 x
+        MeshInfo m = MeshInfo.parse(meshLayerBytes(out));
+        assertEquals(2, m.numTris);
+        assertEquals(5, m.matid, "original matid is preserved");
+        // other layers kept
+        assertEquals(3, out.layers.size());
+        assertEquals("tex", out.layers.get(0).name);
+    }
+
+    private static byte[] meshLayerBytes(ResContainer res) {
+        for(Layer l : res.layers)
+            if(l.name.equals("mesh"))
+                return l.data;
+        throw new AssertionError("no mesh");
+    }
+
     private static byte[] skelLayer(ResContainer res) {
         for(Layer l : res.layers)
             if(l.name.equals("skel"))
                 return l.data;
         throw new AssertionError("no skel");
     }
+
 
     private static SkelInfo.Bone boneByName(SkelInfo s, String n) {
         for(SkelInfo.Bone b : s.bones)

@@ -395,6 +395,7 @@ public class ResForgeFrame extends JFrame {
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
         tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
         tb.add(new JButton(action("Import glTF\u2026", this::doImportGltf)));
+        tb.add(new JButton(action("Rebuild glTF\u2026", this::doRebuildGltf)));
         tb.add(new JButton(action("References\u2026", this::doShowReferences)));
         tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
@@ -640,6 +641,39 @@ public class ResForgeFrame extends JFrame {
             markDirty();
         } catch(Exception e) {
             error("glTF import failed: " + e.getMessage());
+        }
+    }
+
+    private void doRebuildGltf() {
+        if(res == null)
+            return;
+        boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
+        if(!hasGeom) {
+            info("This resource has no 3D geometry (vbuf2) to rebuild.");
+            return;
+        }
+        int ok = JOptionPane.showConfirmDialog(this,
+                "Rebuild regenerates the model's geometry from the glTF, allowing added or\n"
+                        + "removed vertices. Unlike Import glTF it isn't byte-lossless, so verify the\n"
+                        + "result in-game. Continue?",
+                "Rebuild from glTF", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if(ok != JOptionPane.OK_OPTION)
+            return;
+        JFileChooser fc = new JFileChooser(dir());
+        fc.setDialogTitle("Rebuild from glTF");
+        fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
+        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        try {
+            byte[] glb = Files.readAllBytes(fc.getSelectedFile().toPath());
+            GltfImport.RebuildResult r = GltfImport.rebuild(res.serialize(), glb);
+            applyLoaded(ResContainer.parse(r.res), file, pathField.getText(),
+                    "Rebuilt " + r.vertices + " vertices, " + r.triangles + " triangles"
+                            + (r.skinned ? " (with skinning)" : "") + " from "
+                            + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
+            markDirty();
+        } catch(Exception e) {
+            error("glTF rebuild failed: " + e.getMessage());
         }
     }
 
@@ -1153,6 +1187,7 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(
                 new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
                 new JButton(action("Import glTF (.glb)\u2026", this::doImportGltf)),
+                new JButton(action("Rebuild from glTF\u2026", this::doRebuildGltf)),
                 new JButton(action("Export OBJ\u2026", this::doExportObj))));
     }
 

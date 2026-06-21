@@ -53,6 +53,7 @@ a sibling project at `../hafen-client`).
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `obj <file> [out.obj]` · `gltf <file> [out.glb]` ·
 `import-gltf <orig.res> <edited.glb> [out.res]` ·
+`rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
 `transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
@@ -224,8 +225,13 @@ References… (aggregated reference report dialog), **resource-version spinner**
   byte-identical), and on a real edit the skeleton is re-encoded as version-1 via
   `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos).
   Scope: topology-preserving edits (reshape/transform/sculpt + re-weight + re-shape
-  morphs + re-pose the skeleton; no new geometry). **Next: `skan` animation import**,
-  then arbitrary-topology rebuild.
+  morphs + re-pose the skeleton; no new geometry). **A separate "rebuild" mode now adds
+  geometry changes** — `GltfImport.rebuild` (CLI `rebuild-gltf`, GUI **Rebuild from
+  glTF**) regenerates `vbuf2`+`mesh`(+`bones2`) from the glTF at its vertex count, so
+  you can add/remove/re-topologize vertices and faces. It needs no `_VID` and isn't
+  byte-lossless (in-game-validated), and currently targets single-submesh
+  positions/normals/UVs/bone-weights models. **Next: multi-submesh + morph rebuild**,
+  then `skan` animation-keyframe editing.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.
