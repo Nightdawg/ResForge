@@ -337,7 +337,7 @@ public class ResForgeFrame extends JFrame {
     private JMenuBar buildMenuBar() {
         JMenuBar bar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
-        fileMenu.add(item("Open\u2026", KeyEvent.VK_O, this::doOpen));
+        fileMenu.add(item("Open\u2026", KeyEvent.VK_L, this::doOpen));
         fileMenu.add(item("Fetch from server\u2026", KeyEvent.VK_R, this::doFetch));
         fileMenu.add(item("Save As\u2026", KeyEvent.VK_S, this::doSaveAs));
         fileMenu.addSeparator();
