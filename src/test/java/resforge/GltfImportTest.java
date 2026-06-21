@@ -196,6 +196,54 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    /** manim with a single fmt-3 frame morphing vertex 1 by (0.1,0.2,0.3). */
+    private static byte[] manim1(int id, float len) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(1).int16(id).uint8(0).float32(len);
+        w.uint8(3).float32(0f).uint16(1).uint16(1).uint16(1).float16(0.1f).float16(0.2f).float16(0.3f);
+        w.uint8(0);
+        return w.toByteArray();
+    }
+
+    /**
+     * Builds a glb with dense POSITION+_VID and one morph target stored as a SPARSE
+     * accessor (what Blender's exporter emits for shape keys).
+     */
+    private static byte[] sparseMorphGlb(float[] gpos, float[] gvid, int sidx, float[] sval) {
+        int m = gvid.length;
+        int posLen = m * 12, vidLen = m * 4, idxLen = 4 /*ushort + pad*/, valLen = 12;
+        MessageWriter bin = new MessageWriter();
+        for(float v : gpos) bin.float32(v);
+        for(float v : gvid) bin.float32(v);
+        bin.uint16(sidx).uint16(0);                      // sparse index (+2 pad bytes)
+        for(float v : sval) bin.float32(v);
+        int total = posLen + vidLen + idxLen + valLen;
+        String json = "{\"asset\":{\"version\":\"2.0\"},"
+                + "\"buffers\":[{\"byteLength\":" + total + "}],"
+                + "\"bufferViews\":["
+                + "{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + posLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + posLen + ",\"byteLength\":" + vidLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + (posLen + vidLen) + ",\"byteLength\":2},"
+                + "{\"buffer\":0,\"byteOffset\":" + (posLen + vidLen + idxLen) + ",\"byteLength\":" + valLen + "}],"
+                + "\"accessors\":["
+                + "{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"SCALAR\"},"
+                + "{\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\",\"sparse\":{\"count\":1,"
+                + "\"indices\":{\"bufferView\":2,\"componentType\":5123},\"values\":{\"bufferView\":3}}}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"_VID\":1},"
+                + "\"targets\":[{\"POSITION\":2}]}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        int len = 12 + 8 + jpad.length + 8 + bpad.length;
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(len);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
     /** Scales the deltas of one morph target's POSITION accessor in the glb. */
     @SuppressWarnings("unchecked")
     private static byte[] scaleMorphTarget(byte[] glb, int target, float factor) {
@@ -487,6 +535,34 @@ class GltfImportTest {
             if(l.name.equals("manim"))
                 return l.data;
         throw new AssertionError("no manim");
+    }
+
+    @Test
+    void sparseMorphTargetIsReadAndReEncoded() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim1(0, 1.0f)));
+        byte[] orig = res.serialize();
+
+        // dense POSITION = axis-converted original positions; one sparse morph target
+        // overrides vertex 1 with a glTF delta of (0.5, 0.5, -0.5) -> Haven (0.5,0.5,0.5)
+        float[] gpos = new float[12];
+        for(int v = 0; v < 4; v++) {
+            gpos[v * 3] = v;
+            gpos[v * 3 + 1] = -v;
+            gpos[v * 3 + 2] = -v * 0.5f;
+        }
+        float[] gvid = {0, 1, 2, 3};
+        byte[] glb = sparseMorphGlb(gpos, gvid, 1, new float[]{0.5f, 0.5f, -0.5f});
+
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        assertTrue(r.morphs, "a sparse morph target must be read and re-encoded");
+        MeshAnimInfo m = MeshAnimInfo.parse(manimLayer(ResContainer.parse(r.res)));
+        MeshAnimInfo.Frame f0 = m.frames.get(0);
+        assertEquals(0.5f, f0.pos[0], 1e-2f);
+        assertEquals(0.5f, f0.pos[1], 1e-2f);
+        assertEquals(0.5f, f0.pos[2], 1e-2f);
     }
 
     @Test

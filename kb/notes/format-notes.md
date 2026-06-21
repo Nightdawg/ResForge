@@ -226,7 +226,11 @@ as **shape keys**. Each glTF morph target is one frame's deltas; on import they 
 scattered back to original vertices by `_VID`, axis-inverted (a delta is a vector:
 `(gx,gy,gz)→(gx,-gz,gy)`), and re-encoded into the matching `manim` layer via
 `MeshAnimInfo.encodeWith` (run-length spans of fmt-3 float16, the only sampled
-format). Targets map to frames by position: the exporter concatenates every manim's
+format). Blender writes shape keys as **sparse accessors** (only the changed
+elements, an all-zero base with no `bufferView` + an indices/values pair), so the
+accessor reader handles sparse (and integer/normalized) accessors, not just dense
+float ones. Targets map to frames by position: the exporter concatenates every
+manim's
 frames in layer order, and Blender preserves shape-key order, so global target *t* →
 (manim, frame) by cumulative counts. **The timeline is kept from the original** —
 frame times, counts, len, play-order — only the shapes change; this deliberately
