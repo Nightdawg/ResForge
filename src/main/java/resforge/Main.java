@@ -442,8 +442,12 @@ public class Main {
         if(r.nrm) attrs.append(", normals");
         if(r.tex) attrs.append(", UV0");
         if(r.otex) attrs.append(", UV1");
-        System.out.printf("Re-imported %d vertices (%s) from %s -> %s%n",
-                r.vertices, attrs, glbFile, out);
+        String coverage = (r.matched < r.vertices)
+                ? " (" + r.matched + " matched by id, " + (r.vertices - r.matched)
+                        + " filled from coincident vertices)"
+                : "";
+        System.out.printf("Re-imported %d vertices%s (%s) from %s -> %s%n",
+                r.vertices, coverage, attrs, glbFile, out);
     }
 
     private static void replace(String[] args) throws IOException {

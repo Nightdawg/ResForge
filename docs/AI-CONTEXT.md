@@ -104,10 +104,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
-  `WEIGHTS_0` — dependency-free), `GltfImport` (re-import an edited `.glb` →
-  re-quantises pos/nrm/both UVs into their original on-wire formats, Y-up→Z-up,
-  keeps all other layers byte-identical), `ObjExport` (simpler geometry → Wavefront
-  OBJ + a `.mtl` and the local `tex` image(s), so models open textured).
+  `WEIGHTS_0`, plus a stable `_VID` per vertex for re-import — dependency-free),
+  `GltfImport` (re-import an edited `.glb` → maps each glTF vertex back to its
+  original index by `_VID`, re-quantises pos/nrm/both UVs into their original
+  on-wire formats, Y-up→Z-up, keeps all other layers byte-identical), `ObjExport`
+  (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex` image(s), so
+  models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -191,14 +193,19 @@ References… (aggregated reference report dialog), **resource-version spinner**
   (knarr: upright, textured, posable, sails ripple). External-skeleton characters
   get identity-placed named joints. **Phase 2a (glTF import) is now done** —
   `GltfImport` re-imports an edited `.glb` (CLI `import-gltf`, GUI **Import glTF**):
-  it requires the same vertex count as the original, axis-inverts (Y-up→Z-up) and
-  re-quantises positions/normals/both UV sets into each attribute's *original*
-  on-wire format (f4/sn2/un2/uvec1…), while keeping every other layer — bone
-  weights, triangles, skeleton, materials, code — byte-identical. An unchanged
-  model survives res→glb→res byte-for-byte (verified on male/knarr/mulberry/bull/
-  stallion). It is a *patch, not a rebuild*: topology-preserving edits only
-  (reshape/transform/sculpt without adding/removing/re-welding vertices). **Next:
-  Phase 2b** — re-import skinning weights (bones2) and Phase 2c skeleton/animation.
+  it re-quantises positions/normals/both UV sets into each attribute's *original*
+  on-wire format (f4/sn2/un2/uvec1…) and axis-inverts (Y-up→Z-up), while keeping
+  every other layer — bone weights, triangles, skeleton, materials, code —
+  byte-identical (a *patch*, not a rebuild). Blender re-splits vertices at seams
+  (the count changes), so the exporter tags each vertex with a stable id `_VID` and
+  the importer scatters each glTF vertex back to its original `vbuf2` slot by id
+  (reorder/duplicate/re-split safe); seam dups Blender merged away are filled from a
+  coincident matched vertex. `_VID` needs **"Data > Mesh > Attributes" enabled in
+  Blender's glTF export** (default off; normals/UVs/skins are default on). An
+  unchanged model survives res→glb→res byte-for-byte (verified male/knarr/mulberry/
+  bull/stallion, 100% matched). Scope: topology-preserving edits (reshape/transform/
+  sculpt). **Next: Phase 2b** — re-import skinning weights (bones2) and Phase 2c
+  skeleton/animation.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.

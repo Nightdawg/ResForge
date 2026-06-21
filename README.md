@@ -181,7 +181,7 @@ resforge pack   horse.resdir         # -> horse.res
 # Export a 3D model to a Blender-ready binary glTF (UV sets + textures + skeleton, one file):
 resforge gltf   horse.res horse.glb
 
-# Re-import an edited glTF back into the model (same vertex count; re-quantises geometry):
+# Re-import an edited glTF back into the model (maps vertices back by id; re-quantises geometry):
 resforge import-gltf horse.res horse.glb horse-edited.res
 
 # ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):

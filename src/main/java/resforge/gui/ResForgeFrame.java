@@ -628,8 +628,11 @@ public class ResForgeFrame extends JFrame {
             if(r.nrm) attrs.append(", normals");
             if(r.tex) attrs.append(", UV0");
             if(r.otex) attrs.append(", UV1");
+            String coverage = (r.matched < r.vertices)
+                    ? " (" + r.matched + " by id, " + (r.vertices - r.matched) + " coincident)"
+                    : "";
             applyLoaded(patched, file, pathField.getText(),
-                    "Imported " + r.vertices + " vertices (" + attrs + ") from "
+                    "Imported " + r.vertices + " vertices" + coverage + " (" + attrs + ") from "
                             + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
             markDirty();
         } catch(Exception e) {

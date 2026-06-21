@@ -508,17 +508,23 @@ feedback loop.
   glTF **morph targets** + a weight animation (per-frame vertex deltas, linearly
   interpolated). **Phase 1 (export) is complete.** **Phase 2a (geometry import) is
   also done:** `GltfImport` (CLI `import-gltf`, GUI **Import glTF**) re-imports an
-  edited `.glb` as a *patch* — it requires the same vertex count as the original,
-  axis-inverts glTF Y-up→Haven Z-up, and re-quantises positions/normals/both UV
-  sets back into each attribute's *original* on-wire format via
-  `Vbuf2Codec.decodeAttr`/`setAttr` (general f4/f2/sn1-4/un1-4/uvec1-2 de/re-quant),
-  while copying every other layer — bone weights, triangle lists, skeleton,
-  materials, code — byte-for-byte. Because sn/un/uvec round-trips are byte-exact at
-  full scale, an *unchanged* model survives res→glb→res byte-identically (verified
-  on male/knarr/mulberry/bull/stallion). Scope: topology-preserving edits only — no
-  adding/removing/re-welding vertices (a count mismatch is a clear error).
-  **Remaining:** Phase 2b (re-import skinning weights to `bones2`) and Phase 2c
-  (skeleton/animation), then arbitrary-topology import (re-strip + fresh encode).
+  edited `.glb` as a *patch* — it axis-inverts glTF Y-up→Haven Z-up and re-quantises
+  positions/normals/both UV sets back into each attribute's *original* on-wire
+  format via `Vbuf2Codec.decodeAttr`/`setAttr` (general f4/f2/sn1-4/un1-4/uvec1-2
+  de/re-quant), while copying every other layer — bone weights, triangle lists,
+  skeleton, materials, code — byte-for-byte. Since Blender re-splits vertices at
+  UV/normal seams (so the vertex *count* changes), the exporter tags each vertex
+  with a stable id `_VID` and the importer scatters each glTF vertex back to its
+  original `vbuf2` slot by id (reorder/duplicate/re-split safe); seam dups Blender
+  merged are filled from a coincident matched vertex. `_VID` needs **"Data > Mesh >
+  Attributes" enabled in Blender's glTF export** (default off; normals/UVs/skins are
+  default on); a glTF without ids falls back to strict count+order matching. Because
+  sn/un/uvec round-trips are byte-exact at full scale, an *unchanged* model survives
+  res→glb→res byte-identically (verified on male/knarr/mulberry/bull/stallion, 100%
+  matched; the worst-case "all 199 seam dups merged" sim on male still reconstructs
+  every position exactly). Scope: topology-preserving edits (reshape/transform/
+  sculpt). **Remaining:** Phase 2b (re-import skinning weights to `bones2`) and Phase
+  2c (skeleton/animation), then arbitrary-topology import (re-strip + fresh encode).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
