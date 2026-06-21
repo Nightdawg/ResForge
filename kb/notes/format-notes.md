@@ -257,8 +257,28 @@ angle as `mnorm16` (`angle/2π` mod 1) and the rotation axis octahedral-encoded 
 `snorm16`s. Rotations convert quaternion↔axis-angle. No axis swap is needed: our export
 gives each bone its *native* local transform under a conversion ROOT node, so the node
 transform already equals the skel transform. (knarr is ver-1; lilypadlotus/stallion are
-ver-0 — all re-encode to ver-1 on edit.) **Next:** `skan` skeletal-animation import and
-the arbitrary-topology rebuild.
+ver-0 — all re-encode to ver-1 on edit.)
+
+### glTF topology rebuild (add/remove geometry)
+`GltfImport.rebuild` is the *other* import mode: instead of patching the original
+structure (which can't change vertex/triangle counts), it **regenerates** the model's
+geometry from the glTF, so you can add/remove/re-topologize vertices and faces in
+Blender. It rebuilds `vbuf2` at the glTF's vertex count — positions/normals/UVs
+re-quantised into the original attribute formats (via `Vbuf2Codec.setAttr` after
+setting `num`), and `bones2` from `JOINTS_0`/`WEIGHTS_0` (joints mapped to bone names
+via the skin, then `Vbuf2Codec.setBones2`) — and writes a fresh raw-index `mesh`
+(`fl=16` form: num, matid, [id], vbufid, then `num*3` uint16 indices) reusing the
+original mesh's matid/vbufid. All other layers (textures, materials, skeleton, code)
+are kept. No `_VID` is needed (vertex order = glTF order) and it gives up
+byte-exactness, so it leans on in-game testing — exposed separately as CLI
+`rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning) so it's an
+explicit choice, leaving the safe lossless `import-gltf` as the default. This first
+version targets **single-submesh** models (one `vbuf2` + one `mesh`) with
+positions/normals/UVs/bone-weights (morph and multi-submesh models are refused for
+now). Validated: a no-op rebuild of male reproduces it exactly (pos/nrm/tex diff 0,
+skinning identical, passes verify); a synthetic glb with a different vertex count
+rebuilds to that count. **Next:** multi-submesh (material→matid mapping), morph
+rebuild, then animation-keyframe editing.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

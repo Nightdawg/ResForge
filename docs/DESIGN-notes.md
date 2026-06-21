@@ -548,8 +548,14 @@ feedback loop.
   skeleton byte-identical). A moved bone re-encodes the whole skeleton as version-1 via
   `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos; the
   client reads both versions, so ver-0 cpfloat needn't be reproduced).
-  **Remaining:** Phase 2c `skan` import, then arbitrary-topology import
-  (re-strip + fresh encode).
+  **A separate "rebuild" mode now allows add/remove geometry** (`GltfImport.rebuild`,
+  CLI `rebuild-gltf`, GUI **Rebuild from glTF**): instead of patching, it regenerates
+  `vbuf2`+`mesh`(+`bones2`) from the glTF at its own vertex count (positions/normals/UVs
+  re-quantised into the original formats, weights via `setBones2`, a fresh raw-index
+  mesh), keeping all other layers. It needs no `_VID` and gives up byte-exactness
+  (in-game-validated), so it's a deliberate separate action; the lossless `import-gltf`
+  stays the default. First version targets single-submesh positions/normals/UVs/weights
+  models. **Remaining:** multi-submesh + morph rebuild, then `skan` keyframe editing.
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.

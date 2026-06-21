@@ -185,6 +185,9 @@ resforge gltf   horse.res horse.glb
 # Re-import an edited glTF back into the model (geometry + skinning weights + morph shapes, matched by id):
 resforge import-gltf horse.res horse.glb horse-edited.res
 
+# Rebuild geometry from a glTF, allowing added/removed vertices (not byte-lossless):
+resforge rebuild-gltf horse.res horse.glb horse-edited.res
+
 # ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):
 resforge obj    horse.res horse.obj
 
