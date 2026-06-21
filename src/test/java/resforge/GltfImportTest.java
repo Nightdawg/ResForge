@@ -707,6 +707,48 @@ class GltfImportTest {
     }
 
     /** Like {@link #geomGlb} but adds one dense morph target with the given deltas. */
+    /** vbuf2 ver0 with pos/nrm/tex/tan/bit all f4 (tan/bit values are placeholders, recomputed on rebuild). */
+    private static byte[] vbufTangents(int n) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0).uint16(n);
+        w.string("pos2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) w.float32(i).float32(0).float32(0);
+        w.string("nrm2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) w.float32(0).float32(0).float32(1);
+        w.string("tex2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) w.float32(0).float32(0);
+        w.string("tan2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) w.float32(1).float32(0).float32(0);
+        w.string("bit2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) w.float32(1).float32(0).float32(0);
+        return w.toByteArray();
+    }
+
+    @Test
+    void rebuildRecomputesTangents() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufTangents(3)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0,  1, 1, 0};
+        float[] nrm = {0, 0, 1,  0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tex = {0, 0,  1, 0,  0, 1,  1, 1};
+        int[] indices = {0, 1, 2,  1, 3, 2};
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, geomGlb(pos, nrm, tex, indices));
+        assertEquals(4, r.vertices);
+
+        ResContainer out = ResContainer.parse(r.res);
+        Vbuf2Codec c = Vbuf2Codec.parse(vbufLayer(out));
+        assertArrayEquals(c.attr("tan").data, c.attr("bit").data, "Haven stores bit identical to tan");
+        Vbuf2Data d = Vbuf2Data.parse(vbufLayer(out));
+        float[] tan = d.get("tan");
+        for(int v = 0; v < 4; v++) {
+            double len = Math.sqrt(tan[v * 3] * tan[v * 3] + tan[v * 3 + 1] * tan[v * 3 + 1] + tan[v * 3 + 2] * tan[v * 3 + 2]);
+            assertEquals(1.0, len, 1e-3, "recomputed tangent should be unit length");
+        }
+    }
+
     private static byte[] geomGlbMorph(float[] pos, float[] nrm, float[] tex, int[] indices, float[] morph) {
         int m = pos.length / 3;
         int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2, mLen = m * 12;

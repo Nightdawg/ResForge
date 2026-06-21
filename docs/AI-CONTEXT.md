@@ -234,10 +234,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   rebuild recovers each part's id from its material name and Blender doesn't merge
   parts sharing a texture. Handles positions/normals/UVs/bone-weights **and morph
   (`manim`) models** (frame shapes rebuilt from glTF morph targets, re-encoded at the
-  new vertex count, frame count unchanged). Not yet: tangent/bitangent models
-  (knarr/woodheart — need tangents recomputed from new UVs). Validated no-op on male +
-  mulberry/cutblade/fairystone (2–7 submeshes) + wisp/algaeblob (morph); cutblade
-  add/remove confirmed in-game. **Next: tangent recompute**, then animation-keyframe editing.
+  new vertex count, frame count unchanged). Normal-mapped models (`tan`/`bit`) work
+  too — the tangent basis is recomputed from the new positions/UVs (Lengyel + Gram-
+  Schmidt; Haven stores `bit` identical to `tan`, matched to ~1.3° median). Validated
+  no-op on male + mulberry/cutblade/fairystone + wisp/algaeblob + **knarr** (multi-part
+  + morph + skinned + normal-mapped); cutblade add/remove confirmed in-game. **Next:
+  animation-keyframe editing.**
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.

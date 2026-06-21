@@ -179,11 +179,13 @@ public final class GltfImport {
         for(Vbuf2Codec.Attr at : codec.attrs) {
             String base = at.name.endsWith("2") ? at.name.substring(0, at.name.length() - 1) : at.name;
             if(!base.equals("pos") && !base.equals("nrm") && !base.equals("tex") && !base.equals("otex")
+                    && !base.equals("tan") && !base.equals("bit")
                     && !at.name.equals("bones2") && !at.name.equals("bones"))
                 throw new IllegalArgumentException("rebuild doesn't support the '" + at.name + "' vertex attribute yet.");
         }
         boolean hasNrm = codec.attr("nrm") != null, hasTex = codec.attr("tex") != null;
         boolean hasOtex = codec.attr("otex") != null, hasBones = codec.attr("bones") != null;
+        boolean hasTan = codec.attr("tan") != null || codec.attr("bit") != null;
 
         // matid -> a template original mesh layer (for its id/vbufid).
         Map<Integer, MeshInfo> matidToMesh = new LinkedHashMap<>();
@@ -246,12 +248,24 @@ public final class GltfImport {
             throw new IllegalArgumentException("rebuilt mesh has " + total + " vertices, over the 65535 limit.");
 
         codec.num = total;
-        codec.setAttr("pos", concat(cPos));
-        if(hasNrm) codec.setAttr("nrm", concat(cNrm));
-        if(hasTex) codec.setAttr("tex", concat(cTex));
+        float[] allPos = concat(cPos);
+        float[] allNrm = hasNrm ? concat(cNrm) : null;
+        float[] allTex = hasTex ? concat(cTex) : null;
+        codec.setAttr("pos", allPos);
+        if(hasNrm) codec.setAttr("nrm", allNrm);
+        if(hasTex) codec.setAttr("tex", allTex);
         if(hasOtex) codec.setAttr("otex", concat(cOtex));
         if(hasBones)
             rebuildWeights(g, concat(cJoints), concat(cWeights), codec, origVbuf, total);
+        if(hasTan) {
+            // Haven stores tan and bit identically (verified across all sampled
+            // normal-mapped models), so recompute one tangent and write it to both.
+            if(allNrm == null || allTex == null)
+                throw new IllegalArgumentException("rebuilding tangents needs normals and UVs, which the glTF lacks.");
+            float[] tangents = computeTangents(allPos, allNrm, allTex, total, meshTris);
+            if(codec.attr("tan") != null) codec.setAttr("tan", tangents);
+            if(codec.attr("bit") != null) codec.setAttr("bit", tangents);
+        }
         byte[] newVbuf = codec.encode();
 
         // Re-encode each manim at the new vertex count (shapes from the glTF targets).
@@ -364,6 +378,62 @@ public final class GltfImport {
     @SuppressWarnings("unchecked")
     private static List<Object> materialsOf(Map<String, Object> root) {
         return (List<Object>) root.get("materials");
+    }
+
+    /**
+     * Recomputes per-vertex tangents from positions, normals, UVs and triangles
+     * (Lengyel's method: accumulate the UV-gradient tangent over each triangle, then
+     * Gram-Schmidt orthogonalise against the normal and normalise). Used for normal-
+     * mapped models; Haven stores {@code bit} identical to {@code tan}, so the caller
+     * writes this to both.
+     */
+    private static float[] computeTangents(float[] pos, float[] nrm, float[] tex, int num, List<int[]> meshTris) {
+        float[] acc = new float[num * 3];
+        for(int[] tris : meshTris)
+            for(int i = 0; i + 2 < tris.length; i += 3)
+                accumTangent(pos, tex, tris[i], tris[i + 1], tris[i + 2], acc);
+        float[] out = new float[num * 3];
+        for(int v = 0; v < num; v++) {
+            double nx = nrm[v * 3], ny = nrm[v * 3 + 1], nz = nrm[v * 3 + 2];
+            double tx = acc[v * 3], ty = acc[v * 3 + 1], tz = acc[v * 3 + 2];
+            double d = tx * nx + ty * ny + tz * nz;          // Gram-Schmidt vs normal
+            tx -= nx * d; ty -= ny * d; tz -= nz * d;
+            double len = Math.sqrt(tx * tx + ty * ty + tz * tz);
+            if(len < 1e-8) {                                  // degenerate: any perpendicular to the normal
+                double[] p = perp(nx, ny, nz);
+                tx = p[0]; ty = p[1]; tz = p[2];
+                len = 1;
+            }
+            out[v * 3] = (float) (tx / len);
+            out[v * 3 + 1] = (float) (ty / len);
+            out[v * 3 + 2] = (float) (tz / len);
+        }
+        return out;
+    }
+
+    private static void accumTangent(float[] pos, float[] tex, int i0, int i1, int i2, float[] acc) {
+        float e1x = pos[i1 * 3] - pos[i0 * 3], e1y = pos[i1 * 3 + 1] - pos[i0 * 3 + 1], e1z = pos[i1 * 3 + 2] - pos[i0 * 3 + 2];
+        float e2x = pos[i2 * 3] - pos[i0 * 3], e2y = pos[i2 * 3 + 1] - pos[i0 * 3 + 1], e2z = pos[i2 * 3 + 2] - pos[i0 * 3 + 2];
+        float du1 = tex[i1 * 2] - tex[i0 * 2], dv1 = tex[i1 * 2 + 1] - tex[i0 * 2 + 1];
+        float du2 = tex[i2 * 2] - tex[i0 * 2], dv2 = tex[i2 * 2 + 1] - tex[i0 * 2 + 1];
+        float den = du1 * dv2 - du2 * dv1;
+        if(Math.abs(den) < 1e-12f)
+            return;
+        float r = 1f / den;
+        float tx = r * (e1x * dv2 - e2x * dv1), ty = r * (e1y * dv2 - e2y * dv1), tz = r * (e1z * dv2 - e2z * dv1);
+        for(int j : new int[]{i0, i1, i2}) {
+            acc[j * 3] += tx; acc[j * 3 + 1] += ty; acc[j * 3 + 2] += tz;
+        }
+    }
+
+    /** Some unit vector perpendicular to (x,y,z). */
+    private static double[] perp(double x, double y, double z) {
+        double[] r = (Math.abs(x) <= Math.abs(y) && Math.abs(x) <= Math.abs(z))
+                ? new double[]{0, -z, y} : (Math.abs(y) <= Math.abs(z))
+                ? new double[]{-z, 0, x} : new double[]{-y, x, 0};
+        double l = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
+        if(l < 1e-12) return new double[]{1, 0, 0};
+        return new double[]{r[0] / l, r[1] / l, r[2] / l};
     }
 
     /** Reads this primitive's morph-target POSITION deltas (axis-inverted) into the per-target chunk lists. */
