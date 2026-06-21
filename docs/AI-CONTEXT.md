@@ -107,9 +107,10 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `WEIGHTS_0`, plus a stable `_VID` per vertex for re-import — dependency-free),
   `GltfImport` (re-import an edited `.glb` → maps each glTF vertex back to its
   original index by `_VID`, re-quantises pos/nrm/both UVs into their original
-  on-wire formats, Y-up→Z-up, keeps all other layers byte-identical), `ObjExport`
-  (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex` image(s), so
-  models open textured).
+  on-wire formats, Y-up→Z-up, and re-imports skinning weights to `bones2` via
+  `Vbuf2Codec.setBones2` when they changed, keeping all other layers byte-identical),
+  `ObjExport` (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex`
+  image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -203,9 +204,15 @@ References… (aggregated reference report dialog), **resource-version spinner**
   coincident matched vertex. `_VID` needs **"Data > Mesh > Attributes" enabled in
   Blender's glTF export** (default off; normals/UVs/skins are default on). An
   unchanged model survives res→glb→res byte-for-byte (verified male/knarr/mulberry/
-  bull/stallion, 100% matched). Scope: topology-preserving edits (reshape/transform/
-  sculpt). **Next: Phase 2b** — re-import skinning weights (bones2) and Phase 2c
-  skeleton/animation.
+  bull/stallion, 100% matched). User-confirmed end-to-end (head resize in Blender →
+  re-import → correct in-game). **Phase 2b (skinning-weight import) is also done** —
+  it scatters `JOINTS_0`/`WEIGHTS_0` by `_VID`, maps glTF joints to bone *names* via
+  the skin (Blender reorders joints), and re-encodes the top-4 influences into
+  `bones2` (`Vbuf2Codec.setBones2`, original f4/un2/un1 format) — render-equivalent
+  since the client reduces to top-4. It's change-gated: a pure mesh edit leaves
+  `bones2` byte-identical (only actual weight-paint changes re-encode). Scope:
+  topology-preserving edits (reshape/transform/sculpt + re-weight; no new geometry).
+  **Next: Phase 2c** — skeleton/animation import, then arbitrary-topology rebuild.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.

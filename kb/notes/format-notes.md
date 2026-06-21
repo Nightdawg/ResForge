@@ -197,8 +197,28 @@ reconstructs every position exactly via the coincident fallback). Scope is
 topology-preserving edits (reshape/transform/sculpt; no genuinely new geometry).
 The full round-trip is **user-confirmed end-to-end**: exporting male, enlarging the
 head in Blender, re-exporting (Attributes on), re-importing and loading in-game
-renders correctly. **Next:** Phase 2b (re-import skinning weights into the
-run-length `bones2` format) and Phase 2c (skeleton/animation import).
+renders correctly.
+
+### glTF skinning-weight import (Phase 2b)
+`GltfImport` also re-imports edited **bone weights** (weight painting). It scatters
+the glTF's `JOINTS_0`/`WEIGHTS_0` back to each vertex by `_VID`, mapping each glTF
+joint index to a **bone name** via the mesh's `skin.joints` → node name — essential
+because Blender reorders joints, so the raw index isn't stable; the name is. The
+top-4 per-vertex influences are re-encoded into `bones2` via `Vbuf2Codec.setBones2`,
+which emits the run-length-per-bone layout `PoseMorph.read` parses (`uint8 ver`,
+weight-format string, `uint8 mba`, then per used bone a name + `(run, startVertex,
+weights…)` spans, empty name to end), in the original weight format (f4/un2/un1).
+Bones are emitted in name order, skipping unused ones; the client maps influences
+back to skeleton bones by name, so stream order is free. This is render-equivalent
+because the client itself reduces to the top-4 normalized influences
+(`sortweights`+`normweights`). Crucially it is **change-gated**: weights are only
+re-encoded if they actually differ (per-vertex influence sets, ±0.01) from what the
+original would export, so a pure mesh edit leaves `bones2` **byte-identical** (a
+skinned no-op round-trips byte-for-byte on male/knarr/bull/stallion). Un-matched
+seam-dup vertices inherit a coincident vertex's weights, like positions. Validated:
+forcing every male vertex to a single bone re-encodes correctly and all 1325 bind to
+their originally dominant bone. New bones can't be added (skeleton is fixed). **Next:**
+Phase 2c (skeleton/animation import) and arbitrary-topology rebuild.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

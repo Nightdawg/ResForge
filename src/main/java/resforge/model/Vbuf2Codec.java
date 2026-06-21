@@ -174,8 +174,7 @@ public class Vbuf2Codec {
     }
 
     /** Re-encodes the position attribute from num*3 floats, preserving its format. */
-    public void setPositions(float[] vals) {
-        Attr a = position();
+    public void setPositions(float[] vals) {        Attr a = position();
         if(a == null)
             throw new IllegalStateException("no position attribute");
         if(a.bare()) {
@@ -191,6 +190,96 @@ public class Vbuf2Codec {
             w.uint8(1).string(fmt);
             writeFmt(w, fmt, vals);
             a.data = w.toByteArray();
+        }
+    }
+
+    /* ------------------------------------------------------ bones2 skinning weights */
+
+    /** The bone-weight on-wire format of the {@code bones2} attribute ("f4"/"un2"/"un1"), or null. */
+    public String bones2Format() {
+        Attr a = attr("bones");
+        if(a == null || !a.name.equals("bones2"))
+            return null;
+        MessageReader in = new MessageReader(a.data);
+        in.uint8();                                  // data version (== 1)
+        return in.string();
+    }
+
+    /**
+     * Re-encodes the {@code bones2} attribute from per-vertex skinning influences,
+     * mirroring the on-wire layout {@code haven.PoseMorph.read} parses: a version
+     * byte, the weight format, a max-influences byte, then per bone a name followed
+     * by {@code (run, startVertex, weights…)} spans, terminated by an empty name.
+     * Bones are emitted in {@code boneNames} order, skipping any with no influence;
+     * the client maps influences back to skeleton bones by name, so order is free.
+     *
+     * @param boneNames the influence-index → bone-name table
+     * @param vJoints    num*4 influence indices into {@code boneNames} (or -1 padding)
+     * @param vWeights   num*4 weights (0 padding); only positive weights are written
+     */
+    public void setBones2(String[] boneNames, int[] vJoints, float[] vWeights) {
+        Attr a = attr("bones");
+        if(a == null || !a.name.equals("bones2"))
+            throw new IllegalStateException("no bones2 attribute to re-encode");
+        String wfmt = bones2Format();
+
+        int mba = 1;
+        for(int v = 0; v < num; v++) {
+            int c = 0;
+            for(int k = 0; k < 4; k++)
+                if(vJoints[v * 4 + k] >= 0 && vWeights[v * 4 + k] > 0)
+                    c++;
+            mba = Math.max(mba, c);
+        }
+
+        // per bone: parallel lists of (vertex, weight) in ascending vertex order
+        List<List<int[]>> verts = new ArrayList<>();      // vertex index
+        List<List<Float>> weights = new ArrayList<>();
+        for(int b = 0; b < boneNames.length; b++) {
+            verts.add(new ArrayList<>());
+            weights.add(new ArrayList<>());
+        }
+        for(int v = 0; v < num; v++)
+            for(int k = 0; k < 4; k++) {
+                int b = vJoints[v * 4 + k];
+                float wt = vWeights[v * 4 + k];
+                if(b >= 0 && b < boneNames.length && wt > 0) {
+                    verts.get(b).add(new int[]{v});
+                    weights.get(b).add(wt);
+                }
+            }
+
+        MessageWriter w = new MessageWriter();
+        w.uint8(1).string(wfmt).uint8(mba);
+        for(int b = 0; b < boneNames.length; b++) {
+            List<int[]> vs = verts.get(b);
+            if(vs.isEmpty())
+                continue;
+            w.string(boneNames[b]);
+            List<Float> ws = weights.get(b);
+            int i = 0;
+            while(i < vs.size()) {
+                int start = vs.get(i)[0];
+                int j = i + 1;
+                while(j < vs.size() && vs.get(j)[0] == vs.get(j - 1)[0] + 1)
+                    j++;
+                w.uint16(j - i).uint16(start);
+                for(int k = i; k < j; k++)
+                    writeWeight(w, wfmt, ws.get(k));
+                i = j;
+            }
+            w.uint16(0).uint16(0);                       // end of this bone's spans
+        }
+        w.string("");                                    // end of bone list
+        a.data = w.toByteArray();
+    }
+
+    private static void writeWeight(MessageWriter w, String wfmt, float wt) {
+        switch(wfmt) {
+            case "f4": w.float32(wt); break;
+            case "un2": w.uint16(Math.round(Math.max(0, Math.min(1, wt)) * 65535)); break;
+            case "un1": w.uint8(Math.round(Math.max(0, Math.min(1, wt)) * 255)); break;
+            default: throw new IllegalStateException("unknown bone-weight format: " + wfmt);
         }
     }
 
