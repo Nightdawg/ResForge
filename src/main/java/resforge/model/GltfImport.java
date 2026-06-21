@@ -2,6 +2,7 @@ package resforge.model;
 
 import resforge.io.Json;
 import resforge.layers.MeshAnimInfo;
+import resforge.layers.SkelInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
 
@@ -42,10 +43,10 @@ public final class GltfImport {
         public final byte[] res;
         public final int vertices;     // original vbuf2 vertex count
         public final int matched;      // how many were updated directly from the glTF
-        public final boolean nrm, tex, otex, bones, morphs;
+        public final boolean nrm, tex, otex, bones, morphs, skel;
 
         Result(byte[] res, int vertices, int matched, boolean nrm, boolean tex, boolean otex,
-               boolean bones, boolean morphs) {
+               boolean bones, boolean morphs, boolean skel) {
             this.res = res;
             this.vertices = vertices;
             this.matched = matched;
@@ -54,6 +55,7 @@ public final class GltfImport {
             this.otex = otex;
             this.bones = bones;
             this.morphs = morphs;
+            this.skel = skel;
         }
     }
 
@@ -104,7 +106,8 @@ public final class GltfImport {
 
         res.layers.set(vbufIndex, new Layer("vbuf2", codec.encode()));
         boolean morphs = anyVid && applyMorphs(g, res, origVbuf);
-        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex, r.bones, morphs);
+        boolean skel = applySkel(g, res);
+        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex, r.bones, morphs, skel);
     }
 
     /* -------------------------------------------------- id-based scatter (Blender) */
@@ -198,7 +201,7 @@ public final class GltfImport {
             codec.setAttr("otex", otex);
 
         boolean didBones = applyWeights(g, prims, codec, origVbuf, origPos);
-        return new Result(null, num, matched, usedNrm, usedTex, usedOtex, didBones, false);
+        return new Result(null, num, matched, usedNrm, usedTex, usedOtex, didBones, false, false);
     }
 
     /**
@@ -492,7 +495,109 @@ public final class GltfImport {
         return m;
     }
 
-    /* --------------------------------------------- order-based (no ids: exact count) */
+    /* ----------------------------------------------------- skeleton (skel) re-import */
+
+    /**
+     * Re-imports an edited skeleton rest pose (Phase 2c). Each skel bone's new local
+     * transform is read from its glTF joint node by name (Blender preserves bone
+     * names and node-local translation/rotation), compared to the original, and — if
+     * any bone moved beyond a small tolerance — the whole skeleton is re-encoded as a
+     * version-1 {@code skel} via {@link SkelInfo#encodeVer1}. Unchanged skeletons are
+     * left byte-identical (a plain Blender round-trip drifts only ~0.04°).
+     */
+    @SuppressWarnings("unchecked")
+    private static boolean applySkel(Glb g, ResContainer res) {
+        int skelIdx = -1;
+        for(int i = 0; i < res.layers.size(); i++)
+            if(res.layers.get(i).name.equals("skel")) {
+                skelIdx = i;
+                break;
+            }
+        if(skelIdx < 0)
+            return false;
+        SkelInfo si = SkelInfo.parse(res.layers.get(skelIdx).data);
+        if(!si.recognized || si.bones.isEmpty())
+            return false;
+        Map<String, double[]> nodeXf = skelNodeTransforms(g.root);
+        if(nodeXf.isEmpty())
+            return false;
+
+        boolean changed = false;
+        List<SkelInfo.Bone> out = new ArrayList<>();
+        for(SkelInfo.Bone b : si.bones) {
+            double[] xf = nodeXf.get(b.name);
+            if(xf == null) {                             // bone not in the glTF: keep as-is
+                out.add(b);
+                continue;
+            }
+            double dPos = Math.sqrt(sq(xf[0] - b.px) + sq(xf[1] - b.py) + sq(xf[2] - b.pz));
+            double[] oq = axisAngleToQuat(b.ax, b.ay, b.az, b.ang);
+            double dot = Math.abs(oq[0] * xf[3] + oq[1] * xf[4] + oq[2] * xf[5] + oq[3] * xf[6]);
+            double dDeg = Math.toDegrees(2 * Math.acos(Math.min(1, dot)));
+            if(dPos > 1e-3 || dDeg > 0.5)
+                changed = true;
+            double[] aa = quatToAxisAngle(xf[3], xf[4], xf[5], xf[6]);
+            out.add(new SkelInfo.Bone(b.name, b.parent, (float) xf[0], (float) xf[1], (float) xf[2],
+                    (float) aa[0], (float) aa[1], (float) aa[2], (float) aa[3]));
+        }
+        if(!changed)
+            return false;
+        res.layers.set(skelIdx, new Layer("skel", SkelInfo.encodeVer1(out)));
+        return true;
+    }
+
+    /** Skeleton joint node name -> {tx,ty,tz, qx,qy,qz,qw} local transform. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, double[]> skelNodeTransforms(Map<String, Object> root) {
+        Map<String, double[]> out = new HashMap<>();
+        List<Object> nodes = (List<Object>) root.get("nodes");
+        List<Object> skins = (List<Object>) root.get("skins");
+        if(nodes == null || skins == null)
+            return out;
+        for(Object so : skins) {
+            List<Object> joints = (List<Object>) ((Map<String, Object>) so).get("joints");
+            if(joints == null)
+                continue;
+            for(Object jo : joints) {
+                Map<String, Object> n = (Map<String, Object>) nodes.get(((Number) jo).intValue());
+                Object nm = n.get("name");
+                if(nm == null)
+                    continue;
+                double[] xf = {0, 0, 0, 0, 0, 0, 1};
+                List<Object> tl = (List<Object>) n.get("translation");
+                if(tl != null)
+                    for(int k = 0; k < 3; k++) xf[k] = ((Number) tl.get(k)).doubleValue();
+                List<Object> rl = (List<Object>) n.get("rotation");
+                if(rl != null)
+                    for(int k = 0; k < 4; k++) xf[3 + k] = ((Number) rl.get(k)).doubleValue();
+                out.putIfAbsent(nm.toString(), xf);
+            }
+        }
+        return out;
+    }
+
+    private static double sq(double x) {
+        return x * x;
+    }
+
+    /** Axis-angle (normalized axis + radians) -> quaternion [x,y,z,w]. */
+    private static double[] axisAngleToQuat(double ax, double ay, double az, double ang) {
+        double s = Math.sin(ang / 2), w = Math.cos(ang / 2);
+        return new double[]{ax * s, ay * s, az * s, w};
+    }
+
+    /** Quaternion [x,y,z,w] -> {axisX, axisY, axisZ, angle(radians)} with a normalized axis. */
+    private static double[] quatToAxisAngle(double x, double y, double z, double w) {
+        double n = Math.sqrt(x * x + y * y + z * z + w * w);
+        if(n > 0) { x /= n; y /= n; z /= n; w /= n; }
+        w = Math.max(-1, Math.min(1, w));
+        double ang = 2 * Math.acos(w);
+        double s = Math.sqrt(1 - w * w);
+        if(s < 1e-6)
+            return new double[]{0, 0, 1, 0};
+        return new double[]{x / s, y / s, z / s, ang};
+    }
+
 
     private static final String ATTR_HINT =
             "In Blender's glTF export, expand \"Data > Mesh\" and tick \"Attributes\" "
@@ -529,7 +634,7 @@ public final class GltfImport {
             codec.setAttr("otex", readAccessor(g, idx(a.get("TEXCOORD_1")), 2));
             didOtex = true;
         }
-        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex, false, false);
+        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex, false, false, false);
     }
 
     /* ----------------------------------------------------------- glb / accessors */

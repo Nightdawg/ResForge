@@ -240,8 +240,25 @@ byte-identical (a no-op round-trips byte-for-byte on wisp/knarr/algaeblob/woodhe
 which have **2 manims each** of 8 fmt-3 frames). Un-matched seam-dup vertices inherit
 a coincident vertex's delta. If the shape-key count changed (frames added/removed) it
 keeps the original. Validated: doubling one manim's frame-0 deltas re-encodes exactly
-while the model's other manim stays byte-identical. **Next:** Phase 2c skeleton/skan
-import and arbitrary-topology rebuild.
+while the model's other manim stays byte-identical.
+
+### glTF skeleton import (Phase 2c, part 2)
+`GltfImport` re-imports an edited **skeleton rest pose** (`skel`). Each bone's new
+local transform is read from its glTF joint node *by name* (Blender keeps bone names
+and node-local translation/rotation; the skin maps joints→nodes). Empirically a plain
+Blender round-trip preserves bone transforms to ~2e-5 units / ~0.04° (verified by
+diffing knarr before/after Blender), so a generous change-gate (Δpos>1e-3 or Δrot>0.5°)
+cleanly distinguishes a real edit from float noise; an unchanged skeleton is left
+**byte-identical** (validated against the user's actual Blender round-trip of knarr).
+When a bone moved, the whole skeleton is re-encoded via `SkelInfo.encodeVer1` — always
+the **version-1** form (the client reads both, so we needn't reproduce ver-0
+`cpfloat`): a `"\u0001"` marker, then per bone name, parent, `float32` position, the
+angle as `mnorm16` (`angle/2π` mod 1) and the rotation axis octahedral-encoded into two
+`snorm16`s. Rotations convert quaternion↔axis-angle. No axis swap is needed: our export
+gives each bone its *native* local transform under a conversion ROOT node, so the node
+transform already equals the skel transform. (knarr is ver-1; lilypadlotus/stallion are
+ver-0 — all re-encode to ver-1 on edit.) **Next:** `skan` skeletal-animation import and
+the arbitrary-topology rebuild.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

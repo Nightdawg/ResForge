@@ -3,6 +3,7 @@ package resforge;
 import resforge.io.Json;
 import resforge.io.MessageWriter;
 import resforge.layers.MeshAnimInfo;
+import resforge.layers.SkelInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
 import resforge.model.Vbuf2Codec;
@@ -535,6 +536,100 @@ class GltfImportTest {
             if(l.name.equals("manim"))
                 return l.data;
         throw new AssertionError("no manim");
+    }
+
+    private static byte[] skelLayer(ResContainer res) {
+        for(Layer l : res.layers)
+            if(l.name.equals("skel"))
+                return l.data;
+        throw new AssertionError("no skel");
+    }
+
+    private static SkelInfo.Bone boneByName(SkelInfo s, String n) {
+        for(SkelInfo.Bone b : s.bones)
+            if(b.name.equals(n))
+                return b;
+        throw new AssertionError("no bone " + n);
+    }
+
+    /** Adds (dx,dy,dz) to a bone node's translation in the glb (parse JSON, edit, reassemble). */
+    @SuppressWarnings("unchecked")
+    private static byte[] moveBoneInGlb(byte[] glb, String bone, double dx, double dy, double dz) {
+        int jlen = le32(glb, 12);
+        Map<String, Object> root =
+                (Map<String, Object>) Json.parse(new String(glb, 20, jlen, StandardCharsets.UTF_8));
+        for(Object no : (List<Object>) root.get("nodes")) {
+            Map<String, Object> n = (Map<String, Object>) no;
+            if(bone.equals(String.valueOf(n.get("name")))) {
+                List<Object> tl = (List<Object>) n.get("translation");
+                double tx = tl == null ? 0 : ((Number) tl.get(0)).doubleValue();
+                double ty = tl == null ? 0 : ((Number) tl.get(1)).doubleValue();
+                double tz = tl == null ? 0 : ((Number) tl.get(2)).doubleValue();
+                n.put("translation", List.of(tx + dx, ty + dy, tz + dz));
+            }
+        }
+        byte[] jb = Json.write(root).getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        int binStart = 20 + jlen;
+        int binLen = le32(glb, binStart);
+        byte[] bin = java.util.Arrays.copyOfRange(glb, binStart + 8, binStart + 8 + binLen);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + jpad.length + 8 + bin.length);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bin.length).int32(0x004E4942).bytes(bin);
+        return w.toByteArray();
+    }
+
+    @Test
+    void skelEncodeVer1RoundTrips() {
+        List<SkelInfo.Bone> bones = List.of(
+                new SkelInfo.Bone("root", "", 1f, 2f, 3f, 0f, 0f, 1f, 0f),
+                new SkelInfo.Bone("tip", "root", 0f, 0f, 1f, 0.57735f, 0.57735f, 0.57735f, 1.2f));
+        SkelInfo back = SkelInfo.parse(SkelInfo.encodeVer1(bones));
+        assertTrue(back.recognized);
+        assertEquals(2, back.bones.size());
+        SkelInfo.Bone r = back.bones.get(0), t = back.bones.get(1);
+        assertEquals("root", r.name);
+        assertEquals("", r.parent);
+        assertEquals(1f, r.px, 1e-4f);
+        assertEquals(2f, r.py, 1e-4f);
+        assertEquals(3f, r.pz, 1e-4f);
+        assertEquals("tip", t.name);
+        assertEquals("root", t.parent);
+        assertEquals(1f, t.pz, 1e-4f);
+        assertEquals(1.2f, t.ang, 2e-3f);                // mnorm16 angle precision
+        assertEquals(0.577f, t.ax, 1e-2f);               // octahedral axis precision
+        assertEquals(0.577f, t.ay, 1e-2f);
+        assertEquals(0.577f, t.az, 1e-2f);
+    }
+
+    @Test
+    void skelNoOpKeepsSkelByteIdentical() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        GltfImport.Result r = GltfImport.apply(orig, GltfExport.toGlb(res, "rig.res").glb);
+        assertFalse(r.skel, "an unchanged skeleton must not be re-encoded");
+        assertArrayEquals(orig, r.res, "a skeleton no-op must round-trip byte-for-byte");
+    }
+
+    @Test
+    void editedSkelBoneIsReEncoded() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel2()));
+        res.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        byte[] glb = moveBoneInGlb(GltfExport.toGlb(res, "rig.res").glb, "tip", 3, 0, 0);
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        assertTrue(r.skel, "moving a bone must re-encode the skeleton");
+        SkelInfo.Bone tip = boneByName(SkelInfo.parse(skelLayer(ResContainer.parse(r.res))), "tip");
+        assertEquals(3f, tip.px, 1e-3f, "tip (orig x=0) should move to x=3");
+        assertEquals(1f, tip.pz, 1e-3f, "tip's other coords stay");
     }
 
     @Test

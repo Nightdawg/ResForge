@@ -217,9 +217,15 @@ References… (aggregated reference report dialog), **resource-version spinner**
   scattered by `_VID`, axis-inverted, re-encoded into `manim` via
   `MeshAnimInfo.encodeWith`, keeping the original timeline (only shapes change;
   Blender's shape-key *animation* round-trip is deliberately sidestepped).
-  Change-gated (unchanged manim stays byte-identical). Scope: topology-preserving
-  edits (reshape/transform/sculpt + re-weight + re-shape morphs; no new geometry).
-  **Next: Phase 2c skeleton/skan import**, then arbitrary-topology rebuild.
+  Change-gated (unchanged manim stays byte-identical). **Phase 2c skeleton import is
+  also done** — an edited `skel` rest pose re-imports: each bone's new local transform
+  is read from its glTF joint node by name, change-gated (a plain Blender round-trip
+  drifts only ~0.04°, verified by diffing knarr before/after Blender, so unchanged stays
+  byte-identical), and on a real edit the skeleton is re-encoded as version-1 via
+  `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos).
+  Scope: topology-preserving edits (reshape/transform/sculpt + re-weight + re-shape
+  morphs + re-pose the skeleton; no new geometry). **Next: `skan` animation import**,
+  then arbitrary-topology rebuild.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.
