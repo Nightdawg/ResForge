@@ -3,7 +3,7 @@ package resforge.res;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
-import resforge.layers.BoneOffInfo;
+import resforge.layers.BoneOffCodec;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
@@ -247,10 +247,9 @@ public class Verifier {
                 SkanInfo si = SkanInfo.parse(l.data);
                 sum.skanHist.merge(si.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
             }
-            else if(l.name.equals("boneoff")) {
-                BoneOffInfo bo = BoneOffInfo.parse(l.data);
-                sum.boneoffHist.merge(bo.recognized ? "decoded" : "unrecognized", 1, Integer::sum);
-            }
+            else if(l.name.equals("boneoff"))
+                sum.boneoffHist.merge(BoneOffCodec.toJsonIfLossless(l.data) != null ? "json" : "raw",
+                        1, Integer::sum);
             else if(l.name.equals("manim")) {
                 MeshAnimInfo mi = MeshAnimInfo.parse(l.data);
                 sum.manimHist.merge(mi.recognized ? "decoded" : "unrecognized", 1, Integer::sum);

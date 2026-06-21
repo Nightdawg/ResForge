@@ -544,12 +544,12 @@ feedback loop.
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
 - Eventually edit `vbuf2`/`mesh`/`manim` directly. (`mat2`, `anim`,
-  `neg` and `obst` are done — editable JSON via
-  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`; `code`/`codeentry`, the
+  `neg`, `obst` and `boneoff` are done — editable JSON via
+  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`/`BoneOffCodec`; `code`/`codeentry`, the
   dependency layers `deps`/`rlink`/`src`, and the rig/light/morph layers
-  `light`/`skel`/`skan`/`boneoff`/`manim` are decoded read-only via
+  `light`/`skel`/`skan`/`manim` are decoded read-only via
   `CodeInfo`/`CodeEntryInfo`/`DepsInfo`/`RLinkInfo`/`SrcInfo`/`LightInfo`/`SkelInfo`/
-  `SkanInfo`/`BoneOffInfo`/`MeshAnimInfo` — every sample layer type is now decoded.)
+  `SkanInfo`/`MeshAnimInfo` — every sample layer type is now decoded.)
   The rig decoders + the `cpfloat`/norm io primitives are the groundwork for the
   skeleton/animation **write** path.
 - Broaden the `props` codec to more `tto` types (coord/color/bytes/float32, the

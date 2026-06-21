@@ -4,6 +4,7 @@ import resforge.io.Json;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.BoneOffCodec;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.ImageMagic;
@@ -137,6 +138,8 @@ public class Replacer {
                 return encodeNeg(nf);
             case "obst":
                 return encodeObst(nf);
+            case "boneoff":
+                return encodeBoneOff(nf);
             default:
                 throw new ReplaceException("layer '" + layer.name + "' is not replaceable");
         }
@@ -192,6 +195,17 @@ public class Replacer {
             @SuppressWarnings("unchecked")
             Map<String, Object> model = (Map<String, Object>) Json.parse(json);
             return ObstCodec.encode(model);
+        } catch(RuntimeException e) {
+            throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
+        }
+    }
+
+    private static byte[] encodeBoneOff(byte[] nf) {
+        String json = new String(nf, StandardCharsets.UTF_8);
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+            return BoneOffCodec.encode(model);
         } catch(RuntimeException e) {
             throw new ReplaceException("invalid replacement JSON: " + e.getMessage());
         }
