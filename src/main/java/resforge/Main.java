@@ -3,7 +3,6 @@ package resforge;
 import resforge.layers.ImageInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
-import resforge.model.ObjExport;
 import resforge.model.Vbuf2Codec;
 import resforge.res.Catalog;
 import resforge.res.Layer;
@@ -27,7 +26,6 @@ import java.nio.file.Path;
  *   unpack  <file.res> [outDir]
  *   pack    <dir> [out.res]
  *   replace <file.res> <selector> <newfile> [out.res]
- *   obj     <file.res> [out.obj]
  *   gltf    <file.res> [out.glb]
  *   import-gltf <orig.res> <edited.glb> [out.res]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
@@ -65,7 +63,6 @@ public class Main {
             case "unpack": unpack(args); break;
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
-            case "obj":    obj(args);    break;
             case "gltf":   gltf(args);   break;
             case "import-gltf": importGltf(args); break;
             case "rebuild-gltf": rebuildGltf(args); break;
@@ -376,37 +373,6 @@ public class Main {
         System.out.println("NOTE: this is a write path - load the result in-game to confirm it renders.");
     }
 
-    private static void obj(String[] args) throws IOException {
-        if(args.length < 2)
-            throw new UsageException("obj requires a .res file");
-        Path file = Path.of(args[1]);
-        String name = file.getFileName().toString();
-        Path out;
-        if(args.length >= 3) {
-            out = Path.of(args[2]);
-        } else {
-            String n = name;
-            if(n.toLowerCase().endsWith(".res"))
-                n = n.substring(0, n.length() - 4);
-            out = file.resolveSibling(n + ".obj");
-        }
-        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
-        ObjExport.Result r = ObjExport.toObj(res, name);
-        if(r.vertices == 0 || r.triangles == 0)
-            throw new RuntimeException("no 3D geometry (vbuf2/mesh) found in " + file);
-        Files.writeString(out, r.obj);
-        System.out.printf("Exported %d vertices, %d triangles (%d submeshes) -> %s%n",
-                r.vertices, r.triangles, r.submeshes, out);
-        if(r.mtl != null) {
-            Path mtlOut = out.resolveSibling(r.baseName + ".mtl");
-            Files.writeString(mtlOut, r.mtl);
-            for(ObjExport.TexFile tf : r.textures)
-                Files.write(out.resolveSibling(tf.name), tf.data);
-            System.out.printf("  + %s and %d texture file(s) (model opens textured)%n",
-                    mtlOut.getFileName(), r.textures.size());
-        }
-    }
-
     private static void gltf(String[] args) throws IOException {
         if(args.length < 2)
             throw new UsageException("gltf requires a .res file");
@@ -497,7 +463,6 @@ public class Main {
         System.out.println("  replace <file.res> <layer> <newfile> [out.res]");
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
-        System.out.println("  obj    <file.res> [out.obj]  Export 3D geometry to a Wavefront OBJ");
         System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
         System.out.println("  import-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Re-import edited geometry from a glTF (same vertex count)");

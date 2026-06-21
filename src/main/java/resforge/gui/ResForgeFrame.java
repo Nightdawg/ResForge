@@ -2,7 +2,6 @@ package resforge.gui;
 
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
-import resforge.model.ObjExport;
 import resforge.res.Layer;
 import resforge.res.Replacer;
 import resforge.res.ResContainer;
@@ -346,8 +345,6 @@ public class ResForgeFrame extends JFrame {
                 InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
         fileMenu.add(saveAsItem);
         fileMenu.addSeparator();
-        fileMenu.add(menuItem("Export 3D model as OBJ\u2026", this::doExportObj));
-        fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
         bar.add(fileMenu);
 
@@ -392,7 +389,6 @@ public class ResForgeFrame extends JFrame {
         tb.add(new JButton(action("Fetch\u2026", this::doFetch)));
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
-        tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
         tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
         tb.add(new JButton(action("Import glTF\u2026", this::doImportGltf)));
         tb.add(new JButton(action("Rebuild glTF\u2026", this::doRebuildGltf)));
@@ -674,36 +670,6 @@ public class ResForgeFrame extends JFrame {
             markDirty();
         } catch(Exception e) {
             error("glTF rebuild failed: " + e.getMessage());
-        }
-    }
-
-    private void doExportObj() {
-        if(res == null)
-            return;
-        try {
-            ObjExport.Result r = ObjExport.toObj(res, file != null ? file.getFileName().toString() : "model");
-            if(r.vertices == 0 || r.triangles == 0) {
-                info("This resource has no 3D geometry (vbuf2/mesh) to export.");
-                return;
-            }
-            JFileChooser fc = new JFileChooser(dir());
-            fc.setFileFilter(new FileNameExtensionFilter("Wavefront OBJ (*.obj)", "obj"));
-            fc.setSelectedFile(new File(baseName() + ".obj"));
-            if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                Path objPath = fc.getSelectedFile().toPath();
-                Files.writeString(objPath, r.obj);
-                String extra = "";
-                if(r.mtl != null) {
-                    Files.writeString(objPath.resolveSibling(r.baseName + ".mtl"), r.mtl);
-                    for(ObjExport.TexFile tf : r.textures)
-                        Files.write(objPath.resolveSibling(tf.name), tf.data);
-                    extra = " + .mtl + " + r.textures.size() + " texture(s)";
-                }
-                setStatus("Exported " + r.vertices + " vertices, " + r.triangles
-                        + " triangles (" + r.submeshes + " submeshes)" + extra);
-            }
-        } catch(Exception e) {
-            error("OBJ export failed: " + e.getMessage());
         }
     }
 
@@ -1187,8 +1153,7 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(
                 new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
                 new JButton(action("Import glTF (.glb)\u2026", this::doImportGltf)),
-                new JButton(action("Rebuild from glTF\u2026", this::doRebuildGltf)),
-                new JButton(action("Export OBJ\u2026", this::doExportObj))));
+                new JButton(action("Rebuild from glTF\u2026", this::doRebuildGltf))));
     }
 
     private void buildCodePanel(JPanel content, int idx, Layer l) {
@@ -1378,7 +1343,7 @@ public class ResForgeFrame extends JFrame {
     private void doAbout() {
         info("ResForge\n\nA tool to view and edit Haven & Hearth .res files.\n"
                 + "Swap icons, textures, sounds and fonts; edit text and properties;\n"
-                + "export 3D models to OBJ. Unchanged layers are preserved byte-for-byte.");
+                + "edit 3D models through Blender via glTF. Unchanged layers are preserved byte-for-byte.");
     }
 
     /* ---------------------------------------------------------- table + d-and-d */

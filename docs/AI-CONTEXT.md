@@ -51,16 +51,16 @@ a sibling project at `../hafen-client`).
 ## 3. CLI commands (`resforge.Main`)
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
-`obj <file> [out.obj]` · `gltf <file> [out.glb]` ·
+`gltf <file> [out.glb]` ·
 `import-gltf <orig.res> <edited.glb> [out.res]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
 `transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
-exports the 3D model as a Blender-ready binary glTF and `import-gltf` re-imports
-an edited `.glb` back into the model (same vertex count, re-quantised); `obj` is
-the simpler legacy export.)
+exports the 3D model as a Blender-ready binary glTF, `import-gltf` re-imports an
+edited `.glb` losslessly (same vertex count, matched by id), and `rebuild-gltf`
+regenerates geometry to allow added/removed vertices.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
@@ -74,9 +74,9 @@ tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 `src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`/`manim`
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
-**Export OBJ**. Layer
+**Export/Import/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
-Toolbar: Open, Fetch, Save As, Export OBJ, **Export glTF** (Blender-ready .glb),
+Toolbar: Open, Fetch, Save As, **Export glTF** (Blender-ready .glb),
 **Import glTF** (re-import an edited .glb into the model),
 References… (aggregated reference report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
@@ -110,9 +110,9 @@ References… (aggregated reference report dialog), **resource-version spinner**
   original index by `_VID`, re-quantises pos/nrm/both UVs into their original
   on-wire formats, Y-up→Z-up, re-imports skinning weights to `bones2` via
   `Vbuf2Codec.setBones2` and morph shapes to `manim` via `MeshAnimInfo.encodeWith`
-  when they changed, keeping all other layers byte-identical),
-  `ObjExport` (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex`
-  image(s), so models open textured).
+  when they changed, keeping all other layers byte-identical; and `rebuild` which
+  regenerates `vbuf2`+`mesh`(+`bones2`/`manim`) at a new vertex count to allow
+  added/removed geometry, recomputing tangents).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -133,7 +133,7 @@ References… (aggregated reference report dialog), **resource-version spinner**
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
 | `obst` | edit as JSON (collision polygons; float16 coords, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
-| `vbuf2`/`mesh` | **read-only**: fully decoded; GUI shows vertex/attribute + tri/vbuf/material detail; OBJ export (+ `.mtl` + local `tex` image, textured); `transform` write path |
+| `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Import/Rebuild glTF; `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `light` | **read-only**: light source — type (point/spot/directional), id, ambient/diffuse/specular colours, attenuation/direction/exponent (cpfloat ver0, float32 ver1) |

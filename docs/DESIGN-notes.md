@@ -233,8 +233,9 @@ resforge/
     layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
     layers/TtoSkip.java              # generic tto value skipper
     model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
-    model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit)
-    model/ObjExport.java             # 3D geometry -> Wavefront OBJ (+ .mtl + texture)
+    model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit/rebuild)
+    model/GltfExport.java            # 3D model -> Blender-ready binary glTF (.glb)
+    model/GltfImport.java            # edited .glb -> .res (lossless patch + topology rebuild)
   src/test/java/resforge/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
@@ -269,8 +270,8 @@ resforge/
 ./gradlew run --args="replace horse.res image newicon.png horse.res"
 ./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
 
-# Export 3D geometry to OBJ (view in Blender / 3D Viewer)
-./gradlew run --args="obj path/to/horse.res"
+# Export a 3D model to a Blender-ready glTF (then Import/Rebuild glTF to bring edits back)
+./gradlew run --args="gltf path/to/horse.res"
 
 # Catalogue what is editable across a folder of resources
 ./gradlew run --args="catalog path/to/folder"
@@ -384,7 +385,9 @@ java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
   models: `male.res` → 1325 verts / 2248 tris, bbox x[-1.3,1.7] y[-5.0,5.0]
   z[-0.1,12.8] (humanoid); `knarr.res` → 12838 verts / 16952 tris / 21 submeshes,
   bbox x[-81,84] y[-42,42] z[-16,108] (ship). Counts match the decoders and the
-  bounding boxes are geometrically plausible.
+  bounding boxes are geometrically plausible. *(OBJ export was later removed once the
+  glTF round-trip superseded it — glTF carries both UV sets, the skeleton and
+  animations, and round-trips back to `.res`.)*
 - **Structure-preserving vbuf2 encoder + `transform` (2026-06-20)**: the
   automated oracle — decode→encode of every real `vbuf2` is **byte-identical**
   (`verify` → `Vbuf2 re-encode histogram: exact 11`). The `transform` command
@@ -461,12 +464,12 @@ layers remain lossless raw `.bin`.
 
 1. ~~Decode the bone data and the `mesh` index layer~~ (done — see above);
    `skel`/`skan` (skeleton + animations) are still raw.
-2. ~~Emit an editable form~~ — a read-only **Wavefront OBJ** export is built
+2. ~~Emit an editable form~~ — a read-only **Wavefront OBJ** export was built
    (`model/Vbuf2Data.java` de-quantises positions/normals/texcoords;
-   `model/ObjExport.java` emits OBJ; CLI `obj`). Validated: `male` → 1325 verts /
+   `model/ObjExport.java` emitted OBJ; CLI `obj`). Validated: `male` → 1325 verts /
    2248 tris (humanoid bbox), `knarr` → 12838 verts / 16952 tris / 21 submeshes
-   (ship bbox). For a Blender *round-trip* (editing back to `.res`), emit **Ogre
-   XML** instead and port `mkres-fragment.py` to Java for the XML → binary path.
+   (ship bbox). *(Since superseded and removed: the **glTF round-trip** below is the
+   editable form — it carries multi-UV/skeleton/animation and re-imports to `.res`.)*
 3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
