@@ -339,11 +339,7 @@ public class ResForgeFrame extends JFrame {
         JMenu fileMenu = new JMenu("File");
         fileMenu.add(item("Open\u2026", KeyEvent.VK_O, this::doOpen));
         fileMenu.add(item("Fetch from server\u2026", KeyEvent.VK_R, this::doFetch));
-        fileMenu.add(item("Save", KeyEvent.VK_S, this::doSave));
-        JMenuItem saveAsItem = menuItem("Save As\u2026", this::doSaveAs);
-        saveAsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_S,
-                InputEvent.CTRL_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK));
-        fileMenu.add(saveAsItem);
+        fileMenu.add(item("Save As\u2026", KeyEvent.VK_S, this::doSaveAs));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
         bar.add(fileMenu);
@@ -554,15 +550,6 @@ public class ResForgeFrame extends JFrame {
         fc.setFileFilter(new FileNameExtensionFilter("Haven resource (*.res)", "res"));
         if(fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
             openFile(fc.getSelectedFile().toPath());
-    }
-
-    private void doSave() {
-        if(res == null)
-            return;
-        if(file == null)
-            doSaveAs();
-        else
-            writeRes(file);
     }
 
     private void doSaveAs() {
