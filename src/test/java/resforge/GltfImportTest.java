@@ -606,6 +606,106 @@ class GltfImportTest {
         assertEquals("tex", out.layers.get(0).name);
     }
 
+    /**
+     * Builds a glb with two primitives, each its OWN vertex block (as Blender emits
+     * per material) and a material named {@code rfmat_<matid>}, for multi-submesh
+     * rebuild tests.
+     */
+    private static byte[] twoSubmeshGlb(int matidA, int matidB) {
+        // submesh A: 3 verts / 1 tri; submesh B: 4 verts / 2 tris
+        float[] pa = {0, 0, 0,  1, 0, 0,  0, 1, 0};
+        float[] na = {0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] ta = {0, 0,  1, 0,  0, 1};
+        int[] ia = {0, 1, 2};
+        float[] pb = {2, 0, 0,  3, 0, 0,  2, 1, 0,  3, 1, 0};
+        float[] nb = {0, 0, 1,  0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tb = {0, 0,  1, 0,  0, 1,  1, 1};
+        int[] ib = {0, 1, 2,  1, 3, 2};
+
+        MessageWriter bin = new MessageWriter();
+        StringBuilder bvs = new StringBuilder(), accs = new StringBuilder();
+        StringBuilder prims = new StringBuilder();
+        int off = 0, accN = 0;
+        float[][] poss = {pa, pb}, nrms = {na, nb}, texs = {ta, tb};
+        int[][] idxs = {ia, ib};
+        int[] matids = {matidA, matidB};
+        for(int s = 0; s < 2; s++) {
+            int m = poss[s].length / 3;
+            int posBv = bv(bvs, off, m * 12); for(float v : poss[s]) bin.float32(v); off += m * 12;
+            int nrmBv = bv(bvs, off, m * 12); for(float v : nrms[s]) bin.float32(v); off += m * 12;
+            int texBv = bv(bvs, off, m * 8);  for(float v : texs[s]) bin.float32(v); off += m * 8;
+            int idxBv = bv(bvs, off, idxs[s].length * 2);
+            for(int v : idxs[s]) bin.uint16(v);
+            off += idxs[s].length * 2;
+            while((off & 3) != 0) { bin.uint16(0); off += 2; }
+            int pA = accN++, nA = accN++, tA = accN++, iA = accN++;
+            acc(accs, posBv, 5126, m, "VEC3");
+            acc(accs, nrmBv, 5126, m, "VEC3");
+            acc(accs, texBv, 5126, m, "VEC2");
+            acc(accs, idxBv, 5123, idxs[s].length, "SCALAR");
+            if(prims.length() > 0) prims.append(",");
+            prims.append("{\"attributes\":{\"POSITION\":").append(pA).append(",\"NORMAL\":").append(nA)
+                    .append(",\"TEXCOORD_0\":").append(tA).append("},\"indices\":").append(iA)
+                    .append(",\"material\":").append(s).append("}");
+        }
+        String json = "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" + off + "}],"
+                + "\"bufferViews\":[" + bvs + "],\"accessors\":[" + accs + "],"
+                + "\"materials\":[{\"name\":\"rfmat_" + matids[0] + "\"},{\"name\":\"rfmat_" + matids[1] + "\"}],"
+                + "\"meshes\":[{\"primitives\":[" + prims + "]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + jpad.length + 8 + bpad.length);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
+    private static int bv(StringBuilder b, int off, int len) {
+        if(b.length() > 0) b.append(",");
+        b.append("{\"buffer\":0,\"byteOffset\":").append(off).append(",\"byteLength\":").append(len).append("}");
+        return b.toString().split("\\},\\{").length - 1;   // index = current count - 1
+    }
+
+    private static void acc(StringBuilder a, int bvIdx, int ct, int count, String type) {
+        if(a.length() > 0) a.append(",");
+        a.append("{\"bufferView\":").append(bvIdx).append(",\"componentType\":").append(ct)
+                .append(",\"count\":").append(count).append(",\"type\":\"").append(type).append("\"}");
+    }
+
+    @Test
+    void rebuildMergesMultipleSubmeshes() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(1)));
+        res.layers.add(new Layer("mesh", mesh(2)));
+        byte[] orig = res.serialize();
+
+        // two separate-block submeshes (3 + 4 verts), matids 1 and 2 by material name
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, twoSubmeshGlb(1, 2));
+        assertEquals(7, r.vertices, "the two blocks should concatenate (3+4)");
+        assertEquals(3, r.triangles);
+
+        ResContainer out = ResContainer.parse(r.res);
+        Vbuf2Data d = Vbuf2Data.parse(vbufLayer(out));
+        assertEquals(7, d.num);
+        List<MeshInfo> ms = new java.util.ArrayList<>();
+        for(Layer l : out.layers)
+            if(l.name.equals("mesh"))
+                ms.add(MeshInfo.parse(l.data));
+        assertEquals(2, ms.size(), "two submeshes preserved");
+        assertEquals(1, ms.get(0).matid, "first submesh matid recovered from rfmat_1");
+        assertEquals(2, ms.get(1).matid, "second submesh matid recovered from rfmat_2");
+        // submesh B's indices must be offset by submesh A's 3 vertices
+        short maxA = 0;
+        for(short s : ms.get(0).indices) maxA = (short) Math.max(maxA, s);
+        short minB = Short.MAX_VALUE;
+        for(short s : ms.get(1).indices) minB = (short) Math.min(minB, s);
+        assertTrue(minB > maxA, "second submesh indices are offset past the first block");
+    }
+
     private static byte[] meshLayerBytes(ResContainer res) {
         for(Layer l : res.layers)
             if(l.name.equals("mesh"))

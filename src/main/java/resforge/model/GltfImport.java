@@ -11,6 +11,7 @@ import resforge.res.ResContainer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -135,81 +136,198 @@ public final class GltfImport {
      * skeleton, code…). Unlike {@link #apply}, it does not need {@code _VID} and gives
      * up byte-exactness, so it relies on in-game validation.
      *
-     * <p>This first version targets single-submesh models (one {@code vbuf2} + one
-     * {@code mesh}) whose vertex attributes are positions/normals/UVs/bone-weights.
+     * <p>This version targets models with a single shared {@code vbuf2} and one or more
+     * {@code mesh} submeshes, whose vertex attributes are positions/normals/UVs/
+     * bone-weights. Each glTF primitive becomes a submesh, its part id recovered from
+     * the material name ({@code rfmat_<matid>}); primitives are concatenated into the
+     * shared vertex buffer.
      */
     public static RebuildResult rebuild(byte[] origRes, byte[] glb) {
         Glb g = parseGlb(glb);
         ResContainer res = ResContainer.parse(origRes);
 
-        int vbufIdx = -1, meshIdx = -1, vbufN = 0, meshN = 0, manimN = 0;
+        int vbufIdx = -1, vbufN = 0, manimN = 0;
+        List<Integer> meshIdxs = new ArrayList<>();
         for(int i = 0; i < res.layers.size(); i++) {
             String nm = res.layers.get(i).name;
             if(nm.equals("vbuf2")) { vbufN++; vbufIdx = i; }
-            else if(nm.equals("mesh")) { meshN++; meshIdx = i; }
+            else if(nm.equals("mesh")) meshIdxs.add(i);
             else if(nm.equals("manim")) manimN++;
         }
-        if(vbufN != 1 || meshN != 1)
+        if(vbufN != 1 || meshIdxs.isEmpty())
             throw new IllegalArgumentException(
-                    "rebuild currently supports single-submesh models (one vbuf2 + one mesh); this "
-                            + "resource has " + vbufN + " vbuf2 and " + meshN + " mesh layers.");
+                    "rebuild needs one shared vbuf2 and at least one mesh; this resource has "
+                            + vbufN + " vbuf2 and " + meshIdxs.size() + " mesh layers.");
         if(manimN > 0)
             throw new IllegalArgumentException(
                     "rebuild of morph-animated models isn't supported yet (edit those with Import glTF instead).");
 
         byte[] origVbuf = res.layers.get(vbufIdx).data;
         Vbuf2Codec codec = Vbuf2Codec.parse(origVbuf);
-        for(Vbuf2Codec.Attr a : codec.attrs) {
-            String base = a.name.endsWith("2") ? a.name.substring(0, a.name.length() - 1) : a.name;
+        for(Vbuf2Codec.Attr at : codec.attrs) {
+            String base = at.name.endsWith("2") ? at.name.substring(0, at.name.length() - 1) : at.name;
             if(!base.equals("pos") && !base.equals("nrm") && !base.equals("tex") && !base.equals("otex")
-                    && !a.name.equals("bones2") && !a.name.equals("bones"))
-                throw new IllegalArgumentException(
-                        "rebuild doesn't support the '" + a.name + "' vertex attribute yet.");
+                    && !at.name.equals("bones2") && !at.name.equals("bones"))
+                throw new IllegalArgumentException("rebuild doesn't support the '" + at.name + "' vertex attribute yet.");
         }
-        MeshInfo mi = MeshInfo.parse(res.layers.get(meshIdx).data);
-        if(!mi.recognized || mi.indices == null)
-            throw new IllegalArgumentException("couldn't decode the original mesh to rebuild it.");
+        boolean hasNrm = codec.attr("nrm") != null, hasTex = codec.attr("tex") != null;
+        boolean hasOtex = codec.attr("otex") != null, hasBones = codec.attr("bones") != null;
 
-        Map<String, Object> prim = firstPrimitiveWithPosition(g.root);
-        if(prim == null)
+        // matid -> a template original mesh layer (for its id/vbufid).
+        Map<Integer, MeshInfo> matidToMesh = new LinkedHashMap<>();
+        int vbufId = 0;
+        for(int mi : meshIdxs) {
+            MeshInfo m = MeshInfo.parse(res.layers.get(mi).data);
+            if(m.recognized) {
+                matidToMesh.putIfAbsent(m.matid, m);
+                vbufId = m.vbufid;
+            }
+        }
+        List<Object> materials = materialsOf(g.root);
+
+        // Concatenate each distinct vertex block (Blender splits per material; our own
+        // export shares one), de-duplicating by POSITION accessor so a shared buffer
+        // isn't copied per primitive.
+        List<float[]> cPos = new ArrayList<>(), cNrm = new ArrayList<>(), cTex = new ArrayList<>(),
+                cOtex = new ArrayList<>(), cJoints = new ArrayList<>(), cWeights = new ArrayList<>();
+        Map<Integer, Integer> posOffset = new HashMap<>();
+        int total = 0;
+        List<int[]> meshTris = new ArrayList<>();
+        List<Integer> meshMatids = new ArrayList<>();
+
+        for(Map<String, Object> prim : allPrimitives(g.root)) {
+            Map<String, Object> a = attributesOf(prim);
+            if(a == null || !a.containsKey("POSITION"))
+                continue;
+            int posAcc = idx(a.get("POSITION"));
+            int offset;
+            if(posOffset.containsKey(posAcc)) {
+                offset = posOffset.get(posAcc);
+            } else {
+                float[] p = readAccessor(g, posAcc, 3);
+                int cnt = p.length / 3;
+                cPos.add(axisInvert(p));
+                if(hasNrm) cNrm.add(axisInvert(readVec(g, a, "NORMAL", 3, "normals")));
+                if(hasTex) cTex.add(readVec(g, a, "TEXCOORD_0", 2, "UVs"));
+                if(hasOtex) cOtex.add(readVec(g, a, "TEXCOORD_1", 2, "a second UV set"));
+                if(hasBones) {
+                    cJoints.add(readVec(g, a, "JOINTS_0", 4, "skinning joints"));
+                    cWeights.add(readVec(g, a, "WEIGHTS_0", 4, "skinning weights"));
+                }
+                offset = total;
+                posOffset.put(posAcc, offset);
+                total += cnt;
+            }
+            int[] tris = readIndices(g, prim, total);
+            for(int i = 0; i < tris.length; i++)
+                tris[i] += offset;
+            meshTris.add(tris);
+            meshMatids.add(recoverMatid(prim, materials, matidToMesh));
+        }
+        if(total == 0)
             throw new IllegalArgumentException("the glTF has no mesh positions to rebuild from.");
-        Map<String, Object> a = attributesOf(prim);
-        float[] pos = readAccessor(g, idx(a.get("POSITION")), 3);
-        int newNum = pos.length / 3;
-        if(newNum > 0xffff)
-            throw new IllegalArgumentException("rebuilt mesh has " + newNum + " vertices, over the 65535 limit.");
+        if(total > 0xffff)
+            throw new IllegalArgumentException("rebuilt mesh has " + total + " vertices, over the 65535 limit.");
 
-        codec.num = newNum;
-        codec.setAttr("pos", axisInvert(pos));
-        if(codec.attr("nrm") != null && a.containsKey("NORMAL"))
-            codec.setAttr("nrm", axisInvert(readAccessor(g, idx(a.get("NORMAL")), 3)));
-        else if(codec.attr("nrm") != null)
-            throw new IllegalArgumentException("the glTF has no normals, which this model needs.");
-        if(codec.attr("tex") != null && a.containsKey("TEXCOORD_0"))
-            codec.setAttr("tex", readAccessor(g, idx(a.get("TEXCOORD_0")), 2));
-        else if(codec.attr("tex") != null)
-            throw new IllegalArgumentException("the glTF has no UVs, which this model needs.");
-        if(codec.attr("otex") != null && a.containsKey("TEXCOORD_1"))
-            codec.setAttr("otex", readAccessor(g, idx(a.get("TEXCOORD_1")), 2));
-        else if(codec.attr("otex") != null)
-            throw new IllegalArgumentException("the glTF has no second UV set, which this model needs.");
+        codec.num = total;
+        codec.setAttr("pos", concat(cPos));
+        if(hasNrm) codec.setAttr("nrm", concat(cNrm));
+        if(hasTex) codec.setAttr("tex", concat(cTex));
+        if(hasOtex) codec.setAttr("otex", concat(cOtex));
+        if(hasBones)
+            rebuildWeights(g, concat(cJoints), concat(cWeights), codec, origVbuf, total);
+        byte[] newVbuf = codec.encode();
 
-        boolean skinned = false;
-        if(codec.attr("bones") != null) {
-            rebuildWeights(g, a, codec, origVbuf, newNum);
-            skinned = true;
+        // Rebuild the layer list: vbuf2 in place, all old mesh layers replaced by the
+        // new submeshes at the first mesh position, every other layer kept.
+        List<Layer> outLayers = new ArrayList<>();
+        java.util.Set<Integer> meshSet = new java.util.HashSet<>(meshIdxs);
+        boolean meshEmitted = false;
+        int totalTris = 0;
+        for(int i = 0; i < res.layers.size(); i++) {
+            if(i == vbufIdx) {
+                outLayers.add(new Layer("vbuf2", newVbuf));
+            } else if(meshSet.contains(i)) {
+                if(!meshEmitted) {
+                    for(int s = 0; s < meshTris.size(); s++) {
+                        int matid = meshMatids.get(s);
+                        MeshInfo tmpl = matidToMesh.get(matid);
+                        outLayers.add(new Layer("mesh", encodeMeshRaw(matid,
+                                tmpl != null ? tmpl.id : -1, vbufId, meshTris.get(s))));
+                        totalTris += meshTris.get(s).length / 3;
+                    }
+                    meshEmitted = true;
+                }
+            } else {
+                outLayers.add(res.layers.get(i));
+            }
         }
-
-        int[] tris = readIndices(g, prim, newNum);
-        res.layers.set(vbufIdx, new Layer("vbuf2", codec.encode()));
-        res.layers.set(meshIdx, new Layer("mesh", encodeMeshRaw(mi, tris)));
-        return new RebuildResult(res.serialize(), newNum, tris.length / 3, skinned);
+        res.layers.clear();
+        res.layers.addAll(outLayers);
+        return new RebuildResult(res.serialize(), total, totalTris, hasBones);
     }
 
-    /** Builds bones2 for a rebuilt vbuf from the glTF's JOINTS_0/WEIGHTS_0 (joints mapped by name). */
-    private static void rebuildWeights(Glb g, Map<String, Object> a, Vbuf2Codec codec, byte[] origVbuf, int newNum) {
-        if(!a.containsKey("JOINTS_0") || !a.containsKey("WEIGHTS_0"))
-            throw new IllegalArgumentException("the glTF has no skinning data, which this model needs.");
+    /** Reads a required vertex attribute, with a clear error if the glTF is missing it. */
+    private static float[] readVec(Glb g, Map<String, Object> a, String key, int comps, String what) {
+        if(!a.containsKey(key))
+            throw new IllegalArgumentException("the glTF is missing " + what + ", which this model needs.");
+        return readAccessor(g, idx(a.get(key)), comps);
+    }
+
+    private static float[] concat(List<float[]> chunks) {
+        int n = 0;
+        for(float[] c : chunks) n += c.length;
+        float[] out = new float[n];
+        int o = 0;
+        for(float[] c : chunks) { System.arraycopy(c, 0, out, o, c.length); o += c.length; }
+        return out;
+    }
+
+    /** The matid for a primitive, recovered from its material name "rfmat_<matid>". */
+    @SuppressWarnings("unchecked")
+    private static int recoverMatid(Map<String, Object> prim, List<Object> materials,
+                                    Map<Integer, MeshInfo> matidToMesh) {
+        Object mo = prim.get("material");
+        if(mo != null && materials != null) {
+            int mIdx = ((Number) mo).intValue();
+            if(mIdx >= 0 && mIdx < materials.size()) {
+                Object nm = ((Map<String, Object>) materials.get(mIdx)).get("name");
+                Integer matid = parseMatid(nm == null ? null : nm.toString());
+                if(matid != null)
+                    return matid;
+            }
+        }
+        // fall back to the only original matid if there's just one
+        return matidToMesh.size() == 1 ? matidToMesh.keySet().iterator().next() : -1;
+    }
+
+    /** Parses the matid out of a "rfmat_<int>" material name (tolerating Blender's ".001" suffixes). */
+    private static Integer parseMatid(String name) {
+        if(name == null)
+            return null;
+        int p = name.indexOf("rfmat_");
+        if(p < 0)
+            return null;
+        int i = p + 6;
+        int start = i;
+        if(i < name.length() && name.charAt(i) == '-') i++;
+        while(i < name.length() && Character.isDigit(name.charAt(i))) i++;
+        if(i == start || (i == start + 1 && name.charAt(start) == '-'))
+            return null;
+        try {
+            return Integer.parseInt(name.substring(start, i));
+        } catch(NumberFormatException e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> materialsOf(Map<String, Object> root) {
+        return (List<Object>) root.get("materials");
+    }
+
+    /** Builds bones2 for a rebuilt vbuf from concatenated glTF JOINTS_0/WEIGHTS_0 (joints mapped by name). */
+    private static void rebuildWeights(Glb g, float[] gj, float[] gw, Vbuf2Codec codec, byte[] origVbuf, int num) {
         Vbuf2Data sd = Vbuf2Data.parse(origVbuf);
         String[] jointNames = skinJointNames(g.root);
         if(sd == null || sd.boneNames == null || jointNames == null)
@@ -217,12 +335,10 @@ public final class GltfImport {
         Map<String, Integer> nameToIdx = new HashMap<>();
         for(int i = 0; i < sd.boneNames.length; i++)
             nameToIdx.putIfAbsent(sd.boneNames[i], i);
-        float[] gj = readAccessor(g, idx(a.get("JOINTS_0")), 4);
-        float[] gw = readAccessor(g, idx(a.get("WEIGHTS_0")), 4);
-        int[] vJoints = new int[newNum * 4];
-        float[] vWeights = new float[newNum * 4];
+        int[] vJoints = new int[num * 4];
+        float[] vWeights = new float[num * 4];
         java.util.Arrays.fill(vJoints, -1);
-        for(int v = 0; v < newNum; v++)
+        for(int v = 0; v < num; v++)
             for(int k = 0; k < 4; k++) {
                 int ji = Math.round(gj[v * 4 + k]);
                 float wt = gw[v * 4 + k];
@@ -253,14 +369,14 @@ public final class GltfImport {
         return tris;
     }
 
-    private static byte[] encodeMeshRaw(MeshInfo mi, int[] tris) {
+    private static byte[] encodeMeshRaw(int matid, int id, int vbufid, int[] tris) {
         MessageWriter w = new MessageWriter();
-        boolean hasId = mi.id != -1;
+        boolean hasId = id != -1;
         int fl = 16 | (hasId ? 2 : 0);
-        w.uint8(fl).uint16(tris.length / 3).int16(mi.matid);
+        w.uint8(fl).uint16(tris.length / 3).int16(matid);
         if(hasId)
-            w.int16(mi.id);
-        w.int16(mi.vbufid);
+            w.int16(id);
+        w.int16(vbufid);
         for(int t : tris)
             w.uint16(t);
         return w.toByteArray();

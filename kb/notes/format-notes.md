@@ -119,7 +119,9 @@ little-endian binary buffer). Phase 1a (done) = static textured geometry:
 per `vbuf2` a POSITION/NORMAL/TEXCOORD_0(`tex`)/TEXCOORD_1(`otex`) accessor (all
 float32); per `mesh` a primitive (its `vbuf`'s attributes + a USHORT index
 accessor + a material); local `tex` layers → embedded `image`s + PBR materials
-(baseColorTexture, alphaMode MASK, doubleSided), reusing the OBJ `matid→mat2→
+(baseColorTexture, alphaMode MASK, doubleSided) — **one material per distinct submesh
+matid, named `rfmat_<matid>`** (so the rebuild importer can recover each part's id and
+Blender keeps texture-sharing parts separate), reusing the OBJ `matid→mat2→
 local tex` mapping. Coordinates convert Haven Z-up → glTF Y-up via
 `(x,y,z)→(x,z,-y)`. bufferViews are 4-byte aligned; the BIN chunk holds geometry
 then image bytes. Validated structurally (chunk types/alignment, every
@@ -272,13 +274,22 @@ original mesh's matid/vbufid. All other layers (textures, materials, skeleton, c
 are kept. No `_VID` is needed (vertex order = glTF order) and it gives up
 byte-exactness, so it leans on in-game testing — exposed separately as CLI
 `rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning) so it's an
-explicit choice, leaving the safe lossless `import-gltf` as the default. This first
-version targets **single-submesh** models (one `vbuf2` + one `mesh`) with
-positions/normals/UVs/bone-weights (morph and multi-submesh models are refused for
-now). Validated: a no-op rebuild of male reproduces it exactly (pos/nrm/tex diff 0,
-skinning identical, passes verify); a synthetic glb with a different vertex count
-rebuilds to that count. **Next:** multi-submesh (material→matid mapping), morph
-rebuild, then animation-keyframe editing.
+explicit choice, leaving the safe lossless `import-gltf` as the default.
+
+**Multi-submesh** is supported: each glTF primitive becomes a submesh. To recover
+which part each face belongs to (and to stop Blender merging parts that merely share
+a texture), `GltfExport` now emits **one material per distinct matid**, named
+`rfmat_<matid>`; on rebuild each primitive's matid is parsed back from its material
+name (tolerating Blender's `.001` suffixes). Primitives are concatenated into the one
+shared `vbuf2`, **de-duplicated by POSITION accessor** so our own (shared-buffer)
+export isn't copied per primitive while Blender's per-material split blocks are
+concatenated with their indices offset. The original mesh layers are all replaced by
+the rebuilt submeshes at the first mesh position, every other layer kept. This
+version handles positions/normals/UVs/bone-weights; **morph (`manim`) models are still
+refused**. Validated: no-op rebuilds of male (1 submesh) and mulberry/cutblade/
+fairystone (2–7 submeshes) reproduce exactly (matid sequence preserved, geometry diff
+0, valid containers); synthetic glbs with added vertices / separate per-material
+blocks rebuild correctly. **Next:** morph rebuild, then animation-keyframe editing.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

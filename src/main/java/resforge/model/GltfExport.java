@@ -117,6 +117,13 @@ public final class GltfExport {
         List<TexMat> texMats = collectTextures(res);
         Map<Integer, Integer> matToTex = collectMatToTex(res, texMats.size());
 
+        // One glTF material per distinct submesh matid (named "rfmat_<matid>") so the
+        // rebuild import can recover which part each face belongs to, and so Blender
+        // keeps parts that merely share a texture as separate primitives.
+        Map<Integer, Integer> matidToMat = new LinkedHashMap<>();
+        for(MeshInfo m : meshes)
+            matidToMat.putIfAbsent(m.matid, matidToMat.size());
+
         // Unified joint list = the union of every bone-bearing vbuf's influence
         // bones (JOINTS_0 is later remapped from a vbuf's local order to this).
         List<String> joints = new ArrayList<>();
@@ -226,7 +233,7 @@ public final class GltfExport {
             prim.put("attributes", new LinkedHashMap<>(attribs));
             prim.put("indices", idxAccessor);
             if(!texMats.isEmpty())
-                prim.put("material", texOrdFor(m.matid, matToTex, texMats.size()));
+                prim.put("material", matidToMat.get(m.matid));
             List<Object> targets = vbufTargets.get(m.vbufid);
             if(targets != null && !targets.isEmpty())
                 prim.put("targets", targets);
@@ -357,18 +364,23 @@ public final class GltfExport {
         if(!texMats.isEmpty()) {
             List<Object> images = new ArrayList<>();
             List<Object> textures = new ArrayList<>();
-            List<Object> materials = new ArrayList<>();
             for(int i = 0; i < texMats.size(); i++) {
                 TexMat tm = texMats.get(i);
                 int bv = addImage(bin, bufferViews, tm.image);
                 images.add(obj("bufferView", bv, "mimeType", tm.mime));
                 textures.add(obj("source", i, "sampler", 0));
+            }
+            // One material per distinct matid, each pointing at that matid's texture.
+            List<Object> materials = new ArrayList<>();
+            for(int matid : matidToMat.keySet()) {
                 Map<String, Object> pbr = new LinkedHashMap<>();
-                pbr.put("baseColorTexture", obj("index", i, "texCoord", 0));
+                Integer texOrd = texOrdFor(matid, matToTex, texMats.size());
+                if(texOrd >= 0 && texOrd < texMats.size())
+                    pbr.put("baseColorTexture", obj("index", texOrd, "texCoord", 0));
                 pbr.put("metallicFactor", 0.0);
                 pbr.put("roughnessFactor", 1.0);
                 Map<String, Object> mat = new LinkedHashMap<>();
-                mat.put("name", tm.matName);
+                mat.put("name", "rfmat_" + matid);
                 mat.put("doubleSided", Boolean.TRUE);
                 mat.put("alphaMode", "MASK");
                 mat.put("alphaCutoff", 0.5);
