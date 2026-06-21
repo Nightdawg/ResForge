@@ -3,6 +3,7 @@ package resforge.gui;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.AudioInfo;
+import resforge.layers.BoneOffCodec;
 import resforge.layers.BoneOffInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
@@ -262,6 +263,8 @@ public final class GuiSupport {
             return NegCodec.toJsonIfLossless(l.data);
         if(l.name.equals("obst"))
             return ObstCodec.toJsonIfLossless(l.data);
+        if(l.name.equals("boneoff"))
+            return BoneOffCodec.toJsonIfLossless(l.data);
         return null;
     }
 
@@ -595,6 +598,12 @@ public final class GuiSupport {
                 break;
             }
             case "obst": {
+                String j = editableJson(l);
+                if(j != null)
+                    return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");
+                break;
+            }
+            case "boneoff": {
                 String j = editableJson(l);
                 if(j != null)
                     return new Export(j.getBytes(StandardCharsets.UTF_8), "json", "JSON");

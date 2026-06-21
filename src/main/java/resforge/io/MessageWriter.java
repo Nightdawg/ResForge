@@ -92,6 +92,28 @@ public class MessageWriter {
         return this;
     }
 
+    /** Custom-packed float (haven {@code Message.cpfloat} / {@code Utils.floate}): a
+     *  signed {@code int8} exponent then a little-endian {@code uint32} with the sign
+     *  in the top bit and a 31-bit mantissa. The exact inverse of
+     *  {@link MessageReader#cpfloat()} for values it produced, so a decode→encode is
+     *  byte-identical. {@code 0.0} is the special form {@code e=-128, t=0}.
+     *  @throws IllegalArgumentException if the value's exponent is outside [-127, 127]. */
+    public MessageWriter cpfloat(double d) {
+        if(d == 0.0)
+            return int8(-128).int32(0);
+        int s = (d < 0) ? 1 : 0;
+        double a = Math.abs(d);
+        int e = Math.getExponent(a);
+        long m = Math.round((a / Math.scalb(1.0, e) - 1.0) * 2147483648.0);
+        if(m == 2147483648L) {                              // rounding rolled into the next binade
+            m = 0;
+            e++;
+        }
+        if(e < -127 || e > 127)
+            throw new IllegalArgumentException("cpfloat exponent out of range: " + e);
+        return int8(e).int32((int) (((long) s << 31) | m));
+    }
+
     public MessageWriter bytes(byte[] b) {
         out.writeBytes(b);
         return this;

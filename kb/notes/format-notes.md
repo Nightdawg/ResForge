@@ -231,12 +231,16 @@ Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 `flex` (8 @75ms) — all `id=-1`, frame ids contiguous from 128.
 
 ## rig / lighting layers (light, skel, skan, boneoff)
-Read-only viewers ported from the client's `Light.java` and `Skeleton.java`
-(LGPL-3, in `docs/reference/`). These stay raw/lossless; we only surface structure.
+Viewers ported from the client's `Light.java` and `Skeleton.java`
+(LGPL-3, in `docs/reference/`). `light`/`skel`/`skan` stay raw/lossless (we only
+surface structure); **`boneoff` is editable JSON** (see below).
 They use number encodings beyond the basic primitives, now in `MessageReader`:
 - **`cpfloat`** — custom-packed float: `int8` exponent + LE `uint32` (top bit sign,
   low 31 bits mantissa); value = `2^e · (1 + m/2^31)`, with `e=-128,m=0` meaning 0.
   Mirrors `haven.Utils.floatd`. (Validated bit-exact on real `light`/`skel` samples.)
+  `MessageWriter.cpfloat` is the exact inverse — `e = getExponent(a)`,
+  `m = round((a/2^e − 1)·2^31)` (with a carry when rounding rolls into the next binade),
+  so a decode→encode is byte-identical (verified on all 42 sample cpfloat values).
 - **`mnorm16`** = `uint16/2^16` (modular [0,1)), **snorm16** = `int16/0x7fff`
   (signed [-1,1]), **unorm16** = `uint16/0xffff` ([0,1]).
 - **`oct2uvec`** — decodes an octahedral-encoded unit vector from two snorm16s.
@@ -258,11 +262,19 @@ Formats:
   fmt1 = unorm16 time, 3×half-float trans, mnorm16 ang, 2×snorm16 axis). FX events:
   `u16 count`, each time + `u8 t` (`t&0x80` ⇒ sub-message of `u16` length); t 0/2
   spawn-sprite (resname+ver+sdt[+eqp]), 1 trigger, 3 mkoverlay, 4 rmoverlay.
-- **`boneoff`** (`BoneOffInfo`): equip-point opcode program — `string name` then
+- **`boneoff`** (`BoneOffInfo` for the read-only summary; `BoneOffCodec` for editing):
+  equip-point opcode program — `string name` then
   opcodes to EOM: 0/16 translate (cpfloat/float32), 1/17 rotate (cpfloat / mnorm16
   ang + oct axis), 2 equip-point at named bone, 3/19 bone-align, 4 null-rotation,
-  5 scale (float32).
-Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28. e.g.
+  5 scale (float32). **Editable as JSON** `{name, ops:[{op,…},…]}` (`BoneOffCodec`,
+  codec name `boneoff`, lossless-or-raw). The cpfloat/float32 translations decode to
+  plain numbers; the quantised rotation (opcode 17/19) keeps its axis as the **raw
+  octahedral `snorm16` ints** (`axisOct`/`refOct`) rather than a decoded unit vector,
+  because oct2uvec→uvec2oct is **not** byte-exact (drifts ±1 on 4/20 sample instances) —
+  storing the raw components keeps all 28 sample boneoffs losslessly editable, while the
+  mnorm16 angle (exact) is exposed as a friendly turn-fraction `angleTurns`.
+Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28 (all 28
+boneoffs round-trip byte-exact, `verify` BoneOff histogram = `json 28`). e.g.
 knarr's skel = 11 bones (Main root + sails/oar), skan = 8 s loop, 11 tracks.
 
 ## manim layer (mesh / morph animation)

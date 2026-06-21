@@ -730,6 +730,7 @@ public class ResForgeFrame extends JFrame {
             case "material":
             case "hitbox":
             case "collision":
+            case "equip point":
                 buildJsonPanel(content, idx, l);
                 break;
             case "animation":
@@ -754,7 +755,6 @@ public class ResForgeFrame extends JFrame {
             case "light":
             case "skeleton":
             case "skeletal anim":
-            case "equip point":
             case "mesh anim":
                 buildRigPanel(content, idx, l);
                 break;

@@ -77,6 +77,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `anim`            | `*.json`                     | edit sprite animation (speed + frames) as JSON |
 | `neg`             | `*.json`                     | edit click hotspot / hitbox + connection points as JSON |
 | `obst`            | `*.json`                     | edit movement-collision polygons as JSON |
+| `boneoff`         | `*.json`                     | edit equip-point placement (translate/rotate ops) as JSON |
 | `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
 | `midi`            | `*.mid`                      | swap the MIDI music      |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
@@ -249,7 +250,8 @@ for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`), action/keybind metadata (`action`) and
 materials (`mat2`) as JSON, sprite animations (`anim`: speed + frame sequence) as
 JSON, click hitboxes (`neg`: hotspot + connection points) as JSON, movement
-collision (`obst`: polygons) as JSON, and text. **3D models** get a full
+collision (`obst`: polygons) as JSON, equip-point placement (`boneoff`: the
+translate/rotate opcode program) as JSON, and text. **3D models** get a full
 edit-and-add/remove round-trip through Blender via glTF (see "Editing 3D models"
 above): export carries geometry, both UV sets, textures, skeleton, skinning and
 animations; **Rebuild from glTF** brings edits back — regenerating geometry so
@@ -266,8 +268,9 @@ of this up into one deduplicated report of every resource a file references —
 gathered across `deps`, `rlink`, `code` classpaths and `mat2` material links.
 The rig/lighting layers are also decoded read-only: `light` (light type, colours,
 attenuation/direction), `skel` (bone hierarchy), `skan` (skeletal animation:
-length, mode, per-bone tracks), `boneoff` (equip-point transforms) and `manim`
-(mesh/morph animation: per-frame vertex offsets). The skeletal/morph **animation
+length, mode, per-bone tracks) and `manim`
+(mesh/morph animation: per-frame vertex offsets); `boneoff` (equip-point
+transforms) is editable as JSON. The skeletal/morph **animation
 keyframes** themselves (`skan` timing; adding/removing `manim` frames) are the main
 thing the round-trip doesn't yet edit; deeper typed editing can be layered on
 incrementally using the same parts model.

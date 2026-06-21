@@ -67,10 +67,10 @@ image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
 offset — **editable** for old-style image headers)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
 sibling image layers, composited at their true relative size + per-frame offset),
-tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
+tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**/**obst**/**boneoff**
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
-`src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`/`manim`
+`src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`manim`
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
@@ -94,7 +94,7 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `DepsInfo`, `RLinkInfo`, `SrcInfo`, `LightInfo`, `SkelInfo`, `SkanInfo`,
   `BoneOffInfo`, `MeshAnimInfo` (read-only); typed JSON codecs `PropsCodec`,
   `ActionCodec`, `Mat2Codec`,
-  `AnimCodec`,   `NegCodec`, `ObstCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
+  `AnimCodec`,   `NegCodec`, `ObstCodec`, `BoneOffCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
@@ -129,12 +129,13 @@ References… (aggregated reference report dialog), **resource-version spinner**
 | `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
 | `obst` | edit as JSON (collision polygons; float16 coords, lossless-or-raw) |
+| `boneoff` | edit as JSON (equip-point opcode program: translate/rotate/eqpoint/bonealign/scale; cpfloat exact, quantised rotation kept as raw octahedral ints, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
 | `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF; `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `light` | **read-only**: light source — type (point/spot/directional), id, ambient/diffuse/specular colours, attenuation/direction/exponent (cpfloat ver0, float32 ver1) |
-| `skel`/`skan`/`boneoff` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events), equip-point opcode program (`boneoff`) |
+| `skel`/`skan` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events) |
 | `manim` | **read-only**: mesh/morph animation — id, length, play order, per-frame vertex-morph format + counts |
 | everything else (`tileset2`,`clamb`,`foodev`,`rdesc`,…) | **raw passthrough** (lossless) |
 
@@ -225,6 +226,14 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
   broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
+- Typed editor for **`boneoff` is now done** (equip-point opcode program → JSON via
+  `BoneOffCodec`, lossless-or-raw): translate/rotate/eqpoint/bonealign/scale ops, with
+  a new exact `MessageWriter.cpfloat` encoder (inverse of `Utils.floatd`). The quantised
+  rotation (opcode 17/19) keeps its axis as raw octahedral `snorm16` ints because the
+  octahedral round-trip isn't byte-exact (drifts ±1 on 4/20 sample instances), so storing
+  the raw components keeps all 28 sample boneoffs losslessly editable. The friendly
+  cpfloat/float32 translations edit as plain numbers. (`BoneOffInfo` still backs the
+  one-line table summary + CLI catalog.)
 - **Read-only dependency/reference view is now done** for `deps`/`rlink`/`src`
   (`DepsInfo`/`RLinkInfo`/`SrcInfo`) — shows what other resources a `.res` references.
   The **aggregated cross-layer reference report is also done** (`res/References`,
@@ -235,7 +244,8 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
   (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`) and `manim`
   (`MeshAnimInfo`, mesh/morph animation), ported from the client's
-  `Light.java`/`Skeleton.java`/`MeshAnim.java`. Added the `cpfloat`/`mnorm16`/
+  `Light.java`/`Skeleton.java`/`MeshAnim.java` (`boneoff` has since become editable
+  JSON, see above). Added the `cpfloat`/`mnorm16`/
   `snorm16`/`unorm16`/`oct2uvec` io primitives they need. **Every layer type in the
   samples is now decoded** (read-only or editable). These decoders + primitives are
   the groundwork for a future skeleton/animation **write** path (would benefit from
