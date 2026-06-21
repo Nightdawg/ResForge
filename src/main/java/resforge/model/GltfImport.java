@@ -213,12 +213,16 @@ public final class GltfImport {
 
     /* --------------------------------------------- order-based (no ids: exact count) */
 
+    private static final String ATTR_HINT =
+            "In Blender's glTF export, expand \"Data > Mesh\" and tick \"Attributes\" "
+                    + "(it is OFF by default) so the per-vertex ids ResForge embeds survive the "
+                    + "round-trip, then export and re-import again.";
+
     private static Result applyByOrder(Glb g, List<Map<String, Object>> prims, Vbuf2Codec codec) {
         if(prims.size() != 1)
             throw new IllegalArgumentException(
-                    "this glTF has no vertex ids and multiple primitives, so vertices can't be "
-                            + "matched. Re-export it from ResForge and enable \"Data > Mesh > "
-                            + "Attributes\" in Blender's glTF export so vertex ids are preserved.");
+                    "this glTF has no vertex ids and multiple primitives, so its vertices can't be "
+                            + "matched to the model. " + ATTR_HINT);
         Map<String, Object> a = prims.get(0);
         if(!a.containsKey("POSITION"))
             throw new IllegalArgumentException("the glTF has no mesh positions to import");
@@ -226,10 +230,9 @@ public final class GltfImport {
         int glVerts = p.length / 3;
         if(glVerts != codec.num)
             throw new IllegalArgumentException(
-                    "vertex count changed (glTF has " + glVerts + ", resource has " + codec.num
-                            + ") and the glTF carries no vertex ids. Re-export the model from "
-                            + "ResForge and enable \"Data > Mesh > Attributes\" in Blender's glTF "
-                            + "export so edited models can be matched back regardless of count.");
+                    "this glTF has no vertex ids and its " + glVerts + " vertices don't match the "
+                            + "model's " + codec.num + " (tools like Blender re-split vertices, so "
+                            + "the count changes). " + ATTR_HINT);
 
         codec.setAttr("pos", axisInvert(p));
         boolean didNrm = false, didTex = false, didOtex = false;

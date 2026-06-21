@@ -184,12 +184,47 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    /** Like {@link #miniGlb} but with no {@code _VID} (POSITION only). */
+    private static byte[] miniGlbPosOnly(float[] gpos) {
+        int m = gpos.length / 3;
+        int posLen = m * 12;
+        MessageWriter bin = new MessageWriter();
+        for(float v : gpos) bin.float32(v);
+        String json = "{\"asset\":{\"version\":\"2.0\"},"
+                + "\"buffers\":[{\"byteLength\":" + posLen + "}],"
+                + "\"bufferViews\":[{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + posLen + "}],"
+                + "\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0}}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        int len = 12 + 8 + jpad.length + 8 + bpad.length;
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(len);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
     private static byte[] pad(byte[] b, byte fill) {
         int rem = b.length % 4;
         if(rem == 0) return b;
         byte[] out = java.util.Arrays.copyOf(b, b.length + (4 - rem));
         for(int i = b.length; i < out.length; i++) out[i] = fill;
         return out;
+    }
+
+    @Test
+    void missingIdsWithChangedCountSuggestsEnablingAttributes() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        // a glTF with no _VID and a different vertex count (Blender re-split)
+        byte[] glb = miniGlbPosOnly(new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1, 2, 2, 2});
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.apply(res.serialize(), glb));
+        assertTrue(ex.getMessage().contains("Attributes"), ex.getMessage());
     }
 
     @Test

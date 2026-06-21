@@ -1144,7 +1144,8 @@ public class ResForgeFrame extends JFrame {
         }
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("3D geometry is read-only here; export to glTF to edit the whole "
-                + "model in Blender, then re-import the edited .glb."));
+                + "model in Blender, then re-import the edited .glb. (When exporting from Blender, "
+                + "enable \"Data > Mesh > Attributes\" so vertices can be matched back.)"));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
