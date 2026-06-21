@@ -6,6 +6,7 @@ import resforge.layers.AudioInfo;
 import resforge.layers.BoneOffCodec;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
+import resforge.layers.LightCodec;
 import resforge.layers.Mat2Codec;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
@@ -125,6 +126,13 @@ public class Unpacker {
                 String part = LAYERS_SUBDIR + "/" + base + ".json";
                 Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
                 return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "boneoff");
+            }
+        } else if(layer.name.equals("light")) {
+            String json = LightCodec.toJsonIfLossless(layer.data);
+            if(json != null) {
+                String part = LAYERS_SUBDIR + "/" + base + ".json";
+                Files.write(outDir.resolve(part), json.getBytes(StandardCharsets.UTF_8));
+                return new Manifest.Entry(layer.name, new ArrayList<>(List.of(part)), "light");
             }
         } else if(layer.name.equals("mat2")) {
             String json = Mat2Codec.toJsonIfLossless(layer.data);

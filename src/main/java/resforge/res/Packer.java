@@ -4,6 +4,7 @@ import resforge.io.Json;
 import resforge.layers.ActionCodec;
 import resforge.layers.AnimCodec;
 import resforge.layers.BoneOffCodec;
+import resforge.layers.LightCodec;
 import resforge.layers.Mat2Codec;
 import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
@@ -122,6 +123,19 @@ public class Packer {
                 return BoneOffCodec.encode(model);
             } catch(RuntimeException ex) {
                 throw new IOException("Failed to encode boneoff layer '" + e.name + "': " + ex.getMessage(), ex);
+            }
+        }
+        if(e.codec.equals("light")) {
+            if(e.parts.size() != 1)
+                throw new IOException("light codec expects 1 part (json) for layer '"
+                        + e.name + "', found " + e.parts.size());
+            String json = new String(read(dir, e.parts.get(0)), StandardCharsets.UTF_8);
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> model = (Map<String, Object>) Json.parse(json);
+                return LightCodec.encode(model);
+            } catch(RuntimeException ex) {
+                throw new IOException("Failed to encode light layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
         if(e.codec.equals("mat2")) {
