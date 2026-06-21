@@ -146,13 +146,12 @@ public final class GltfImport {
         Glb g = parseGlb(glb);
         ResContainer res = ResContainer.parse(origRes);
 
-        int vbufIdx = -1, vbufN = 0, manimN = 0;
+        int vbufIdx = -1, vbufN = 0;
         List<Integer> meshIdxs = new ArrayList<>();
         for(int i = 0; i < res.layers.size(); i++) {
             String nm = res.layers.get(i).name;
             if(nm.equals("vbuf2")) { vbufN++; vbufIdx = i; }
             else if(nm.equals("mesh")) meshIdxs.add(i);
-            else if(nm.equals("manim")) manimN++;
         }
         if(vbufN != 1 || meshIdxs.isEmpty())
             throw new IllegalArgumentException(
@@ -236,7 +235,7 @@ public final class GltfImport {
                 posOffset.put(posAcc, offset);
                 total += cnt;
             }
-            int[] tris = readIndices(g, prim, total);
+            int[] tris = readIndices(g, prim);
             for(int i = 0; i < tris.length; i++)
                 tris[i] += offset;
             meshTris.add(tris);
@@ -488,11 +487,13 @@ public final class GltfImport {
         codec.setBones2(sd.boneNames, vJoints, vWeights);
     }
 
-    /** Reads the primitive's triangle indices (or generates a trivial list if non-indexed). */
-    private static int[] readIndices(Glb g, Map<String, Object> prim, int newNum) {
+    /** Reads the primitive's triangle indices (or generates a trivial list over its own vertices if non-indexed). */
+    @SuppressWarnings("unchecked")
+    private static int[] readIndices(Glb g, Map<String, Object> prim) {
         Object idxAcc = prim.get("indices");
         if(idxAcc == null) {
-            int[] t = new int[newNum - (newNum % 3)];
+            int pc = accessorCount(g, idx(((Map<String, Object>) prim.get("attributes")).get("POSITION")));
+            int[] t = new int[pc - (pc % 3)];
             for(int i = 0; i < t.length; i++)
                 t[i] = i;
             return t;
@@ -502,6 +503,12 @@ public final class GltfImport {
         for(int i = 0; i < raw.length; i++)
             tris[i] = Math.round(raw[i]);
         return tris;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static int accessorCount(Glb g, int index) {
+        Map<String, Object> acc = (Map<String, Object>) ((List<Object>) g.root.get("accessors")).get(index);
+        return ((Number) acc.get("count")).intValue();
     }
 
     private static byte[] encodeMeshRaw(int matid, int id, int vbufid, int[] tris) {
@@ -1105,16 +1112,6 @@ public final class GltfImport {
     @SuppressWarnings("unchecked")
     private static Map<String, Object> attributesOf(Map<String, Object> prim) {
         return (Map<String, Object>) prim.get("attributes");
-    }
-
-    /** The first primitive (across all meshes) whose attributes include POSITION. */
-    private static Map<String, Object> firstPrimitiveWithPosition(Map<String, Object> root) {
-        for(Map<String, Object> prim : allPrimitives(root)) {
-            Map<String, Object> at = attributesOf(prim);
-            if(at != null && at.containsKey("POSITION"))
-                return prim;
-        }
-        return null;
     }
 
     private static int idx(Object o) {
