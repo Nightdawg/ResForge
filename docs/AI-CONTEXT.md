@@ -232,9 +232,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
   becomes a submesh; the export now emits one material per matid (`rfmat_<matid>`) so
   rebuild recovers each part's id from its material name and Blender doesn't merge
-  parts sharing a texture. Handles positions/normals/UVs/bone-weights; morph models
-  refused. Validated no-op on male + mulberry/cutblade/fairystone (2–7 submeshes).
-  **Next: morph rebuild**, then `skan` animation-keyframe editing.
+  parts sharing a texture. Handles positions/normals/UVs/bone-weights **and morph
+  (`manim`) models** (frame shapes rebuilt from glTF morph targets, re-encoded at the
+  new vertex count, frame count unchanged). Not yet: tangent/bitangent models
+  (knarr/woodheart — need tangents recomputed from new UVs). Validated no-op on male +
+  mulberry/cutblade/fairystone (2–7 submeshes) + wisp/algaeblob (morph); cutblade
+  add/remove confirmed in-game. **Next: tangent recompute**, then animation-keyframe editing.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.

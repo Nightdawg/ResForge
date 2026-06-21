@@ -284,12 +284,20 @@ name (tolerating Blender's `.001` suffixes). Primitives are concatenated into th
 shared `vbuf2`, **de-duplicated by POSITION accessor** so our own (shared-buffer)
 export isn't copied per primitive while Blender's per-material split blocks are
 concatenated with their indices offset. The original mesh layers are all replaced by
-the rebuilt submeshes at the first mesh position, every other layer kept. This
-version handles positions/normals/UVs/bone-weights; **morph (`manim`) models are still
-refused**. Validated: no-op rebuilds of male (1 submesh) and mulberry/cutblade/
-fairystone (2–7 submeshes) reproduce exactly (matid sequence preserved, geometry diff
-0, valid containers); synthetic glbs with added vertices / separate per-material
-blocks rebuild correctly. **Next:** morph rebuild, then animation-keyframe editing.
+the rebuilt submeshes at the first mesh position, every other layer kept. It handles
+positions/normals/UVs/bone-weights **and morph (`manim`) models**: each frame's
+shape is rebuilt from the glTF morph targets (concatenated per part like the
+geometry, axis-inverted) and re-encoded via `MeshAnimInfo.encodeWith` at the new
+vertex count, keeping the original frame times; the shape-key count must equal the
+frame count (adding/removing morph frames isn't supported yet). **Not yet supported:**
+models with tangent/bitangent (`tan`/`bit`) attributes — normal-mapped meshes like
+knarr/woodheart — since glTF doesn't carry the bitangent and tangents would need
+recomputing from the new UVs (a planned follow-up). Validated: no-op rebuilds of male
+(1 submesh), mulberry/cutblade/fairystone (2–7 submeshes) and wisp/algaeblob (morph,
+2 manims each) reproduce exactly (matid sequence + geometry diff 0 + morph deltas 0,
+valid containers); cutblade's add/remove edit confirmed in-game; synthetic glbs with
+added vertices / separate per-material blocks / a morph target rebuild correctly.
+**Next:** tangent recompute (unblocks knarr), then animation-keyframe editing.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
