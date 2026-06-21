@@ -560,8 +560,10 @@ feedback loop.
   share a texture separate; primitives are concatenated into the shared `vbuf2`,
   de-duplicated by POSITION accessor. Handles positions/normals/UVs/bone-weights **and
   morph (`manim`) models** (frame shapes rebuilt from the glTF targets, re-encoded at
-  the new vertex count). Not yet: tangent/bitangent models (need tangents recomputed
-  from new UVs). **Remaining:** tangent recompute, then `skan`/`manim` keyframe editing.
+  the new vertex count). Normal-mapped models (`tan`/`bit`) work too — the tangent
+  basis is recomputed from the new positions/UVs (Lengyel + Gram-Schmidt; Haven stores
+  `bit` identical to `tan`). **Remaining:** `skan`/`manim` keyframe editing (add/remove/
+  retime animation frames).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.

@@ -289,15 +289,20 @@ positions/normals/UVs/bone-weights **and morph (`manim`) models**: each frame's
 shape is rebuilt from the glTF morph targets (concatenated per part like the
 geometry, axis-inverted) and re-encoded via `MeshAnimInfo.encodeWith` at the new
 vertex count, keeping the original frame times; the shape-key count must equal the
-frame count (adding/removing morph frames isn't supported yet). **Not yet supported:**
-models with tangent/bitangent (`tan`/`bit`) attributes — normal-mapped meshes like
-knarr/woodheart — since glTF doesn't carry the bitangent and tangents would need
-recomputing from the new UVs (a planned follow-up). Validated: no-op rebuilds of male
-(1 submesh), mulberry/cutblade/fairystone (2–7 submeshes) and wisp/algaeblob (morph,
-2 manims each) reproduce exactly (matid sequence + geometry diff 0 + morph deltas 0,
-valid containers); cutblade's add/remove edit confirmed in-game; synthetic glbs with
-added vertices / separate per-material blocks / a morph target rebuild correctly.
-**Next:** tangent recompute (unblocks knarr), then animation-keyframe editing.
+frame count (adding/removing morph frames isn't supported yet). **Normal-mapped
+models** (`tan`/`bit` attributes, e.g. knarr/woodheart) work too: glTF doesn't carry
+the tangent basis, so it's **recomputed** from the new positions/UVs/triangles
+(Lengyel's method + Gram-Schmidt against the normal; degenerate verts fall back to an
+arbitrary perpendicular). Empirically Haven stores `bit` byte-identical to `tan` (all
+6 sampled normal-mapped models), so one tangent is computed and written to both; the
+recompute matches the original to ~1.3° median (verified on knarr/woodheart). Validated:
+no-op rebuilds of male (1 submesh), mulberry/cutblade/fairystone (2–7 submeshes),
+wisp/algaeblob (morph) and **knarr** (multi-part + morph + skinned + normal-mapped)
+reproduce exactly / faithfully (matid sequence + geometry diff 0 + morph deltas 0 +
+tangents within ~1.3°, valid containers); cutblade's add/remove edit confirmed in-game;
+synthetic glbs with added vertices / separate per-material blocks / a morph target /
+tangent recompute rebuild correctly. **Next:** animation-keyframe editing
+(`skan`/`manim` add/remove/retime frames).
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
