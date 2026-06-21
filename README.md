@@ -31,7 +31,7 @@ re-UV, re-paint **skinning weights**, re-pose the **skeleton**, re-shape **morph
 matched vertex-for-vertex and re-quantised into the original on-wire formats);
 **Rebuild from glTF** to regenerate geometry so you can **add, remove or
 re-topologize vertices and faces** (multi-part, morph, skinned and normal-mapped
-models supported — tangents are recomputed); plus a simpler **OBJ** export. You can
+models supported — tangents are recomputed). You can
 also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
@@ -219,9 +219,6 @@ resforge import-gltf horse.res horse.glb horse-edited.res
 
 # Rebuild geometry from a glTF, allowing added/removed vertices (not byte-lossless):
 resforge rebuild-gltf horse.res horse.glb horse-edited.res
-
-# ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):
-resforge obj    horse.res horse.obj
 
 # Validate round-trip + image splitting for one file or a whole folder:
 resforge verify path/to/folder-of-res

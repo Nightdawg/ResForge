@@ -98,13 +98,13 @@ tagged-value form (a string stays a plain JSON string; everything else is a
 single-tag object like `{"color":[204,204,204,255]}`, `{"f32":0.5}`, `{"u8":0}`)
 under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value-list".
 
-## material → texture mapping (for OBJ export)
+## material → texture mapping
 A `mesh` references a material by `matid`; the `mat2` with that `id` describes the
 look. A material points at its texture via a `tex`/`otex` command: a **local**
 texture is `[{u8:k}]` (k indexes this resource's own `tex` layers), while an
 **external** texture is `[<string respath>, …]` (e.g. `mlink` →
-`gfx/terobjs/trees/peartree-tex` — lives in *another* `.res`). `ObjExport` writes
-`.mtl` + the local `tex` images only: single-tex models map cleanly to everything;
+`gfx/terobjs/trees/peartree-tex` — lives in *another* `.res`). The glTF export uses
+the local `tex` images only: single-tex models map cleanly to everything;
 multi-tex use the `matid→mat2→local tex` chain best-effort; external (mlink)
 textures aren't fetched. (knarr: 6 local tex but most parts use external mlinks.)
 
@@ -121,7 +121,7 @@ float32); per `mesh` a primitive (its `vbuf`'s attributes + a USHORT index
 accessor + a material); local `tex` layers → embedded `image`s + PBR materials
 (baseColorTexture, alphaMode MASK, doubleSided) — **one material per distinct submesh
 matid, named `rfmat_<matid>`** (so the rebuild importer can recover each part's id and
-Blender keeps texture-sharing parts separate), reusing the OBJ `matid→mat2→
+Blender keeps texture-sharing parts separate), reusing the `matid→mat2→
 local tex` mapping. Coordinates convert Haven Z-up → glTF Y-up via
 `(x,y,z)→(x,z,-y)`. bufferViews are 4-byte aligned; the BIN chunk holds geometry
 then image bytes. Validated structurally (chunk types/alignment, every
