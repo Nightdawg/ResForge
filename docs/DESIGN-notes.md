@@ -558,8 +558,10 @@ feedback loop.
   with each part's matid recovered from its material name — the export now emits one
   material per matid (`rfmat_<matid>`) so the id survives and Blender keeps parts that
   share a texture separate; primitives are concatenated into the shared `vbuf2`,
-  de-duplicated by POSITION accessor. Handles positions/normals/UVs/bone-weights;
-  morph models refused. **Remaining:** morph rebuild, then `skan` keyframe editing.
+  de-duplicated by POSITION accessor. Handles positions/normals/UVs/bone-weights **and
+  morph (`manim`) models** (frame shapes rebuilt from the glTF targets, re-encoded at
+  the new vertex count). Not yet: tangent/bitangent models (need tangents recomputed
+  from new UVs). **Remaining:** tangent recompute, then `skan`/`manim` keyframe editing.
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.

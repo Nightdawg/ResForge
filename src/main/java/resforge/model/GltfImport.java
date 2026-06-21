@@ -158,9 +158,21 @@ public final class GltfImport {
             throw new IllegalArgumentException(
                     "rebuild needs one shared vbuf2 and at least one mesh; this resource has "
                             + vbufN + " vbuf2 and " + meshIdxs.size() + " mesh layers.");
-        if(manimN > 0)
-            throw new IllegalArgumentException(
-                    "rebuild of morph-animated models isn't supported yet (edit those with Import glTF instead).");
+        // morph layers re-encode at the new vertex count (shapes from the glTF targets,
+        // timing kept from the original); the frame count must be unchanged.
+        List<MeshAnimInfo> manims = new ArrayList<>();
+        List<Integer> manimIdxs = new ArrayList<>();
+        int totalFrames = 0;
+        for(int i = 0; i < res.layers.size(); i++)
+            if(res.layers.get(i).name.equals("manim")) {
+                MeshAnimInfo mai = MeshAnimInfo.parse(res.layers.get(i).data);
+                if(!mai.recognized)
+                    throw new IllegalArgumentException("couldn't decode a manim layer to rebuild it.");
+                manims.add(mai);
+                manimIdxs.add(i);
+                totalFrames += mai.frames.size();
+            }
+        boolean hasManim = !manims.isEmpty();
 
         byte[] origVbuf = res.layers.get(vbufIdx).data;
         Vbuf2Codec codec = Vbuf2Codec.parse(origVbuf);
@@ -194,6 +206,8 @@ public final class GltfImport {
         int total = 0;
         List<int[]> meshTris = new ArrayList<>();
         List<Integer> meshMatids = new ArrayList<>();
+        List<List<float[]>> tChunks = new ArrayList<>();     // morph target deltas, per target -> chunks
+        int[] targetN = {-1};
 
         for(Map<String, Object> prim : allPrimitives(g.root)) {
             Map<String, Object> a = attributesOf(prim);
@@ -214,6 +228,8 @@ public final class GltfImport {
                     cJoints.add(readVec(g, a, "JOINTS_0", 4, "skinning joints"));
                     cWeights.add(readVec(g, a, "WEIGHTS_0", 4, "skinning weights"));
                 }
+                if(hasManim)
+                    readMorphChunks(g, prim, cnt, tChunks, targetN);
                 offset = total;
                 posOffset.put(posAcc, offset);
                 total += cnt;
@@ -238,8 +254,30 @@ public final class GltfImport {
             rebuildWeights(g, concat(cJoints), concat(cWeights), codec, origVbuf, total);
         byte[] newVbuf = codec.encode();
 
+        // Re-encode each manim at the new vertex count (shapes from the glTF targets).
+        Map<Integer, byte[]> manimReplace = new HashMap<>();
+        if(hasManim) {
+            if(targetN[0] != totalFrames)
+                throw new IllegalArgumentException(
+                        "the glTF has " + targetN[0] + " shape keys but the model's morph animation has "
+                                + totalFrames + " frames; rebuild can't add or remove morph frames yet.");
+            float[][] combined = new float[totalFrames][];
+            for(int t = 0; t < totalFrames; t++)
+                combined[t] = concat(tChunks.get(t));
+            int gi = 0;
+            for(int m = 0; m < manims.size(); m++) {
+                MeshAnimInfo mai = manims.get(m);
+                int cntF = mai.frames.size();
+                float[][] fd = new float[cntF][];
+                for(int f = 0; f < cntF; f++)
+                    fd[f] = combined[gi + f];
+                manimReplace.put(manimIdxs.get(m), mai.encodeWith(fd, total, 1e-6f));
+                gi += cntF;
+            }
+        }
+
         // Rebuild the layer list: vbuf2 in place, all old mesh layers replaced by the
-        // new submeshes at the first mesh position, every other layer kept.
+        // new submeshes at the first mesh position, manim layers re-encoded, others kept.
         List<Layer> outLayers = new ArrayList<>();
         java.util.Set<Integer> meshSet = new java.util.HashSet<>(meshIdxs);
         boolean meshEmitted = false;
@@ -258,6 +296,8 @@ public final class GltfImport {
                     }
                     meshEmitted = true;
                 }
+            } else if(manimReplace.containsKey(i)) {
+                outLayers.add(new Layer("manim", manimReplace.get(i)));
             } else {
                 outLayers.add(res.layers.get(i));
             }
@@ -324,6 +364,31 @@ public final class GltfImport {
     @SuppressWarnings("unchecked")
     private static List<Object> materialsOf(Map<String, Object> root) {
         return (List<Object>) root.get("materials");
+    }
+
+    /** Reads this primitive's morph-target POSITION deltas (axis-inverted) into the per-target chunk lists. */
+    private static void readMorphChunks(Glb g, Map<String, Object> prim, int cnt,
+                                        List<List<float[]>> tChunks, int[] targetN) {
+        Object tg = prim.get("targets");
+        if(tg == null)
+            throw new IllegalArgumentException(
+                    "this model has morph animation but the glTF has no shape keys to rebuild it from.");
+        List<?> targets = (List<?>) tg;
+        if(targetN[0] < 0) {
+            targetN[0] = targets.size();
+            for(int t = 0; t < targetN[0]; t++)
+                tChunks.add(new ArrayList<>());
+        }
+        if(targets.size() != targetN[0])
+            throw new IllegalArgumentException("the glTF's parts have inconsistent shape-key counts.");
+        for(int t = 0; t < targetN[0]; t++) {
+            Object pa = ((Map<?, ?>) targets.get(t)).get("POSITION");
+            float[] td = (pa == null) ? new float[cnt * 3]
+                    : axisInvert(readAccessor(g, ((Number) pa).intValue(), 3));
+            if(td.length != cnt * 3)
+                td = java.util.Arrays.copyOf(td, cnt * 3);
+            tChunks.get(t).add(td);
+        }
     }
 
     /** Builds bones2 for a rebuilt vbuf from concatenated glTF JOINTS_0/WEIGHTS_0 (joints mapped by name). */

@@ -706,6 +706,76 @@ class GltfImportTest {
         assertTrue(minB > maxA, "second submesh indices are offset past the first block");
     }
 
+    /** Like {@link #geomGlb} but adds one dense morph target with the given deltas. */
+    private static byte[] geomGlbMorph(float[] pos, float[] nrm, float[] tex, int[] indices, float[] morph) {
+        int m = pos.length / 3;
+        int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2, mLen = m * 12;
+        MessageWriter bin = new MessageWriter();
+        for(float v : pos) bin.float32(v);
+        for(float v : nrm) bin.float32(v);
+        for(float v : tex) bin.float32(v);
+        for(int v : indices) bin.uint16(v);
+        if((idxLen & 3) != 0) bin.uint16(0);
+        for(float v : morph) bin.float32(v);
+        int po = 0, no = posLen, to = posLen + nrmLen, io = posLen + nrmLen + texLen;
+        int mo = io + ((idxLen + 3) & ~3);
+        int total = mo + mLen;
+        String json = "{\"asset\":{\"version\":\"2.0\"},"
+                + "\"buffers\":[{\"byteLength\":" + total + "}],"
+                + "\"bufferViews\":["
+                + "{\"buffer\":0,\"byteOffset\":" + po + ",\"byteLength\":" + posLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + no + ",\"byteLength\":" + nrmLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + to + ",\"byteLength\":" + texLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + io + ",\"byteLength\":" + idxLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + mo + ",\"byteLength\":" + mLen + "}],"
+                + "\"accessors\":["
+                + "{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":2,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC2\"},"
+                + "{\"bufferView\":3,\"componentType\":5123,\"count\":" + indices.length + ",\"type\":\"SCALAR\"},"
+                + "{\"bufferView\":4,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},"
+                + "\"indices\":3,\"targets\":[{\"POSITION\":4}]}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + jpad.length + 8 + bpad.length);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
+    @Test
+    void rebuildReEncodesMorphShapes() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim1(0, 1.0f)));   // 1 frame morphing vertex 1
+        byte[] orig = res.serialize();
+
+        // glb: 3 verts, one morph target whose vertex 1 delta is glTF (0.5,0.5,-0.5) -> Haven (0.5,0.5,0.5)
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0};
+        float[] nrm = {0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tex = {0, 0,  1, 0,  0, 1};
+        int[] indices = {0, 1, 2};
+        float[] morph = {0, 0, 0,  0.5f, 0.5f, -0.5f,  0, 0, 0};
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, geomGlbMorph(pos, nrm, tex, indices, morph));
+
+        assertEquals(3, r.vertices);
+        MeshAnimInfo m = MeshAnimInfo.parse(manimLayer(ResContainer.parse(r.res)));
+        MeshAnimInfo.Frame f0 = m.frames.get(0);
+        // vertex 1 should carry the re-encoded Haven delta (0.5,0.5,0.5)
+        int q = -1;
+        for(int i = 0; i < f0.idx.length; i++)
+            if(f0.idx[i] == 1) q = i;
+        assertTrue(q >= 0, "vertex 1 should be in the rebuilt morph frame");
+        assertEquals(0.5f, f0.pos[q * 3], 1e-2f);
+        assertEquals(0.5f, f0.pos[q * 3 + 1], 1e-2f);
+        assertEquals(0.5f, f0.pos[q * 3 + 2], 1e-2f);
+    }
+
     private static byte[] meshLayerBytes(ResContainer res) {
         for(Layer l : res.layers)
             if(l.name.equals("mesh"))
