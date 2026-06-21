@@ -2,6 +2,7 @@ package resforge.model;
 
 import resforge.io.Json;
 import resforge.layers.Mat2Codec;
+import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
 import resforge.layers.SkanInfo;
 import resforge.layers.SkelInfo;
@@ -158,6 +159,52 @@ public final class GltfExport {
             vertices += d.num;
         }
 
+        // manim layers -> glTF morph targets (per vbuf). A frame's positions are
+        // deltas added to the base and interpolated linearly between frames, which
+        // is exactly glTF morph-target semantics. (Samples have one vbuf; this is
+        // handled for the single-vbuf case, the only one that occurs.)
+        Map<Integer, List<Object>> vbufTargets = new LinkedHashMap<>();
+        List<float[]> morphTimes = new ArrayList<>();   // per manim: keyframe times (+ loop close)
+        List<int[]> morphSlots = new ArrayList<>();      // per manim: {baseSlot, frameCount}
+        if(vbufs.size() == 1) {
+            int vbufid = vbufs.keySet().iterator().next();
+            Vbuf2Data d = vbufs.get(vbufid);
+            List<MeshAnimInfo> manims = new ArrayList<>();
+            for(Layer l : res.layers)
+                if(l.name.equals("manim")) {
+                    MeshAnimInfo ma = MeshAnimInfo.parse(l.data);
+                    if(ma.recognized)
+                        manims.add(ma);
+                }
+            if(d != null && d.get("pos") != null && !manims.isEmpty()) {
+                List<Object> targets = new ArrayList<>();
+                for(MeshAnimInfo ma : manims) {
+                    int base = targets.size();
+                    for(MeshAnimInfo.Frame f : ma.frames) {
+                        float[] delta = new float[d.num * 3];
+                        if(f.pos != null && f.idx != null)
+                            for(int k = 0; k < f.idx.length; k++) {
+                                int v = f.idx[k];
+                                if(v < 0 || v >= d.num)
+                                    continue;
+                                delta[v * 3] = f.pos[k * 3];          // Haven Z-up -> glTF Y-up
+                                delta[v * 3 + 1] = f.pos[k * 3 + 2];  // (the same linear convert
+                                delta[v * 3 + 2] = -f.pos[k * 3 + 1]; //  applied to positions)
+                            }
+                        targets.add(obj("POSITION", addVec3(bin, bufferViews, accessors, delta, d.num, false, true)));
+                    }
+                    float[] times = new float[ma.frames.size() + 1];
+                    for(int fi = 0; fi < ma.frames.size(); fi++)
+                        times[fi] = ma.frames.get(fi).time;
+                    times[ma.frames.size()] = ma.len;     // loop close back to frame 0
+                    morphTimes.add(times);
+                    morphSlots.add(new int[]{base, ma.frames.size()});
+                }
+                if(!targets.isEmpty())
+                    vbufTargets.put(vbufid, targets);
+            }
+        }
+
         List<Object> primitives = new ArrayList<>();
         int triangles = 0, submeshes = 0;
         for(MeshInfo m : meshes) {
@@ -171,9 +218,15 @@ public final class GltfExport {
             prim.put("indices", idxAccessor);
             if(!texMats.isEmpty())
                 prim.put("material", texOrdFor(m.matid, matToTex, texMats.size()));
+            List<Object> targets = vbufTargets.get(m.vbufid);
+            if(targets != null && !targets.isEmpty())
+                prim.put("targets", targets);
             primitives.add(prim);
             triangles += m.indices.length / 3;
         }
+        int morphCount = 0;
+        for(List<Object> t : vbufTargets.values())
+            morphCount = Math.max(morphCount, t.size());
 
         String base = baseName(sourceName);
         List<Object> nodes = new ArrayList<>();
@@ -261,12 +314,36 @@ public final class GltfExport {
 
         // skan layers -> glTF animations (only for bones in the local skeleton).
         List<Object> animations = buildAnimations(res, skel, boneNode, bin, bufferViews, accessors);
+        // manim morph weight animations (one per manim) targeting the mesh node's weights.
+        for(int mi = 0; mi < morphSlots.size(); mi++) {
+            int slotBase = morphSlots.get(mi)[0], cnt = morphSlots.get(mi)[1];
+            float[] times = morphTimes.get(mi);
+            float[] out = new float[times.length * morphCount];
+            for(int ki = 0; ki < times.length; ki++) {
+                int active = (ki < cnt) ? slotBase + ki : slotBase;   // last keyframe loops back to frame 0
+                out[ki * morphCount + active] = 1f;
+            }
+            int inAcc = addScalar(bin, bufferViews, accessors, times);
+            int outAcc = addScalarN(bin, bufferViews, accessors, out);
+            Map<String, Object> sampler = obj("input", inAcc, "output", outAcc, "interpolation", "LINEAR");
+            Map<String, Object> channel = obj("sampler", 0,
+                    "target", obj("node", 0, "path", "weights"));
+            animations.add(obj("name", "morph_" + mi, "samplers", List.of(sampler),
+                    "channels", List.of(channel)));
+        }
         if(!animations.isEmpty())
             root.put("animations", animations);
 
         root.put("scenes", List.of(obj("nodes", sceneNodes)));
         root.put("nodes", nodes);
-        root.put("meshes", List.of(obj("name", base, "primitives", primitives)));
+        Map<String, Object> meshObj = obj("name", base, "primitives", primitives);
+        if(morphCount > 0) {
+            List<Object> weights = new ArrayList<>();
+            for(int k = 0; k < morphCount; k++)
+                weights.add(0.0);
+            meshObj.put("weights", weights);
+        }
+        root.put("meshes", List.of(meshObj));
 
         if(!texMats.isEmpty()) {
             List<Object> images = new ArrayList<>();
@@ -579,6 +656,22 @@ public final class GltfExport {
         acc.put("componentType", FLOAT);
         acc.put("count", count);
         acc.put("type", "VEC4");
+        accs.add(acc);
+        return accs.size() - 1;
+    }
+
+    /** A flat SCALAR float accessor (count = number of floats); used for morph weights. */
+    private static int addScalarN(Buf bin, List<Object> bvs, List<Object> accs, float[] data) {
+        bin.align4();
+        int off = bin.size();
+        for(float v : data)
+            bin.f32(v);
+        int bv = addBufferView(bvs, off, bin.size() - off, -1);
+        Map<String, Object> acc = new LinkedHashMap<>();
+        acc.put("bufferView", bv);
+        acc.put("componentType", FLOAT);
+        acc.put("count", data.length);
+        acc.put("type", "SCALAR");
         accs.add(acc);
         return accs.size() - 1;
     }

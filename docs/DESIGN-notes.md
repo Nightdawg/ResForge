@@ -502,9 +502,11 @@ needs the in-game feedback loop.
   verified). Characters whose skeleton is in another resource get identity-placed
   named joints (mesh + vertex groups still correct). Dependency-free (our `Json` +
   `model/M4` 4×4 maths). `skan` layers also export as glTF **animations** (per-bone
-  translation/rotation channels composed onto the bind pose). **Remaining:**
-  `manim`→morph targets; then the **glTF import** path (re-encode vbuf2/mesh with
-  re-strip + re-quantise behind lossless-or-raw). The Haven encode toolkit is fully in the
+  translation/rotation channels composed onto the bind pose), and `manim` layers as
+  glTF **morph targets** + a weight animation (per-frame vertex deltas, linearly
+  interpolated). **Phase 1 (export) is complete. Remaining:** the **glTF import**
+  path (re-encode vbuf2/mesh with re-strip + re-quantise behind lossless-or-raw).
+  The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
 - Eventually edit `vbuf2`/`mesh`/`manim` directly. (`mat2`, `anim`,
