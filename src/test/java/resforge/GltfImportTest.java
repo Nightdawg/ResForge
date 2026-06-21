@@ -1,0 +1,263 @@
+package resforge;
+
+import resforge.io.Json;
+import resforge.io.MessageWriter;
+import resforge.model.GltfExport;
+import resforge.model.GltfImport;
+import resforge.model.Vbuf2Codec;
+import resforge.model.Vbuf2Data;
+import resforge.res.Layer;
+import resforge.res.ResContainer;
+import org.junit.jupiter.api.Test;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+class GltfImportTest {
+
+    /** vbuf2 ver0 with f4 pos/nrm/tex over {@code n} vertices (first 3 form a tri). */
+    private static byte[] vbufF4(int n) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0);
+        w.uint16(n);
+        w.string("pos2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++) {
+            w.float32(i).float32(i * 0.5f).float32(-i);
+        }
+        w.string("nrm2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++)
+            w.float32(0).float32(0).float32(1);
+        w.string("tex2").uint8(1).string("f4");
+        for(int i = 0; i < n; i++)
+            w.float32(0.25f).float32(0.75f);
+        return w.toByteArray();
+    }
+
+    /**
+     * vbuf2 ver0, 3 vertices, using the quantised on-wire formats real models use:
+     * pos=sn2, tex=un2, nrm=uvec1 — each chosen at full octahedral/normalised scale
+     * so a decode→re-encode is byte-exact.
+     */
+    private static byte[] vbufQuant() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0);
+        w.uint16(3);
+        // pos2 sn2: max=1.0, ints reach ±32767 so re-quant returns identical ints
+        w.string("pos2").uint8(1).string("sn2");
+        w.float32(1.0f);
+        short[] pos = {32767, 0, 0,  0, 32767, 0,  0, 0, -32767};
+        for(short s : pos) w.int16(s);
+        // tex2 un2: max=1.0, full-scale uints
+        w.string("tex2").uint8(1).string("un2");
+        w.float32(1.0f);
+        int[] tex = {65535, 0,  0, 65535,  0, 0};
+        for(int u : tex) w.uint16(u);
+        // nrm2 uvec1: octahedral int8 pairs for three unit normals
+        w.string("nrm2").uint8(1).string("uvec1");
+        byte[][] octs = {oct(0, 0, 1), oct(1, 0, 0), oct(0, 1, 0)};
+        for(byte[] o : octs) w.int8(o[0]).int8(o[1]);
+        return w.toByteArray();
+    }
+
+    /** Octahedral-encode a unit vector to two int8s (mirrors the codec's quantiser). */
+    private static byte[] oct(float x, float y, float z) {
+        float m = 1.0f / (Math.abs(x) + Math.abs(y) + Math.abs(z));
+        float hx = x * m, hy = y * m, ox, oy;
+        if(z >= 0) {
+            ox = hx; oy = hy;
+        } else {
+            ox = (1 - Math.abs(hy)) * Math.copySign(1, hx);
+            oy = (1 - Math.abs(hx)) * Math.copySign(1, hy);
+        }
+        return new byte[]{(byte) Math.round(ox * 127), (byte) Math.round(oy * 127)};
+    }
+
+    private static byte[] vbufBones() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0);
+        w.uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})
+            w.float32(v);
+        w.string("bones2").uint8(1).string("f4").uint8(1);
+        w.string("root").uint16(3).uint16(0)
+                .float32(1f).float32(1f).float32(1f)
+                .uint16(0).uint16(0);
+        w.string("");
+        return w.toByteArray();
+    }
+
+    private static byte[] skel() {
+        MessageWriter w = new MessageWriter();
+        w.string("\u0001");
+        w.string("root").string("");
+        w.float32(0).float32(0).float32(0);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
+    private static byte[] mesh(int matid) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(16);
+        w.uint16(1);
+        w.int16(matid);
+        w.int16(0);
+        w.uint16(0).uint16(1).uint16(2);
+        return w.toByteArray();
+    }
+
+    private static byte[] vbufLayer(ResContainer res) {
+        for(Layer l : res.layers)
+            if(l.name.equals("vbuf2"))
+                return l.data;
+        throw new AssertionError("no vbuf2");
+    }
+
+    private static float[] decoded(byte[] resBytes, String attr) {
+        return Vbuf2Data.parse(vbufLayer(ResContainer.parse(resBytes))).get(attr);
+    }
+
+    /* ---------------- glb position editing ---------------- */
+
+    private static int le32(byte[] b, int off) {
+        return (b[off] & 0xff) | ((b[off + 1] & 0xff) << 8)
+                | ((b[off + 2] & 0xff) << 16) | ((b[off + 3] & 0xff) << 24);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static byte[] scalePositions(byte[] glb, float factor) {
+        int jlen = le32(glb, 12);
+        Map<String, Object> root =
+                (Map<String, Object>) Json.parse(new String(glb, 20, jlen, StandardCharsets.UTF_8));
+        Map<String, Object> mesh0 = (Map<String, Object>) ((List<Object>) root.get("meshes")).get(0);
+        Map<String, Object> prim = (Map<String, Object>) ((List<Object>) mesh0.get("primitives")).get(0);
+        int accIdx = ((Number) ((Map<String, Object>) prim.get("attributes")).get("POSITION")).intValue();
+        Map<String, Object> acc = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(accIdx);
+        int count = ((Number) acc.get("count")).intValue();
+        int bvIdx = ((Number) acc.get("bufferView")).intValue();
+        Map<String, Object> bv = (Map<String, Object>) ((List<Object>) root.get("bufferViews")).get(bvIdx);
+        int bvOff = bv.get("byteOffset") == null ? 0 : ((Number) bv.get("byteOffset")).intValue();
+        int accOff = acc.get("byteOffset") == null ? 0 : ((Number) acc.get("byteOffset")).intValue();
+        int base = 20 + jlen + 8 + bvOff + accOff;
+        byte[] out = glb.clone();
+        for(int i = 0; i < count * 3; i++) {
+            int p = base + i * 4;
+            float v = Float.intBitsToFloat(le32(out, p)) * factor;
+            int b = Float.floatToIntBits(v);
+            out[p] = (byte) b;
+            out[p + 1] = (byte) (b >>> 8);
+            out[p + 2] = (byte) (b >>> 16);
+            out[p + 3] = (byte) (b >>> 24);
+        }
+        return out;
+    }
+
+    /* ---------------------------------------------------------------- tests */
+
+    @Test
+    void unchangedRoundTripIsByteIdentical() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(5)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        byte[] glb = GltfExport.toGlb(res, "t.res").glb;
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+
+        assertEquals(5, r.vertices);
+        assertArrayEquals(orig, r.res, "unchanged f4 geometry must round-trip byte-for-byte");
+    }
+
+    @Test
+    void quantizedRoundTripIsByteIdentical() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufQuant()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        byte[] glb = GltfExport.toGlb(res, "t.res").glb;
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+
+        Vbuf2Codec a = Vbuf2Codec.parse(vbufLayer(res));
+        Vbuf2Codec b = Vbuf2Codec.parse(vbufLayer(ResContainer.parse(r.res)));
+        assertArrayEquals(a.attr("pos").data, b.attr("pos").data, "sn2 positions re-quantise exactly");
+        assertArrayEquals(a.attr("tex").data, b.attr("tex").data, "un2 UVs re-quantise exactly");
+        assertArrayEquals(a.attr("nrm").data, b.attr("nrm").data, "uvec1 normals re-quantise exactly");
+    }
+
+    @Test
+    void editedPositionsAreReEncoded() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+        float[] before = decoded(orig, "pos");
+
+        byte[] glb = scalePositions(GltfExport.toGlb(res, "t.res").glb, 2.0f);
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        float[] after = decoded(r.res, "pos");
+
+        assertEquals(before.length, after.length);
+        for(int i = 0; i < before.length; i++)
+            assertEquals(before[i] * 2.0f, after[i], 1e-4f, "position " + i + " should be doubled");
+    }
+
+    @Test
+    void vertexCountMismatchIsRejected() {
+        ResContainer small = new ResContainer(7);
+        small.layers.add(new Layer("vbuf2", vbufF4(3)));
+        small.layers.add(new Layer("mesh", mesh(-1)));
+
+        ResContainer big = new ResContainer(7);
+        big.layers.add(new Layer("vbuf2", vbufF4(6)));
+        big.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] glb6 = GltfExport.toGlb(big, "big.res").glb;
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.apply(small.serialize(), glb6));
+        assertTrue(ex.getMessage().contains("vertex count"), ex.getMessage());
+    }
+
+    @Test
+    void keepsBonesAndOtherLayersByteForByte() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel()));
+        res.layers.add(new Layer("vbuf2", vbufBones()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+
+        byte[] glb = GltfExport.toGlb(res, "rig.res").glb;
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+
+        // f4 positions round-trip exactly and bones/skel/mesh are carried over verbatim
+        assertArrayEquals(orig, r.res, "skinned model with f4 positions must round-trip byte-for-byte");
+    }
+
+    @Test
+    void resWithoutGeometryIsRejected() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("image", new byte[]{1, 2, 3}));
+        byte[] anyGlb = GltfExport.toGlb(withGeometry(), "g.res").glb;
+        assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.apply(res.serialize(), anyGlb));
+    }
+
+    @Test
+    void nonGlbInputIsRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.apply(withGeometry().serialize(), new byte[]{0, 1, 2, 3, 4, 5}));
+    }
+
+    private static ResContainer withGeometry() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        return res;
+    }
+}

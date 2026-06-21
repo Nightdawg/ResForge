@@ -97,6 +97,65 @@ public class Vbuf2Codec {
         return null;
     }
 
+    public Attr attr(String base) {
+        for(Attr a : attrs)
+            if(a.name.equals(base) || a.name.equals(base + "2"))
+                return a;
+        return null;
+    }
+
+    private int elnOf(Attr a) {
+        return ELN.get(a.name);
+    }
+
+    /** The on-wire format string of a formatted attribute ("f4","sn2","uvec1",…),
+     *  or "bare" for a ver-0 raw-float32 attribute. */
+    private static String formatOf(Attr a) {
+        if(a.bare())
+            return "bare";
+        MessageReader in = new MessageReader(a.data);
+        in.uint8();                     // data version (== 1)
+        return in.string();
+    }
+
+    /** Decodes any supported attribute to num*eln floats. */
+    public float[] decodeAttr(String base) {
+        Attr a = attr(base);
+        if(a == null)
+            return null;
+        int eln = elnOf(a);
+        float[] dst = new float[num * eln];
+        if(a.bare()) {
+            MessageReader in = new MessageReader(a.data);
+            for(int i = 0; i < dst.length; i++)
+                dst[i] = in.float32();
+        } else {
+            MessageReader in = new MessageReader(a.data);
+            in.uint8();
+            readAny(in, in.string(), dst);
+        }
+        return dst;
+    }
+
+    /** Re-encodes an attribute from num*eln floats, preserving its on-wire format. */
+    public void setAttr(String base, float[] vals) {
+        Attr a = attr(base);
+        if(a == null)
+            throw new IllegalStateException("no attribute: " + base);
+        if(a.bare()) {
+            MessageWriter w = new MessageWriter();
+            for(float v : vals)
+                w.float32(v);
+            a.data = w.toByteArray();
+        } else {
+            String fmt = formatOf(a);
+            MessageWriter w = new MessageWriter();
+            w.uint8(1).string(fmt);
+            writeAny(w, fmt, vals);
+            a.data = w.toByteArray();
+        }
+    }
+
     /** Decodes the position attribute to num*3 floats. */
     public float[] decodePositions() {
         Attr a = position();
@@ -242,6 +301,103 @@ public class Vbuf2Codec {
                 w.int16(q);
             else
                 w.int32(q);
+        }
+    }
+
+    /* ---- general attribute de/re-quantisation (all formats real attributes use) ---- */
+
+    private static void readAny(MessageReader in, String fmt, float[] dst) {
+        int cap = dst.length;
+        float[] vb = new float[3];
+        switch(fmt) {
+            case "f4": for(int i = 0; i < cap; i++) dst[i] = in.float32(); break;
+            case "f2": for(int i = 0; i < cap; i++) dst[i] = in.float16(); break;
+            case "sn4": { float f = in.float32() / 2147483647.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.int32() * f; break; }
+            case "sn2": { float f = in.float32() / 32767.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.int16() * f; break; }
+            case "sn1": { float f = in.float32() / 127.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.int8() * f; break; }
+            case "un4": { float f = in.float32() / 4294967295.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.uint32() * f; break; }
+            case "un2": { float f = in.float32() / 65535.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.uint16() * f; break; }
+            case "un1": { float f = in.float32() / 255.0f;
+                for(int i = 0; i < cap; i++) dst[i] = in.uint8() * f; break; }
+            case "uvec1": { float F = 1.0f / 127.0f;
+                for(int i = 0; i < cap; ) {
+                    MessageReader.oct2uvec(vb, in.int8() * F, in.int8() * F);
+                    dst[i++] = vb[0]; dst[i++] = vb[1]; dst[i++] = vb[2];
+                } break; }
+            case "uvec2": { float F = 1.0f / 32767.0f;
+                for(int i = 0; i < cap; ) {
+                    MessageReader.oct2uvec(vb, in.int16() * F, in.int16() * F);
+                    dst[i++] = vb[0]; dst[i++] = vb[1]; dst[i++] = vb[2];
+                } break; }
+            default:
+                throw new IllegalArgumentException("attribute format not supported for editing: " + fmt);
+        }
+    }
+
+    private static void writeAny(MessageWriter w, String fmt, float[] vals) {
+        switch(fmt) {
+            case "f4": for(float v : vals) w.float32(v); break;
+            case "f2": for(float v : vals) w.float16(v); break;
+            case "sn4": quantSigned(w, vals, 2147483647L); break;
+            case "sn2": quantSigned(w, vals, 32767L); break;
+            case "sn1": quantSigned(w, vals, 127L); break;
+            case "un4": quantUnsigned(w, vals, 4294967295L); break;
+            case "un2": quantUnsigned(w, vals, 65535L); break;
+            case "un1": quantUnsigned(w, vals, 255L); break;
+            case "uvec1": quantOct(w, vals, 127); break;
+            case "uvec2": quantOct(w, vals, 32767); break;
+            default:
+                throw new IllegalArgumentException("attribute format not supported for editing: " + fmt);
+        }
+    }
+
+    private static void quantUnsigned(MessageWriter w, float[] vals, long max) {
+        float maxv = 0;
+        for(float v : vals)
+            maxv = Math.max(maxv, Math.abs(v));
+        w.float32(maxv);
+        for(float v : vals) {
+            long q = (maxv == 0) ? 0
+                    : Math.round(Math.max(0.0, Math.min(1.0, v / maxv)) * max);
+            if(max <= 255)
+                w.uint8((int) q);
+            else if(max <= 65535)
+                w.uint16((int) q);
+            else
+                w.int32((int) q);
+        }
+    }
+
+    /** Octahedral-encodes unit vectors (eln 3) to two signed-normalised components. */
+    private static void quantOct(MessageWriter w, float[] vals, int max) {
+        float[] oct = new float[2];
+        for(int i = 0; i + 2 < vals.length; i += 3) {
+            uvec2oct(oct, vals[i], vals[i + 1], vals[i + 2]);
+            for(int k = 0; k < 2; k++) {
+                int q = (int) Math.round(Math.max(-1.0, Math.min(1.0, oct[k])) * max);
+                if(max <= 127)
+                    w.int8(q);
+                else
+                    w.int16(q);
+            }
+        }
+    }
+
+    /** Octahedral encode of a unit vector (mirrors haven.Utils.uvec2oct). */
+    private static void uvec2oct(float[] out, float x, float y, float z) {
+        float m = 1.0f / (Math.abs(x) + Math.abs(y) + Math.abs(z));
+        float hx = x * m, hy = y * m;
+        if(z >= 0) {
+            out[0] = hx;
+            out[1] = hy;
+        } else {
+            out[0] = (1 - Math.abs(hy)) * Math.copySign(1, hx);
+            out[1] = (1 - Math.abs(hx)) * Math.copySign(1, hy);
         }
     }
 }

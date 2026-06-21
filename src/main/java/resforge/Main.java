@@ -2,6 +2,7 @@ package resforge;
 
 import resforge.layers.ImageInfo;
 import resforge.model.GltfExport;
+import resforge.model.GltfImport;
 import resforge.model.ObjExport;
 import resforge.model.Vbuf2Codec;
 import resforge.res.Catalog;
@@ -28,6 +29,7 @@ import java.nio.file.Path;
  *   replace <file.res> <selector> <newfile> [out.res]
  *   obj     <file.res> [out.obj]
  *   gltf    <file.res> [out.glb]
+ *   import-gltf <orig.res> <edited.glb> [out.res]
  *   transform <file.res> <sx> <sy> <sz> [out.res]
  *   catalog <file.res | dir>
  *   verify  <file.res | dir>
@@ -64,6 +66,7 @@ public class Main {
             case "replace": replace(args); break;
             case "obj":    obj(args);    break;
             case "gltf":   gltf(args);   break;
+            case "import-gltf": importGltf(args); break;
             case "transform": transform(args); break;
             case "catalog": catalog(args); break;
             case "verify": verify(args); break;
@@ -425,6 +428,24 @@ public class Main {
                 r.vertices, r.triangles, r.submeshes, r.textures, out);
     }
 
+    private static void importGltf(String[] args) throws IOException {
+        if(args.length < 3)
+            throw new UsageException("import-gltf requires <original.res> <edited.glb> [out.res]");
+        Path resFile = Path.of(args[1]);
+        Path glbFile = Path.of(args[2]);
+        Path out = (args.length >= 4) ? Path.of(args[3]) : resFile;
+        byte[] orig = Files.readAllBytes(resFile);
+        byte[] glb = Files.readAllBytes(glbFile);
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        Files.write(out, r.res);
+        StringBuilder attrs = new StringBuilder("positions");
+        if(r.nrm) attrs.append(", normals");
+        if(r.tex) attrs.append(", UV0");
+        if(r.otex) attrs.append(", UV1");
+        System.out.printf("Re-imported %d vertices (%s) from %s -> %s%n",
+                r.vertices, attrs, glbFile, out);
+    }
+
     private static void replace(String[] args) throws IOException {
         if(args.length < 4)
             throw new UsageException("replace requires <file.res> <selector> <newfile> [out.res]");
@@ -455,6 +476,8 @@ public class Main {
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  obj    <file.res> [out.obj]  Export 3D geometry to a Wavefront OBJ");
         System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
+        System.out.println("  import-gltf <orig.res> <edited.glb> [out.res]");
+        System.out.println("                               Re-import edited geometry from a glTF (same vertex count)");
         System.out.println("  transform <file.res> <sx> <sy> <sz> [out.res]");
         System.out.println("                               Scale a model's vertices (re-quantizes positions)");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
