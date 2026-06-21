@@ -606,41 +606,72 @@ public final class GltfImport {
         Map<String, Object> acc = (Map<String, Object>) accessors.get(index);
         int ct = ((Number) acc.get("componentType")).intValue();
         boolean normalized = Boolean.TRUE.equals(acc.get("normalized"));
-        int compSize, max;
-        boolean signed, floats = false;
+        int count = ((Number) acc.get("count")).intValue();
+        List<Object> bufferViews = (List<Object>) g.root.get("bufferViews");
+        float[] out = new float[count * comps];
+
+        // Dense base values (absent for an all-zero accessor or a sparse morph target).
+        Object bvObj = acc.get("bufferView");
+        if(bvObj != null) {
+            Map<String, Object> bv = (Map<String, Object>) bufferViews.get(((Number) bvObj).intValue());
+            int bvOff = num(bv.get("byteOffset"));
+            int accOff = num(acc.get("byteOffset"));
+            int compSize = compSize(ct);
+            int stride = bv.get("byteStride") == null ? comps * compSize : ((Number) bv.get("byteStride")).intValue();
+            int base = g.binStart + bvOff + accOff;
+            for(int i = 0; i < count; i++)
+                for(int c = 0; c < comps; c++)
+                    out[i * comps + c] = decodeComp(g.data, base + i * stride + c * compSize, ct, normalized);
+        }
+
+        // Sparse overrides (Blender exports shape-key morph targets this way).
+        Map<String, Object> sparse = (Map<String, Object>) acc.get("sparse");
+        if(sparse != null) {
+            int sc = ((Number) sparse.get("count")).intValue();
+            Map<String, Object> sIdx = (Map<String, Object>) sparse.get("indices");
+            Map<String, Object> sVal = (Map<String, Object>) sparse.get("values");
+            int idxCt = ((Number) sIdx.get("componentType")).intValue();
+            int idxSize = compSize(idxCt);
+            Map<String, Object> idxBv = (Map<String, Object>) bufferViews.get(((Number) sIdx.get("bufferView")).intValue());
+            int idxBase = g.binStart + num(idxBv.get("byteOffset")) + num(sIdx.get("byteOffset"));
+            int valSize = compSize(ct);
+            Map<String, Object> valBv = (Map<String, Object>) bufferViews.get(((Number) sVal.get("bufferView")).intValue());
+            int valBase = g.binStart + num(valBv.get("byteOffset")) + num(sVal.get("byteOffset"));
+            for(int s = 0; s < sc; s++) {
+                int ei = (int) leUint(g.data, idxBase + s * idxSize, idxSize);
+                for(int c = 0; c < comps; c++)
+                    out[ei * comps + c] = decodeComp(g.data, valBase + (s * comps + c) * valSize, ct, normalized);
+            }
+        }
+        return out;
+    }
+
+    private static int num(Object o) {
+        return o == null ? 0 : ((Number) o).intValue();
+    }
+
+    private static int compSize(int componentType) {
+        switch(componentType) {
+            case 5126: case 5125: return 4;     // FLOAT, UNSIGNED_INT
+            case 5123: case 5122: return 2;     // (UNSIGNED_)SHORT
+            case 5121: case 5120: return 1;     // (UNSIGNED_)BYTE
+            default: throw new IllegalArgumentException("unsupported accessor componentType: " + componentType);
+        }
+    }
+
+    /** Decodes one component at {@code off}, honouring componentType and the normalized flag. */
+    private static float decodeComp(byte[] data, int off, int ct, boolean normalized) {
         switch(ct) {
-            case 5126: compSize = 4; signed = true; floats = true; max = 0; break;     // FLOAT
-            case 5125: compSize = 4; signed = false; max = 0; break;                    // UNSIGNED_INT
-            case 5123: compSize = 2; signed = false; max = 65535; break;                // UNSIGNED_SHORT
-            case 5122: compSize = 2; signed = true; max = 32767; break;                 // SHORT
-            case 5121: compSize = 1; signed = false; max = 255; break;                  // UNSIGNED_BYTE
-            case 5120: compSize = 1; signed = true; max = 127; break;                   // BYTE
+            case 5126: return Float.intBitsToFloat(le32(data, off));                          // FLOAT
+            case 5125: return leUint(data, off, 4);                                           // UNSIGNED_INT
+            case 5123: return normalized ? leUint(data, off, 2) / 65535f : leUint(data, off, 2);
+            case 5121: return normalized ? leUint(data, off, 1) / 255f : leUint(data, off, 1);
+            case 5122: return normalized ? Math.max(-1f, signExtend(leUint(data, off, 2), 2) / 32767f)
+                    : signExtend(leUint(data, off, 2), 2);
+            case 5120: return normalized ? Math.max(-1f, signExtend(leUint(data, off, 1), 1) / 127f)
+                    : signExtend(leUint(data, off, 1), 1);
             default: throw new IllegalArgumentException("unsupported accessor componentType: " + ct);
         }
-        int count = ((Number) acc.get("count")).intValue();
-        int bvIndex = ((Number) acc.get("bufferView")).intValue();
-        Map<String, Object> bv = (Map<String, Object>) ((List<Object>) g.root.get("bufferViews")).get(bvIndex);
-        int bvOff = bv.get("byteOffset") == null ? 0 : ((Number) bv.get("byteOffset")).intValue();
-        int accOff = acc.get("byteOffset") == null ? 0 : ((Number) acc.get("byteOffset")).intValue();
-        int stride = bv.get("byteStride") == null ? comps * compSize : ((Number) bv.get("byteStride")).intValue();
-        int base = g.binStart + bvOff + accOff;
-        float[] out = new float[count * comps];
-        for(int i = 0; i < count; i++)
-            for(int c = 0; c < comps; c++) {
-                int off = base + i * stride + c * compSize;
-                float val;
-                if(floats) {
-                    val = Float.intBitsToFloat(le32(g.data, off));
-                } else {
-                    long raw = leUint(g.data, off, compSize);
-                    long sv = signed ? signExtend(raw, compSize) : raw;
-                    val = normalized
-                            ? (signed ? Math.max(-1f, sv / (float) max) : raw / (float) max)
-                            : sv;
-                }
-                out[i * comps + c] = val;
-            }
-        return out;
     }
 
     private static long leUint(byte[] b, int off, int size) {
