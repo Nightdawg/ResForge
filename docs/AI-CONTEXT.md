@@ -229,9 +229,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   geometry changes** — `GltfImport.rebuild` (CLI `rebuild-gltf`, GUI **Rebuild from
   glTF**) regenerates `vbuf2`+`mesh`(+`bones2`) from the glTF at its vertex count, so
   you can add/remove/re-topologize vertices and faces. It needs no `_VID` and isn't
-  byte-lossless (in-game-validated), and currently targets single-submesh
-  positions/normals/UVs/bone-weights models. **Next: multi-submesh + morph rebuild**,
-  then `skan` animation-keyframe editing.
+  byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
+  becomes a submesh; the export now emits one material per matid (`rfmat_<matid>`) so
+  rebuild recovers each part's id from its material name and Blender doesn't merge
+  parts sharing a texture. Handles positions/normals/UVs/bone-weights; morph models
+  refused. Validated no-op on male + mulberry/cutblade/fairystone (2–7 submeshes).
+  **Next: morph rebuild**, then `skan` animation-keyframe editing.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.
