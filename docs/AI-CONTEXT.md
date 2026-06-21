@@ -52,12 +52,14 @@ a sibling project at `../hafen-client`).
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `obj <file> [out.obj]` · `gltf <file> [out.glb]` ·
+`import-gltf <orig.res> <edited.glb> [out.res]` ·
 `transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
-exports the 3D model as a Blender-ready binary glTF; `obj` is the simpler legacy
-export.)
+exports the 3D model as a Blender-ready binary glTF and `import-gltf` re-imports
+an edited `.glb` back into the model (same vertex count, re-quantised); `obj` is
+the simpler legacy export.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
@@ -74,6 +76,7 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 **Export OBJ**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar: Open, Fetch, Save As, Export OBJ, **Export glTF** (Blender-ready .glb),
+**Import glTF** (re-import an edited .glb into the model),
 References… (aggregated reference report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
@@ -97,11 +100,14 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
-  `Vbuf2Codec` (structure-preserving vbuf2 encode), `M4` (column-major 4×4 maths),
+  `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
+  `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
-  `WEIGHTS_0` — dependency-free), `ObjExport` (simpler geometry → Wavefront OBJ +
-  a `.mtl` and the local `tex` image(s), so models open textured).
+  `WEIGHTS_0` — dependency-free), `GltfImport` (re-import an edited `.glb` →
+  re-quantises pos/nrm/both UVs into their original on-wire formats, Y-up→Z-up,
+  keeps all other layers byte-identical), `ObjExport` (simpler geometry → Wavefront
+  OBJ + a `.mtl` and the local `tex` image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -183,9 +189,17 @@ References… (aggregated reference report dialog), **resource-version spinner**
   **skeletal animations** (`skan` → translation/rotation channels), **and mesh-morph
   animations** (`manim` → morph targets + weight animation). All Blender-confirmed
   (knarr: upright, textured, posable, sails ripple). External-skeleton characters
-  get identity-placed named joints. **Next: Phase 2 — glTF import** to re-encode an
-  edited `.glb` back to `.res` (vbuf2/mesh re-strip + re-quantise, behind
-  lossless-or-raw). The Haven *encode* toolkit is fully in the client
+  get identity-placed named joints. **Phase 2a (glTF import) is now done** —
+  `GltfImport` re-imports an edited `.glb` (CLI `import-gltf`, GUI **Import glTF**):
+  it requires the same vertex count as the original, axis-inverts (Y-up→Z-up) and
+  re-quantises positions/normals/both UV sets into each attribute's *original*
+  on-wire format (f4/sn2/un2/uvec1…), while keeping every other layer — bone
+  weights, triangles, skeleton, materials, code — byte-identical. An unchanged
+  model survives res→glb→res byte-for-byte (verified on male/knarr/mulberry/bull/
+  stallion). It is a *patch, not a rebuild*: topology-preserving edits only
+  (reshape/transform/sculpt without adding/removing/re-welding vertices). **Next:
+  Phase 2b** — re-import skinning weights (bones2) and Phase 2c skeleton/animation.
+  The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,

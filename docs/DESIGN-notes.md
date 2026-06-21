@@ -484,9 +484,11 @@ verifies, geometry scales correctly — e.g. `male.res` z×2 doubles the z bound
 box, other attributes unchanged), but **a write path's final proof is loading the
 result in-game** — which is the one check that can't be automated here. (A
 non-uniform scale leaves normals untransformed; uniform scale is fully correct.)
-The remaining step to a Blender round-trip is importing *arbitrary* new topology
-(re-stripping the index buffer + a fresh `mkres`-style encode), which genuinely
-needs the in-game feedback loop.
+The first half of a full Blender round-trip — importing *topology-preserving*
+edits (reshape/transform/sculpt the existing vertices) — is now done (`GltfImport`,
+§9); the remaining step is importing *arbitrary new topology* (re-stripping the
+index buffer + a fresh `mkres`-style encode), which genuinely needs the in-game
+feedback loop.
 
 ## 9. Possible next steps
 
@@ -504,8 +506,19 @@ needs the in-game feedback loop.
   `model/M4` 4×4 maths). `skan` layers also export as glTF **animations** (per-bone
   translation/rotation channels composed onto the bind pose), and `manim` layers as
   glTF **morph targets** + a weight animation (per-frame vertex deltas, linearly
-  interpolated). **Phase 1 (export) is complete. Remaining:** the **glTF import**
-  path (re-encode vbuf2/mesh with re-strip + re-quantise behind lossless-or-raw).
+  interpolated). **Phase 1 (export) is complete.** **Phase 2a (geometry import) is
+  also done:** `GltfImport` (CLI `import-gltf`, GUI **Import glTF**) re-imports an
+  edited `.glb` as a *patch* — it requires the same vertex count as the original,
+  axis-inverts glTF Y-up→Haven Z-up, and re-quantises positions/normals/both UV
+  sets back into each attribute's *original* on-wire format via
+  `Vbuf2Codec.decodeAttr`/`setAttr` (general f4/f2/sn1-4/un1-4/uvec1-2 de/re-quant),
+  while copying every other layer — bone weights, triangle lists, skeleton,
+  materials, code — byte-for-byte. Because sn/un/uvec round-trips are byte-exact at
+  full scale, an *unchanged* model survives res→glb→res byte-identically (verified
+  on male/knarr/mulberry/bull/stallion). Scope: topology-preserving edits only — no
+  adding/removing/re-welding vertices (a count mismatch is a clear error).
+  **Remaining:** Phase 2b (re-import skinning weights to `bones2`) and Phase 2c
+  (skeleton/animation), then arbitrary-topology import (re-strip + fresh encode).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
   `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.

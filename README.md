@@ -23,9 +23,11 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
-and fonts; and **Export 3D model** actions — a Blender-ready binary **glTF**
+and fonts; and **3D model** actions — export to a Blender-ready binary **glTF**
 (`.glb`, carrying both of Haven's UV sets, textures, the **skeleton/skinning**,
-**skeletal animations** and **mesh-morph animations** in one file) and a simpler
+**skeletal animations** and **mesh-morph animations** in one file), **re-import**
+an edited `.glb` back into the model (reshape/transform vertices in Blender, then
+load the changes back, re-quantised into the original on-wire formats), and a simpler
 **OBJ** (writes a `.mtl` + the texture image, single UV). You can also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
@@ -33,8 +35,9 @@ offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and 
 **audio** clip's id + volume, and adding an image wraps it in a fresh layer with
 the next free id — so you can extend a sprite **animation** by adding frames and
 listing their ids in the `anim` editor. The 3D `vbuf2`/`mesh` layers show their
-vertex/attribute and triangle/material detail (read-only). Unchanged
-layers are preserved byte-for-byte on save, so edits can't corrupt a file.
+vertex/attribute and triangle/material detail (read-only in-app), but a whole model
+can be edited by the **glTF round-trip** (export → edit in Blender → re-import).
+Unchanged layers are preserved byte-for-byte on save, so edits can't corrupt a file.
 
 ## The `.res` format
 
@@ -177,6 +180,9 @@ resforge pack   horse.resdir         # -> horse.res
 
 # Export a 3D model to a Blender-ready binary glTF (UV sets + textures + skeleton, one file):
 resforge gltf   horse.res horse.glb
+
+# Re-import an edited glTF back into the model (same vertex count; re-quantises geometry):
+resforge import-gltf horse.res horse.glb horse-edited.res
 
 # ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):
 resforge obj    horse.res horse.obj

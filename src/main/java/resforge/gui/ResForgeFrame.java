@@ -1,6 +1,7 @@
 package resforge.gui;
 
 import resforge.model.GltfExport;
+import resforge.model.GltfImport;
 import resforge.model.ObjExport;
 import resforge.res.Layer;
 import resforge.res.Replacer;
@@ -393,6 +394,7 @@ public class ResForgeFrame extends JFrame {
         tb.addSeparator();
         tb.add(new JButton(action("Export OBJ\u2026", this::doExportObj)));
         tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
+        tb.add(new JButton(action("Import glTF\u2026", this::doImportGltf)));
         tb.add(new JButton(action("References\u2026", this::doShowReferences)));
         tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
@@ -602,6 +604,36 @@ public class ResForgeFrame extends JFrame {
             setStatus("Saved " + p.getFileName());
         } catch(Exception e) {
             error("Could not save: " + e.getMessage());
+        }
+    }
+
+    private void doImportGltf() {
+        if(res == null)
+            return;
+        boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
+        if(!hasGeom) {
+            info("This resource has no 3D geometry (vbuf2) to re-import into.");
+            return;
+        }
+        JFileChooser fc = new JFileChooser(dir());
+        fc.setDialogTitle("Import edited glTF");
+        fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
+        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        try {
+            byte[] glb = Files.readAllBytes(fc.getSelectedFile().toPath());
+            GltfImport.Result r = GltfImport.apply(res.serialize(), glb);
+            ResContainer patched = ResContainer.parse(r.res);
+            StringBuilder attrs = new StringBuilder("positions");
+            if(r.nrm) attrs.append(", normals");
+            if(r.tex) attrs.append(", UV0");
+            if(r.otex) attrs.append(", UV1");
+            applyLoaded(patched, file, pathField.getText(),
+                    "Imported " + r.vertices + " vertices (" + attrs + ") from "
+                            + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
+            markDirty();
+        } catch(Exception e) {
+            error("glTF import failed: " + e.getMessage());
         }
     }
 
@@ -1108,10 +1140,12 @@ public class ResForgeFrame extends JFrame {
             content.add(labeled(GuiSupport.summary(l)));
         }
         content.add(Box.createVerticalStrut(8));
-        content.add(labeled("3D geometry is read-only here; edit the whole model via glTF or OBJ export."));
+        content.add(labeled("3D geometry is read-only here; export to glTF to edit the whole "
+                + "model in Blender, then re-import the edited .glb."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
+                new JButton(action("Import glTF (.glb)\u2026", this::doImportGltf)),
                 new JButton(action("Export OBJ\u2026", this::doExportObj))));
     }
 
