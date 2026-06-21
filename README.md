@@ -23,13 +23,16 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
-and fonts; and **3D model** actions — export to a Blender-ready binary **glTF**
-(`.glb`, carrying both of Haven's UV sets, textures, the **skeleton/skinning**,
-**skeletal animations** and **mesh-morph animations** in one file), **re-import**
-an edited `.glb` back into the model (reshape/transform vertices, re-paint
-skinning weights, *and* re-shape morph/shape-key animations in Blender, then load
-the changes back, re-quantised into the original on-wire formats), and a simpler
-**OBJ** (writes a `.mtl` + the texture image, single UV). You can also add,
+and fonts; and a full **3D model round-trip** — export to a Blender-ready binary
+**glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
+**skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
+file); **Import glTF** to bring edits back losslessly (reshape/sculpt vertices,
+re-UV, re-paint **skinning weights**, re-pose the **skeleton**, re-shape **morphs** —
+matched vertex-for-vertex and re-quantised into the original on-wire formats);
+**Rebuild from glTF** to regenerate geometry so you can **add, remove or
+re-topologize vertices and faces** (multi-part, morph, skinned and normal-mapped
+models supported — tangents are recomputed); plus a simpler **OBJ** export. You can
+also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
 offset, no-offset flag), edit a **texture** header (id, atlas offset, size) and an
@@ -107,6 +110,35 @@ renaming a button or rebinding its hotkey.
 `font` layers embed a TrueType/OpenType font after a 2-byte header — split into
 `*.fonthdr` + `*.ttf`/`*.otf` so you can swap the typeface. `midi` layers are a
 whole MIDI file, exposed as `*.mid`.
+
+## Editing 3D models (the glTF round-trip)
+
+Haven's 3D models live in `vbuf2` (vertices) + `mesh` (triangles) layers, with
+quantised attributes (positions, two UV sets, octahedral normals/tangents, bone
+weights), plus optional `skel` (skeleton), `skan` (skeletal animation) and `manim`
+(mesh-morph animation). ResForge round-trips the whole thing through **Blender** via
+glTF:
+
+1. **Export glTF** — writes a self-contained `.glb` with geometry, both UV sets,
+   embedded textures, the skeleton + skinning, and the animations. Open it in Blender
+   (or any glTF tool).
+2. Edit in Blender.
+3. Bring it back one of two ways:
+   - **Import glTF** — a *lossless patch*. It matches every glTF vertex back to its
+     original by a hidden id and re-quantises only what you touched, keeping every
+     other byte identical. Use this to **reshape/sculpt** vertices, **re-UV**,
+     **weight-paint** the rig, **re-pose** the skeleton, or **re-shape** morph
+     targets. *Requirement:* in Blender's glTF **export** dialog, tick **Data → Mesh →
+     Attributes** so the vertex ids survive (it's off by default).
+   - **Rebuild from glTF** — *regenerates* the geometry, so you can **add, remove or
+     re-topologize** vertices and faces (and whole parts). It re-encodes positions/
+     normals/UVs/weights into the original formats, recomputes tangents, and rebuilds
+     the submeshes/morphs. It isn't byte-lossless, so verify in-game. Multi-part,
+     skinned, morph-animated and normal-mapped models are all supported.
+
+What still can't be edited through the round-trip: the skeleton's *animation
+keyframes* (`skan`) and adding/removing morph *frames* — the meshes, materials,
+skinning, skeleton rest pose and morph shapes all round-trip.
 
 ## Building / testing
 
@@ -229,9 +261,13 @@ for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`), action/keybind metadata (`action`) and
 materials (`mat2`) as JSON, sprite animations (`anim`: speed + frame sequence) as
 JSON, click hitboxes (`neg`: hotspot + connection points) as JSON, movement
-collision (`obst`: polygons) as JSON, and text. The 3D vertex buffers (`vbuf2`) are
-inspected read-only (vertex count + attribute formats shown by `info`/`verify`),
-and `code`/`codeentry` layers are decoded read-only (class names and the
+collision (`obst`: polygons) as JSON, and text. **3D models** get a full
+edit-and-add/remove round-trip through Blender via glTF (see "Editing 3D models"
+above): export carries geometry, both UV sets, textures, skeleton, skinning and
+animations; **Import glTF** brings edits back losslessly (vertices, UVs, weights,
+skeleton pose, morph shapes) and **Rebuild from glTF** regenerates geometry so
+vertices/faces/parts can be added or removed (tangents recomputed). The
+`code`/`codeentry` layers are decoded read-only (class names and the
 entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).
 A read-only **dependency / reference view** surfaces what other resources a `.res`
 points to: the explicit dependency list (`deps`: name + version), resource links
@@ -242,9 +278,10 @@ gathered across `deps`, `rlink`, `code` classpaths and `mat2` material links.
 The rig/lighting layers are also decoded read-only: `light` (light type, colours,
 attenuation/direction), `skel` (bone hierarchy), `skan` (skeletal animation:
 length, mode, per-bone tracks), `boneoff` (equip-point transforms) and `manim`
-(mesh/morph animation: per-frame vertex offsets). Deeper typed editing
-(mesh/skeleton geometry, animations, collision) can be layered on incrementally
-using the same parts model.
+(mesh/morph animation: per-frame vertex offsets). The skeletal/morph **animation
+keyframes** themselves (`skan` timing; adding/removing `manim` frames) are the main
+thing the round-trip doesn't yet edit; deeper typed editing can be layered on
+incrementally using the same parts model.
 
 ## How this was built ("vibe coded")
 

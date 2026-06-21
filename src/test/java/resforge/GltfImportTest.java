@@ -749,6 +749,56 @@ class GltfImportTest {
         }
     }
 
+    /** A glb with one primitive that has NO indices (POSITION/NORMAL/TEXCOORD only). */
+    private static byte[] nonIndexedGlb(float[] pos, float[] nrm, float[] tex) {
+        int m = pos.length / 3;
+        int posLen = m * 12, nrmLen = m * 12, texLen = m * 8;
+        MessageWriter bin = new MessageWriter();
+        for(float v : pos) bin.float32(v);
+        for(float v : nrm) bin.float32(v);
+        for(float v : tex) bin.float32(v);
+        int total = posLen + nrmLen + texLen;
+        String json = "{\"asset\":{\"version\":\"2.0\"},\"buffers\":[{\"byteLength\":" + total + "}],"
+                + "\"bufferViews\":["
+                + "{\"buffer\":0,\"byteOffset\":0,\"byteLength\":" + posLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + posLen + ",\"byteLength\":" + nrmLen + "},"
+                + "{\"buffer\":0,\"byteOffset\":" + (posLen + nrmLen) + ",\"byteLength\":" + texLen + "}],"
+                + "\"accessors\":["
+                + "{\"bufferView\":0,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
+                + "{\"bufferView\":2,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC2\"}],"
+                + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2}}]}]}";
+        byte[] jb = json.getBytes(StandardCharsets.UTF_8);
+        byte[] jpad = pad(jb, (byte) 0x20);
+        byte[] bb = bin.toByteArray();
+        byte[] bpad = pad(bb, (byte) 0x00);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + jpad.length + 8 + bpad.length);
+        w.int32(jpad.length).int32(0x4E4F534A).bytes(jpad);
+        w.int32(bpad.length).int32(0x004E4942).bytes(bpad);
+        return w.toByteArray();
+    }
+
+    @Test
+    void rebuildHandlesNonIndexedPrimitive() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        byte[] orig = res.serialize();
+        // 6 vertices, two triangles, NO index buffer -> indices should be 0..5
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0,  1, 1, 0,  2, 0, 0,  2, 1, 0};
+        float[] nrm = new float[18];
+        for(int i = 0; i < 6; i++) nrm[i * 3 + 2] = 1;
+        float[] tex = new float[12];
+        GltfImport.RebuildResult r = GltfImport.rebuild(orig, nonIndexedGlb(pos, nrm, tex));
+        assertEquals(6, r.vertices);
+        assertEquals(2, r.triangles, "non-indexed 6 verts -> 2 triangles over its own vertices");
+        MeshInfo m = MeshInfo.parse(meshLayerBytes(ResContainer.parse(r.res)));
+        assertEquals(2, m.numTris);
+        for(short s : m.indices)
+            assertTrue(s >= 0 && s < 6, "indices stay within the primitive's own vertices");
+    }
+
     private static byte[] geomGlbMorph(float[] pos, float[] nrm, float[] tex, int[] indices, float[] morph) {
         int m = pos.length / 3;
         int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2, mLen = m * 12;
