@@ -533,7 +533,15 @@ feedback loop.
   leaves `bones2` byte-identical; only actual weight-paint changes re-encode (a
   skinned no-op round-trips byte-for-byte). Scope: topology-preserving edits
   (reshape/transform/sculpt + re-weight; the skeleton is fixed, no new bones/geometry).
-  **Remaining:** Phase 2c (skeleton/animation import), then arbitrary-topology import
+  **Phase 2c morph-shape import is also done:** edited `manim` morph shapes (Blender
+  shape keys) re-import — each glTF morph target is a frame's vertex deltas, scattered
+  by `_VID`, axis-inverted, and re-encoded into `manim` via `MeshAnimInfo.encodeWith`
+  (run-length fmt-3 spans). The original timeline is kept (frame times/counts/length);
+  only the shapes change, which avoids the brittle round-trip of Blender's shape-key
+  *animation* (the glTF weight-animation is never read). Change-gated per manim
+  (unchanged stays byte-identical; a no-op round-trips byte-for-byte on
+  wisp/knarr/algaeblob/woodheart, each with two manims).
+  **Remaining:** Phase 2c skeleton + `skan` import, then arbitrary-topology import
   (re-strip + fresh encode).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus

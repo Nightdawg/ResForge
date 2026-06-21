@@ -2,6 +2,7 @@ package resforge;
 
 import resforge.io.Json;
 import resforge.io.MessageWriter;
+import resforge.layers.MeshAnimInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
 import resforge.model.Vbuf2Codec;
@@ -185,12 +186,51 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    /** manim (fmt 3 float16), 2 frames each morphing vertex 0 over the vbuf. */
+    private static byte[] manim(int id, float len) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(1).int16(id).uint8(0).float32(len);
+        w.uint8(3).float32(0f).uint16(1).uint16(0).uint16(1).float16(0.1f).float16(0.2f).float16(0.3f);
+        w.uint8(3).float32(len / 2).uint16(1).uint16(0).uint16(1).float16(-0.1f).float16(0f).float16(0f);
+        w.uint8(0);
+        return w.toByteArray();
+    }
+
+    /** Scales the deltas of one morph target's POSITION accessor in the glb. */
+    @SuppressWarnings("unchecked")
+    private static byte[] scaleMorphTarget(byte[] glb, int target, float factor) {
+        int jlen = le32(glb, 12);
+        Map<String, Object> root =
+                (Map<String, Object>) Json.parse(new String(glb, 20, jlen, StandardCharsets.UTF_8));
+        Map<String, Object> mesh0 = (Map<String, Object>) ((List<Object>) root.get("meshes")).get(0);
+        Map<String, Object> prim = (Map<String, Object>) ((List<Object>) mesh0.get("primitives")).get(0);
+        List<Object> targets = (List<Object>) prim.get("targets");
+        int accIdx = ((Number) ((Map<String, Object>) targets.get(target)).get("POSITION")).intValue();
+        Map<String, Object> acc = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(accIdx);
+        int count = ((Number) acc.get("count")).intValue();
+        int bvIdx = ((Number) acc.get("bufferView")).intValue();
+        Map<String, Object> bv = (Map<String, Object>) ((List<Object>) root.get("bufferViews")).get(bvIdx);
+        int bvOff = bv.get("byteOffset") == null ? 0 : ((Number) bv.get("byteOffset")).intValue();
+        int accOff = acc.get("byteOffset") == null ? 0 : ((Number) acc.get("byteOffset")).intValue();
+        int base = 20 + jlen + 8 + bvOff + accOff;
+        byte[] out = glb.clone();
+        for(int i = 0; i < count * 3; i++) {
+            int p = base + i * 4;
+            float v = Float.intBitsToFloat(le32(out, p)) * factor;
+            int b = Float.floatToIntBits(v);
+            out[p] = (byte) b;
+            out[p + 1] = (byte) (b >>> 8);
+            out[p + 2] = (byte) (b >>> 16);
+            out[p + 3] = (byte) (b >>> 24);
+        }
+        return out;
+    }
+
     private static byte[] vbufLayer(ResContainer res) {
         for(Layer l : res.layers)
             if(l.name.equals("vbuf2"))
                 return l.data;
-        throw new AssertionError("no vbuf2");
-    }
+        throw new AssertionError("no vbuf2");    }
 
     private static float[] decoded(byte[] resBytes, String attr) {
         return Vbuf2Data.parse(vbufLayer(ResContainer.parse(resBytes))).get(attr);
@@ -375,8 +415,7 @@ class GltfImportTest {
     }
 
     @Test
-    void setBones2EncodesUnormWeights() {
-        // re-encode a un1 bones2 directly: bind all vertices fully to bone "tip"
+    void setBones2EncodesUnormWeights() {        // re-encode a un1 bones2 directly: bind all vertices fully to bone "tip"
         Vbuf2Codec codec = Vbuf2Codec.parse(vbufBones2("un1"));
         int[] joints = new int[codec.num * 4];
         float[] weights = new float[codec.num * 4];
@@ -392,6 +431,62 @@ class GltfImportTest {
             assertEquals("tip", d.boneNames[d.vJoints[v * 4]]);
             assertEquals(1f, d.vWeights[v * 4], 1e-2f);
         }
+    }
+
+    @Test
+    void morphNoOpKeepsManimByteIdentical() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim(0, 1.0f)));
+        byte[] orig = res.serialize();
+
+        GltfImport.Result r = GltfImport.apply(orig, GltfExport.toGlb(res, "morph.res").glb);
+        assertFalse(r.morphs, "unchanged morph shapes must not re-encode manim");
+        assertArrayEquals(orig, r.res, "an unchanged morph model must round-trip byte-for-byte");
+    }
+
+    @Test
+    void editedMorphShapeIsReEncoded() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(4)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim(0, 1.0f)));
+        byte[] orig = res.serialize();
+        MeshAnimInfo m0 = MeshAnimInfo.parse(manimLayer(ResContainer.parse(orig)));
+
+        // double frame 0's deltas (target 0 = frame 0 of the single manim)
+        byte[] glb = scaleMorphTarget(GltfExport.toGlb(res, "morph.res").glb, 0, 2.0f);
+        GltfImport.Result r = GltfImport.apply(orig, glb);
+        assertTrue(r.morphs, "changed morph shapes must re-encode manim");
+
+        MeshAnimInfo m1 = MeshAnimInfo.parse(manimLayer(ResContainer.parse(r.res)));
+        MeshAnimInfo.Frame f0o = m0.frames.get(0), f0n = m1.frames.get(0);
+        for(int c = 0; c < 3; c++)
+            assertEquals(f0o.pos[c] * 2f, f0n.pos[c], 1e-2f, "frame 0 delta " + c + " should be doubled");
+        // frame 1 (untouched target) stays the same
+        assertEquals(m0.frames.get(1).pos[0], m1.frames.get(1).pos[0], 1e-3f);
+    }
+
+    @Test
+    void meshAnimEncodeWithRoundTrips() {
+        MeshAnimInfo mi = MeshAnimInfo.parse(manim(7, 2.0f));
+        float[][] nd = new float[2][12];                 // num = 4 vertices
+        nd[0][0] = 0.2f; nd[0][1] = 0.4f; nd[0][2] = 0.6f;
+        nd[1][0] = -0.1f;
+        MeshAnimInfo back = MeshAnimInfo.parse(mi.encodeWith(nd, 4, 1e-6f));
+        assertEquals(7, back.id);
+        assertEquals(2, back.frames.size());
+        assertEquals(0.2f, back.frames.get(0).pos[0], 1e-2f);
+        assertEquals(0.4f, back.frames.get(0).pos[1], 1e-2f);
+        assertEquals(-0.1f, back.frames.get(1).pos[0], 1e-2f);
+    }
+
+    private static byte[] manimLayer(ResContainer res) {
+        for(Layer l : res.layers)
+            if(l.name.equals("manim"))
+                return l.data;
+        throw new AssertionError("no manim");
     }
 
     @Test

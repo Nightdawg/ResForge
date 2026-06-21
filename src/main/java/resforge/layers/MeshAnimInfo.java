@@ -1,6 +1,7 @@
 package resforge.layers;
 
 import resforge.io.MessageReader;
+import resforge.io.MessageWriter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -136,5 +137,44 @@ public final class MeshAnimInfo {
         for(Frame f : frames)
             n += f.vertices;
         return n;
+    }
+
+    /**
+     * Re-encodes this animation keeping its id/order/length and every frame's time
+     * and format, but replacing each frame's vertex deltas with {@code newDeltas}
+     * (one dense {@code num*3} array per frame). Only fmt-3 (float16) frames are
+     * supported (the only format in real data); a vertex is written when any of its
+     * delta components exceeds {@code eps}, grouped into run-length spans exactly as
+     * {@code haven.MeshAnim.Res} reads them.
+     */
+    public byte[] encodeWith(float[][] newDeltas, int num, float eps) {
+        for(Frame f : frames)
+            if(f.fmt != 3)
+                throw new IllegalStateException("only fmt-3 manim re-encode is supported (got fmt " + f.fmt + ")");
+        MessageWriter w = new MessageWriter();
+        w.uint8(1).int16(id).uint8(random ? 1 : 0).float32(len);
+        for(int fi = 0; fi < frames.size(); fi++) {
+            float[] d = newDeltas[fi];
+            List<Integer> verts = new ArrayList<>();
+            for(int v = 0; v < num; v++)
+                if(Math.abs(d[v * 3]) > eps || Math.abs(d[v * 3 + 1]) > eps || Math.abs(d[v * 3 + 2]) > eps)
+                    verts.add(v);
+            w.uint8(3).float32(frames.get(fi).time).uint16(verts.size());
+            int i = 0;
+            while(i < verts.size()) {
+                int st = verts.get(i);
+                int j = i + 1;
+                while(j < verts.size() && verts.get(j) == verts.get(j - 1) + 1)
+                    j++;
+                w.uint16(st).uint16(j - i);
+                for(int k = i; k < j; k++) {
+                    int v = verts.get(k);
+                    w.float16(d[v * 3]).float16(d[v * 3 + 1]).float16(d[v * 3 + 2]);
+                }
+                i = j;
+            }
+        }
+        w.uint8(0);
+        return w.toByteArray();
     }
 }

@@ -107,8 +107,9 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `WEIGHTS_0`, plus a stable `_VID` per vertex for re-import — dependency-free),
   `GltfImport` (re-import an edited `.glb` → maps each glTF vertex back to its
   original index by `_VID`, re-quantises pos/nrm/both UVs into their original
-  on-wire formats, Y-up→Z-up, and re-imports skinning weights to `bones2` via
-  `Vbuf2Codec.setBones2` when they changed, keeping all other layers byte-identical),
+  on-wire formats, Y-up→Z-up, re-imports skinning weights to `bones2` via
+  `Vbuf2Codec.setBones2` and morph shapes to `manim` via `MeshAnimInfo.encodeWith`
+  when they changed, keeping all other layers byte-identical),
   `ObjExport` (simpler geometry → Wavefront OBJ + a `.mtl` and the local `tex`
   image(s), so models open textured).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
@@ -210,9 +211,15 @@ References… (aggregated reference report dialog), **resource-version spinner**
   the skin (Blender reorders joints), and re-encodes the top-4 influences into
   `bones2` (`Vbuf2Codec.setBones2`, original f4/un2/un1 format) — render-equivalent
   since the client reduces to top-4. It's change-gated: a pure mesh edit leaves
-  `bones2` byte-identical (only actual weight-paint changes re-encode). Scope:
-  topology-preserving edits (reshape/transform/sculpt + re-weight; no new geometry).
-  **Next: Phase 2c** — skeleton/animation import, then arbitrary-topology rebuild.
+  `bones2` byte-identical (only actual weight-paint changes re-encode). User-confirmed
+  in-game. **Phase 2c morph-shape import is also done** — edited `manim` morph shapes
+  (Blender shape keys) re-import: each glTF morph target is a frame's vertex deltas,
+  scattered by `_VID`, axis-inverted, re-encoded into `manim` via
+  `MeshAnimInfo.encodeWith`, keeping the original timeline (only shapes change;
+  Blender's shape-key *animation* round-trip is deliberately sidestepped).
+  Change-gated (unchanged manim stays byte-identical). Scope: topology-preserving
+  edits (reshape/transform/sculpt + re-weight + re-shape morphs; no new geometry).
+  **Next: Phase 2c skeleton/skan import**, then arbitrary-topology rebuild.
   The Haven *encode* toolkit is fully in the client
   (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
   `mkres-fragment.py` for the mesh choices — no dev code needed.
