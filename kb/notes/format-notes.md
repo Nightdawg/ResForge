@@ -195,8 +195,10 @@ male/knarr/mulberry/bull/stallion — 100% matched, `vbuf2` + all other layers
 identical; and the worst-case "Blender merged all 199 seam dups" sim on male
 reconstructs every position exactly via the coincident fallback). Scope is
 topology-preserving edits (reshape/transform/sculpt; no genuinely new geometry).
-**Next:** Phase 2b (re-import skinning weights into the run-length `bones2` format)
-and Phase 2c (skeleton/animation import).
+The full round-trip is **user-confirmed end-to-end**: exporting male, enlarging the
+head in Blender, re-exporting (Attributes on), re-importing and loading in-game
+renders correctly. **Next:** Phase 2b (re-import skinning weights into the
+run-length `bones2` format) and Phase 2c (skeleton/animation import).
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),
