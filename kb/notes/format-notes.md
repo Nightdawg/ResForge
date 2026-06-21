@@ -163,108 +163,12 @@ frame over the frame times, looping back to frame 0 at `len`). `MeshAnimInfo` no
 captures per-frame idx/deltas (fmt 1/3/4). So knarr exports both skeletal *and*
 morph animation; wisp's flicker and algaeblob's sway export as morphs.
 
-### glTF geometry import (Phase 2a)
-`GltfImport` re-imports an edited `.glb` back into a model (CLI `import-gltf`, GUI
-**Import glTF**). It is a **patch, not a rebuild**: only the `vbuf2` vertex data is
-re-encoded; every other layer (`mesh` triangles, `skel`, `bones2` weights, `mat2`,
-`tex`, code…) is carried over byte-for-byte. For each glTF vertex it reads
-POSITION/NORMAL/TEXCOORD_0/TEXCOORD_1 (FLOAT accessors out of the BIN chunk),
-inverts the axis convert (glTF Y-up→Haven Z-up, `(gx,gy,gz)→(gx,-gz,gy)` for
-positions *and* normals), and re-quantises each attribute into its **original**
-on-wire format via `Vbuf2Codec.decodeAttr`/`setAttr` — a general de/re-quantiser
-covering f4/f2/sn1-4/un1-4/uvec1-2 (`writeAny`: signed/unsigned NormNumber with a
-leading float32 max, and octahedral `uvec2oct` for normals).
-
-**Vertex matching by stable id.** Blender (and most DCC tools) re-split vertices at
-UV/normal seams on export — the [glTF manual](https://docs.blender.org/manual/en/latest/addons/import_export/scene_gltf2.html)
-says "Discontinuous UVs and flat-shaded edges may result in moderately higher
-vertex counts", so the count almost never matches (e.g. male 1325→1326; male has
-only 1126 *distinct* positions, 199 seam dups). To survive that, `GltfExport` now
-tags every vertex with a custom scalar attribute **`_VID`** = its `vbuf2` index, and
-`GltfImport` scatters each glTF vertex back to slot `_VID` (so reordered /
-duplicated / re-split vertices all land correctly, count-independent). Vertices
-whose id Blender *merged* away (a seam dup folded into its twin) are filled from a
-coincident matched vertex (same original position → moves together); their
-normal/UV stay original. Guards: ids beyond `num` ⇒ "different .res" error; zero
-matches ⇒ error. `_VID` requires **"Data > Mesh > Attributes" enabled in Blender's
-glTF exporter** (`export_attributes`, default *off*); `export_normals`/`texcoords`/
-`skins` are default on. A glTF *without* `_VID` falls back to strict count+order
-matching (ResForge's own unedited export, or order-preserving tools).
-
-Because sn/un/uvec round-trip byte-exactly when a component sits at full scale, an
-**unchanged** model survives res→glb→res **byte-identically** (verified on
-male/knarr/mulberry/bull/stallion — 100% matched, `vbuf2` + all other layers
-identical; and the worst-case "Blender merged all 199 seam dups" sim on male
-reconstructs every position exactly via the coincident fallback). Scope is
-topology-preserving edits (reshape/transform/sculpt; no genuinely new geometry).
-The full round-trip is **user-confirmed end-to-end**: exporting male, enlarging the
-head in Blender, re-exporting (Attributes on), re-importing and loading in-game
-renders correctly.
-
-### glTF skinning-weight import (Phase 2b)
-`GltfImport` also re-imports edited **bone weights** (weight painting). It scatters
-the glTF's `JOINTS_0`/`WEIGHTS_0` back to each vertex by `_VID`, mapping each glTF
-joint index to a **bone name** via the mesh's `skin.joints` → node name — essential
-because Blender reorders joints, so the raw index isn't stable; the name is. The
-top-4 per-vertex influences are re-encoded into `bones2` via `Vbuf2Codec.setBones2`,
-which emits the run-length-per-bone layout `PoseMorph.read` parses (`uint8 ver`,
-weight-format string, `uint8 mba`, then per used bone a name + `(run, startVertex,
-weights…)` spans, empty name to end), in the original weight format (f4/un2/un1).
-Bones are emitted in name order, skipping unused ones; the client maps influences
-back to skeleton bones by name, so stream order is free. This is render-equivalent
-because the client itself reduces to the top-4 normalized influences
-(`sortweights`+`normweights`). Crucially it is **change-gated**: weights are only
-re-encoded if they actually differ (per-vertex influence sets, ±0.01) from what the
-original would export, so a pure mesh edit leaves `bones2` **byte-identical** (a
-skinned no-op round-trips byte-for-byte on male/knarr/bull/stallion). Un-matched
-seam-dup vertices inherit a coincident vertex's weights, like positions. Validated:
-forcing every male vertex to a single bone re-encodes correctly and all 1325 bind to
-their originally dominant bone. New bones can't be added (skeleton is fixed).
-
-### glTF morph-shape import (Phase 2c, part 1)
-`GltfImport` re-imports edited **morph (`manim`) shapes** — the per-frame vertex
-deltas behind effects like a rippling sail or a flickering wisp, which Blender holds
-as **shape keys**. Each glTF morph target is one frame's deltas; on import they are
-scattered back to original vertices by `_VID`, axis-inverted (a delta is a vector:
-`(gx,gy,gz)→(gx,-gz,gy)`), and re-encoded into the matching `manim` layer via
-`MeshAnimInfo.encodeWith` (run-length spans of fmt-3 float16, the only sampled
-format). Blender writes shape keys as **sparse accessors** (only the changed
-elements, an all-zero base with no `bufferView` + an indices/values pair), so the
-accessor reader handles sparse (and integer/normalized) accessors, not just dense
-float ones. Targets map to frames by position: the exporter concatenates every
-manim's
-frames in layer order, and Blender preserves shape-key order, so global target *t* →
-(manim, frame) by cumulative counts. **The timeline is kept from the original** —
-frame times, counts, len, play-order — only the shapes change; this deliberately
-sidesteps the brittle round-trip of Blender's shape-key *animation* (we never read
-the glTF weight-animation). Change-gated per manim: an unchanged manim stays
-byte-identical (a no-op round-trips byte-for-byte on wisp/knarr/algaeblob/woodheart,
-which have **2 manims each** of 8 fmt-3 frames). Un-matched seam-dup vertices inherit
-a coincident vertex's delta. If the shape-key count changed (frames added/removed) it
-keeps the original. Validated: doubling one manim's frame-0 deltas re-encodes exactly
-while the model's other manim stays byte-identical.
-
-### glTF skeleton import (Phase 2c, part 2)
-`GltfImport` re-imports an edited **skeleton rest pose** (`skel`). Each bone's new
-local transform is read from its glTF joint node *by name* (Blender keeps bone names
-and node-local translation/rotation; the skin maps joints→nodes). Empirically a plain
-Blender round-trip preserves bone transforms to ~2e-5 units / ~0.04° (verified by
-diffing knarr before/after Blender), so a generous change-gate (Δpos>1e-3 or Δrot>0.5°)
-cleanly distinguishes a real edit from float noise; an unchanged skeleton is left
-**byte-identical** (validated against the user's actual Blender round-trip of knarr).
-When a bone moved, the whole skeleton is re-encoded via `SkelInfo.encodeVer1` — always
-the **version-1** form (the client reads both, so we needn't reproduce ver-0
-`cpfloat`): a `"\u0001"` marker, then per bone name, parent, `float32` position, the
-angle as `mnorm16` (`angle/2π` mod 1) and the rotation axis octahedral-encoded into two
-`snorm16`s. Rotations convert quaternion↔axis-angle. No axis swap is needed: our export
-gives each bone its *native* local transform under a conversion ROOT node, so the node
-transform already equals the skel transform. (knarr is ver-1; lilypadlotus/stallion are
-ver-0 — all re-encode to ver-1 on edit.)
-
-### glTF topology rebuild (add/remove geometry)
-`GltfImport.rebuild` is the *other* import mode: instead of patching the original
-structure (which can't change vertex/triangle counts), it **regenerates** the model's
-geometry from the glTF, so you can add/remove/re-topologize vertices and faces in
+### glTF model rebuild (bring edits back from Blender)
+`GltfImport.rebuild` brings an edited `.glb` back into a model. Rather than patching
+the original structure (which couldn't change vertex/triangle counts), it
+**regenerates** the model's
+geometry from the glTF, so you can reshape, re-UV, add, remove or re-topologize
+vertices and faces in
 Blender. It rebuilds `vbuf2` at the glTF's vertex count — positions/normals/UVs
 re-quantised into the original attribute formats (via `Vbuf2Codec.setAttr` after
 setting `num`), and `bones2`/legacy `bones` from `JOINTS_0`/`WEIGHTS_0` (joints mapped
@@ -273,13 +177,15 @@ modern `bones2` header or the legacy `bones` header with `f4` weights) — and w
 fresh raw-index `mesh`
 (`fl=16` form: num, matid, [id], vbufid, then `num*3` uint16 indices) reusing the
 original mesh's matid/vbufid. All other layers (textures, materials, code) are kept,
-**and the skeleton is re-posed** if a bone moved in Blender (same `applySkel` /
-change-gate as the lossless import — so plain reshaping leaves `skel` byte-identical,
-while a moved bone is re-encoded as `skel` ver1). No `_VID` is needed (vertex order =
-glTF order) and it gives up
-byte-exactness, so it leans on in-game testing — exposed separately as CLI
-`rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning) so it's an
-explicit choice, leaving the safe lossless `import-gltf` as the default.
+**and the skeleton is re-posed** if a bone moved in Blender (change-gated, so plain
+reshaping leaves `skel` byte-identical, while a moved bone is re-encoded as `skel`
+ver1 — each bone's new local transform read from its glTF joint node by name, then
+`SkelInfo.encodeVer1`: mnorm16 angle + snorm16 octahedral axis + float32 pos; knarr is
+ver-1, lilypadlotus/stallion are ver-0, all re-encode to ver-1). The axis convert is
+inverted (glTF Y-up→Haven Z-up, `(gx,gy,gz)→(gx,-gz,gy)` for positions, normals and
+morph deltas). No per-vertex id is needed (vertex order = glTF order) and it gives up
+byte-exactness, so it leans on in-game testing — exposed as CLI
+`rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning).
 
 **Multi-submesh** is supported: each glTF primitive becomes a submesh. To recover
 which part each face belongs to (and to stop Blender merging parts that merely share
@@ -294,7 +200,10 @@ positions/normals/UVs/bone-weights **and morph (`manim`) models**: each frame's
 shape is rebuilt from the glTF morph targets (concatenated per part like the
 geometry, axis-inverted) and re-encoded via `MeshAnimInfo.encodeWith` at the new
 vertex count, keeping the original frame times; the shape-key count must equal the
-frame count (adding/removing morph frames isn't supported yet). **Normal-mapped
+frame count (adding/removing morph frames isn't supported yet). Blender writes shape
+keys as **sparse accessors** (an all-zero base with no `bufferView` + an indices/values
+pair), so `readAccessor` handles sparse (and integer/normalized) accessors, not just
+dense float ones. **Normal-mapped
 models** (`tan`/`bit` attributes, e.g. knarr/woodheart) work too: glTF doesn't carry
 the tangent basis, so it's **recomputed** from the new positions/UVs/triangles
 (Lengyel's method + Gram-Schmidt against the normal; degenerate verts fall back to an
