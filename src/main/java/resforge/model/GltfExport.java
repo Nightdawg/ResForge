@@ -162,15 +162,6 @@ public final class GltfExport {
                 attribs.put("JOINTS_0", addJoints(bin, bufferViews, accessors, d, joints));
                 attribs.put("WEIGHTS_0", addWeights(bin, bufferViews, accessors, d));
             }
-            // A stable per-vertex id so an edited model can be re-imported even
-            // though Blender re-splits/reorders vertices at UV/normal seams (it
-            // changes the vertex count). Re-import maps each glTF vertex back to
-            // its original vbuf2 index via this id. Requires "Attributes" to be
-            // enabled in Blender's glTF export so the id survives the round-trip.
-            float[] vid = new float[d.num];
-            for(int i = 0; i < d.num; i++)
-                vid[i] = i;
-            attribs.put("_VID", addVertexScalar(bin, bufferViews, accessors, vid));
             vbufAttribs.put(e.getKey(), attribs);
             vertices += d.num;
         }
@@ -688,22 +679,6 @@ public final class GltfExport {
         for(float v : data)
             bin.f32(v);
         int bv = addBufferView(bvs, off, bin.size() - off, -1);
-        Map<String, Object> acc = new LinkedHashMap<>();
-        acc.put("bufferView", bv);
-        acc.put("componentType", FLOAT);
-        acc.put("count", data.length);
-        acc.put("type", "SCALAR");
-        accs.add(acc);
-        return accs.size() - 1;
-    }
-
-    /** A per-vertex SCALAR float vertex attribute (ARRAY_BUFFER), used for {@code _VID}. */
-    private static int addVertexScalar(Buf bin, List<Object> bvs, List<Object> accs, float[] data) {
-        bin.align4();
-        int off = bin.size();
-        for(float v : data)
-            bin.f32(v);
-        int bv = addBufferView(bvs, off, bin.size() - off, ARRAY_BUFFER);
         Map<String, Object> acc = new LinkedHashMap<>();
         acc.put("bufferView", bv);
         acc.put("componentType", FLOAT);

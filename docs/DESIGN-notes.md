@@ -235,7 +235,7 @@ resforge/
     model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
     model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit/rebuild)
     model/GltfExport.java            # 3D model -> Blender-ready binary glTF (.glb)
-    model/GltfImport.java            # edited .glb -> .res (lossless patch + topology rebuild)
+    model/GltfImport.java            # edited .glb -> .res (topology rebuild)
   src/test/java/resforge/
     RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
     PropsJsonTest.java               # JSON + props codec tests
@@ -270,7 +270,7 @@ resforge/
 ./gradlew run --args="replace horse.res image newicon.png horse.res"
 ./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
 
-# Export a 3D model to a Blender-ready glTF (then Import/Rebuild glTF to bring edits back)
+# Export a 3D model to a Blender-ready glTF (then Rebuild glTF to bring edits back)
 ./gradlew run --args="gltf path/to/horse.res"
 
 # Catalogue what is editable across a folder of resources
@@ -469,7 +469,7 @@ layers remain lossless raw `.bin`.
    `model/ObjExport.java` emitted OBJ; CLI `obj`). Validated: `male` → 1325 verts /
    2248 tris (humanoid bbox), `knarr` → 12838 verts / 16952 tris / 21 submeshes
    (ship bbox). *(Since superseded and removed: the **glTF round-trip** below is the
-   editable form — it carries multi-UV/skeleton/animation and re-imports to `.res`.)*
+   editable form — it carries multi-UV/skeleton/animation and rebuilds back to `.res`.)*
 3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
@@ -509,65 +509,36 @@ feedback loop.
   `model/M4` 4×4 maths). `skan` layers also export as glTF **animations** (per-bone
   translation/rotation channels composed onto the bind pose), and `manim` layers as
   glTF **morph targets** + a weight animation (per-frame vertex deltas, linearly
-  interpolated). **Phase 1 (export) is complete.** **Phase 2a (geometry import) is
-  also done:** `GltfImport` (CLI `import-gltf`, GUI **Import glTF**) re-imports an
-  edited `.glb` as a *patch* — it axis-inverts glTF Y-up→Haven Z-up and re-quantises
+  interpolated). **Phase 1 (export) is complete.** **Bringing edits back is done via a
+  topology rebuild** (`GltfImport.rebuild`, CLI `rebuild-gltf`, GUI **Rebuild from
+  glTF**): it regenerates
+  `vbuf2`+`mesh`(+`bones2`/`bones`/`manim`) from the edited glTF at its own vertex count,
+  so you can reshape, re-UV, add, remove or re-topologize vertices and faces. It
+  axis-inverts glTF Y-up→Haven Z-up and re-quantises
   positions/normals/both UV sets back into each attribute's *original* on-wire
   format via `Vbuf2Codec.decodeAttr`/`setAttr` (general f4/f2/sn1-4/un1-4/uvec1-2
-  de/re-quant), while copying every other layer — bone weights, triangle lists,
-  skeleton, materials, code — byte-for-byte. Since Blender re-splits vertices at
-  UV/normal seams (so the vertex *count* changes), the exporter tags each vertex
-  with a stable id `_VID` and the importer scatters each glTF vertex back to its
-  original `vbuf2` slot by id (reorder/duplicate/re-split safe); seam dups Blender
-  merged are filled from a coincident matched vertex. `_VID` needs **"Data > Mesh >
-  Attributes" enabled in Blender's glTF export** (default off; normals/UVs/skins are
-  default on); a glTF without ids falls back to strict count+order matching. Because
-  sn/un/uvec round-trips are byte-exact at full scale, an *unchanged* model survives
-  res→glb→res byte-identically (verified on male/knarr/mulberry/bull/stallion, 100%
-  matched; the worst-case "all 199 seam dups merged" sim on male still reconstructs
-  every position exactly). User-confirmed end-to-end (enlarging male's head in
-  Blender re-imports and renders correctly in-game). **Phase 2b (skinning-weight
-  import) is also done:** edited bone weights re-import too — `GltfImport` scatters
-  `JOINTS_0`/`WEIGHTS_0` by `_VID`, maps each glTF joint to a bone *name* via the
-  skin (Blender reorders joints, so the name is the stable key), and re-encodes the
-  top-4 influences into `bones2` (`Vbuf2Codec.setBones2`, the run-length-per-bone
-  layout in the original f4/un2/un1 weight format). This is render-equivalent (the
-  client reduces to top-4 normalized anyway) and **change-gated** — a pure mesh edit
-  leaves `bones2` byte-identical; only actual weight-paint changes re-encode (a
-  skinned no-op round-trips byte-for-byte). Scope: topology-preserving edits
-  (reshape/transform/sculpt + re-weight; the skeleton is fixed, no new bones/geometry).
-  **Phase 2c morph-shape import is also done:** edited `manim` morph shapes (Blender
-  shape keys) re-import — each glTF morph target is a frame's vertex deltas, scattered
-  by `_VID`, axis-inverted, and re-encoded into `manim` via `MeshAnimInfo.encodeWith`
-  (run-length fmt-3 spans). The original timeline is kept (frame times/counts/length);
-  only the shapes change, which avoids the brittle round-trip of Blender's shape-key
-  *animation* (the glTF weight-animation is never read). Change-gated per manim
-  (unchanged stays byte-identical; a no-op round-trips byte-for-byte on
-  wisp/knarr/algaeblob/woodheart, each with two manims).
-  **Phase 2c skeleton import is also done:** an edited `skel` rest pose re-imports —
-  each bone's new local transform is read from its glTF joint node by name (Blender
-  preserves bone names + node-local transforms; a plain round-trip drifts only ~0.04°,
-  verified by diffing knarr before/after Blender, so the change-gate keeps an unedited
-  skeleton byte-identical). A moved bone re-encodes the whole skeleton as version-1 via
-  `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos; the
-  client reads both versions, so ver-0 cpfloat needn't be reproduced).
-  **A separate "rebuild" mode now allows add/remove geometry** (`GltfImport.rebuild`,
-  CLI `rebuild-gltf`, GUI **Rebuild from glTF**): instead of patching, it regenerates
-  `vbuf2`+`mesh`(+`bones2`) from the glTF at its own vertex count (positions/normals/UVs
-  re-quantised into the original formats, weights via `setBones2` — which handles both
-  the modern `bones2` and the legacy `bones` v0 header — a fresh raw-index
-  mesh), keeping all other layers and **re-posing the skeleton** if a bone moved (same
-  `applySkel`/change-gate as the lossless import). It needs no `_VID` and gives up byte-exactness
-  (in-game-validated), so it's a deliberate separate action; the lossless `import-gltf`
-  stays the default. **Multi-submesh works**: each glTF primitive becomes a submesh,
-  with each part's matid recovered from its material name — the export now emits one
+  de/re-quant), writes a fresh raw-index `mesh`, and copies every other layer
+  (materials, textures, code). It needs no per-vertex ids and gives up byte-exactness
+  (in-game-validated). **Multi-submesh works**: each glTF primitive becomes a submesh,
+  with each part's matid recovered from its material name — the export emits one
   material per matid (`rfmat_<matid>`) so the id survives and Blender keeps parts that
   share a texture separate; primitives are concatenated into the shared `vbuf2`,
-  de-duplicated by POSITION accessor. Handles positions/normals/UVs/bone-weights **and
-  morph (`manim`) models** (frame shapes rebuilt from the glTF targets, re-encoded at
-  the new vertex count). Normal-mapped models (`tan`/`bit`) work too — the tangent
+  de-duplicated by POSITION accessor. **Skinning weights** rebuild too: `JOINTS_0`/
+  `WEIGHTS_0` are mapped to bone *names* via the skin (Blender reorders joints, so the
+  name is the stable key) and the top-4 influences re-encoded via `Vbuf2Codec.setBones2`,
+  which handles both the modern `bones2` and the legacy `bones` v0 header (render-
+  equivalent, since the client reduces to top-4 normalized). **Morph (`manim`) models**
+  work: each frame's shape is rebuilt from the glTF morph targets and re-encoded via
+  `MeshAnimInfo.encodeWith` (run-length fmt-3 spans) at the new vertex count, keeping the
+  original timeline (frame count unchanged; Blender's shape-key *animation* is never
+  read). **Normal-mapped models** (`tan`/`bit`) work too — the tangent
   basis is recomputed from the new positions/UVs (Lengyel + Gram-Schmidt; Haven stores
-  `bit` identical to `tan`). **Remaining:** `skan`/`manim` keyframe editing (add/remove/
+  `bit` identical to `tan`). **The skeleton is re-posed** if a bone moved: each bone's
+  new local transform is read from its glTF joint node by name (a plain round-trip drifts
+  only ~0.04°, so the change-gate keeps an unedited skeleton byte-identical), and a moved
+  bone re-encodes the whole skeleton as version-1 via `SkelInfo.encodeVer1` (mnorm16
+  angle + snorm16 octahedral axis + float32 pos; the client reads both versions, so ver-0
+  cpfloat needn't be reproduced). **Remaining:** `skan`/`manim` keyframe editing (add/remove/
   retime animation frames).
   The Haven encode toolkit is fully in the
   client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus

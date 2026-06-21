@@ -27,7 +27,6 @@ import java.nio.file.Path;
  *   pack    <dir> [out.res]
  *   replace <file.res> <selector> <newfile> [out.res]
  *   gltf    <file.res> [out.glb]
- *   import-gltf <orig.res> <edited.glb> [out.res]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
  *   transform <file.res> <sx> <sy> <sz> [out.res]
  *   catalog <file.res | dir>
@@ -64,7 +63,6 @@ public class Main {
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
             case "gltf":   gltf(args);   break;
-            case "import-gltf": importGltf(args); break;
             case "rebuild-gltf": rebuildGltf(args); break;
             case "transform": transform(args); break;
             case "catalog": catalog(args); break;
@@ -396,31 +394,6 @@ public class Main {
                 r.vertices, r.triangles, r.submeshes, r.textures, out);
     }
 
-    private static void importGltf(String[] args) throws IOException {
-        if(args.length < 3)
-            throw new UsageException("import-gltf requires <original.res> <edited.glb> [out.res]");
-        Path resFile = Path.of(args[1]);
-        Path glbFile = Path.of(args[2]);
-        Path out = (args.length >= 4) ? Path.of(args[3]) : resFile;
-        byte[] orig = Files.readAllBytes(resFile);
-        byte[] glb = Files.readAllBytes(glbFile);
-        GltfImport.Result r = GltfImport.apply(orig, glb);
-        Files.write(out, r.res);
-        StringBuilder attrs = new StringBuilder("positions");
-        if(r.nrm) attrs.append(", normals");
-        if(r.tex) attrs.append(", UV0");
-        if(r.otex) attrs.append(", UV1");
-        if(r.bones) attrs.append(", skinning weights");
-        if(r.morphs) attrs.append(", morph shapes");
-        if(r.skel) attrs.append(", skeleton");
-        String coverage = (r.matched < r.vertices)
-                ? " (" + r.matched + " matched by id, " + (r.vertices - r.matched)
-                        + " filled from coincident vertices)"
-                : "";
-        System.out.printf("Re-imported %d vertices%s (%s) from %s -> %s%n",
-                r.vertices, coverage, attrs, glbFile, out);
-    }
-
     private static void rebuildGltf(String[] args) throws IOException {
         if(args.length < 3)
             throw new UsageException("rebuild-gltf requires <original.res> <edited.glb> [out.res]");
@@ -465,8 +438,6 @@ public class Main {
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
-        System.out.println("  import-gltf <orig.res> <edited.glb> [out.res]");
-        System.out.println("                               Re-import edited geometry from a glTF (same vertex count)");
         System.out.println("  rebuild-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Rebuild geometry from a glTF (allows added/removed vertices)");
         System.out.println("  transform <file.res> <sx> <sy> <sz> [out.res]");

@@ -390,7 +390,6 @@ public class ResForgeFrame extends JFrame {
         tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
-        tb.add(new JButton(action("Import glTF\u2026", this::doImportGltf)));
         tb.add(new JButton(action("Rebuild glTF\u2026", this::doRebuildGltf)));
         tb.add(new JButton(action("References\u2026", this::doShowReferences)));
         tb.addSeparator();
@@ -604,42 +603,6 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
-    private void doImportGltf() {
-        if(res == null)
-            return;
-        boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
-        if(!hasGeom) {
-            info("This resource has no 3D geometry (vbuf2) to re-import into.");
-            return;
-        }
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setDialogTitle("Import edited glTF");
-        fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
-        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
-            return;
-        try {
-            byte[] glb = Files.readAllBytes(fc.getSelectedFile().toPath());
-            GltfImport.Result r = GltfImport.apply(res.serialize(), glb);
-            ResContainer patched = ResContainer.parse(r.res);
-            StringBuilder attrs = new StringBuilder("positions");
-            if(r.nrm) attrs.append(", normals");
-            if(r.tex) attrs.append(", UV0");
-            if(r.otex) attrs.append(", UV1");
-            if(r.bones) attrs.append(", skinning weights");
-            if(r.morphs) attrs.append(", morph shapes");
-            if(r.skel) attrs.append(", skeleton");
-            String coverage = (r.matched < r.vertices)
-                    ? " (" + r.matched + " by id, " + (r.vertices - r.matched) + " coincident)"
-                    : "";
-            applyLoaded(patched, file, pathField.getText(),
-                    "Imported " + r.vertices + " vertices" + coverage + " (" + attrs + ") from "
-                            + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
-            markDirty();
-        } catch(Exception e) {
-            error("glTF import failed: " + e.getMessage());
-        }
-    }
-
     private void doRebuildGltf() {
         if(res == null)
             return;
@@ -650,7 +613,7 @@ public class ResForgeFrame extends JFrame {
         }
         int ok = JOptionPane.showConfirmDialog(this,
                 "Rebuild regenerates the model's geometry from the glTF, allowing added or\n"
-                        + "removed vertices. Unlike Import glTF it isn't byte-lossless, so verify the\n"
+                        + "removed vertices. It isn't byte-lossless, so verify the\n"
                         + "result in-game. Continue?",
                 "Rebuild from glTF", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if(ok != JOptionPane.OK_OPTION)
@@ -1147,12 +1110,10 @@ public class ResForgeFrame extends JFrame {
         }
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("3D geometry is read-only here; export to glTF to edit the whole "
-                + "model in Blender, then re-import the edited .glb. (When exporting from Blender, "
-                + "enable \"Data > Mesh > Attributes\" so vertices can be matched back.)"));
+                + "model in Blender, then rebuild from the edited .glb to bring your changes back."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
                 new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
-                new JButton(action("Import glTF (.glb)\u2026", this::doImportGltf)),
                 new JButton(action("Rebuild from glTF\u2026", this::doRebuildGltf))));
     }
 

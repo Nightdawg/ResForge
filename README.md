@@ -26,12 +26,11 @@ an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
-file); **Import glTF** to bring edits back losslessly (reshape/sculpt vertices,
-re-UV, re-paint **skinning weights**, re-pose the **skeleton**, re-shape **morphs** —
-matched vertex-for-vertex and re-quantised into the original on-wire formats);
-**Rebuild from glTF** to regenerate geometry so you can **add, remove or
-re-topologize vertices and faces** (multi-part, morph, skinned and normal-mapped
-models supported — tangents are recomputed and the skeleton is re-posed). You can
+file); **Rebuild from glTF** to bring edits back — regenerate geometry so you can
+**reshape/sculpt, re-UV, add, remove or re-topologize vertices and faces** (multi-part,
+morph, skinned and normal-mapped models supported — positions/normals/UVs are
+re-quantised into the original on-wire formats, **skinning weights** rebuilt, tangents
+recomputed, the **skeleton** re-posed and **morphs** re-shaped). You can
 also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
@@ -123,19 +122,12 @@ glTF:
    embedded textures, the skeleton + skinning, and the animations. Open it in Blender
    (or any glTF tool).
 2. Edit in Blender.
-3. Bring it back one of two ways:
-   - **Import glTF** — a *lossless patch*. It matches every glTF vertex back to its
-     original by a hidden id and re-quantises only what you touched, keeping every
-     other byte identical. Use this to **reshape/sculpt** vertices, **re-UV**,
-     **weight-paint** the rig, **re-pose** the skeleton, or **re-shape** morph
-     targets. *Requirement:* in Blender's glTF **export** dialog, tick **Data → Mesh →
-     Attributes** so the vertex ids survive (it's off by default).
-   - **Rebuild from glTF** — *regenerates* the geometry, so you can **add, remove or
-     re-topologize** vertices and faces (and whole parts). It re-encodes positions/
-     normals/UVs/weights into the original formats, recomputes tangents, rebuilds
-     the submeshes/morphs, and **re-poses the skeleton** if you moved a bone. It isn't
-     byte-lossless, so verify in-game. Multi-part,
-     skinned, morph-animated and normal-mapped models are all supported.
+3. **Rebuild from glTF** — *regenerates* the geometry from the edited `.glb`, so you
+   can **reshape/sculpt, re-UV, add, remove or re-topologize** vertices and faces (and
+   whole parts). It re-encodes positions/normals/UVs/weights into the original formats,
+   recomputes tangents, rebuilds the submeshes/morphs, and **re-poses the skeleton** if
+   you moved a bone. It isn't byte-lossless, so verify in-game. Multi-part, skinned,
+   morph-animated and normal-mapped models are all supported.
 
 What still can't be edited through the round-trip: the skeleton's *animation
 keyframes* (`skan`) and adding/removing morph *frames* — the meshes, materials,
@@ -215,10 +207,8 @@ resforge pack   horse.resdir         # -> horse.res
 # Export a 3D model to a Blender-ready binary glTF (UV sets + textures + skeleton, one file):
 resforge gltf   horse.res horse.glb
 
-# Re-import an edited glTF back into the model (geometry + skinning weights + morph shapes, matched by id):
-resforge import-gltf horse.res horse.glb horse-edited.res
-
-# Rebuild geometry from a glTF, allowing added/removed vertices (not byte-lossless):
+# Rebuild geometry from an edited glTF — reshape/add/remove vertices, weights, morphs,
+# skeleton (regenerated, not byte-lossless, so verify in-game):
 resforge rebuild-gltf horse.res horse.glb horse-edited.res
 
 # Validate round-trip + image splitting for one file or a whole folder:
@@ -262,9 +252,10 @@ JSON, click hitboxes (`neg`: hotspot + connection points) as JSON, movement
 collision (`obst`: polygons) as JSON, and text. **3D models** get a full
 edit-and-add/remove round-trip through Blender via glTF (see "Editing 3D models"
 above): export carries geometry, both UV sets, textures, skeleton, skinning and
-animations; **Import glTF** brings edits back losslessly (vertices, UVs, weights,
-skeleton pose, morph shapes) and **Rebuild from glTF** regenerates geometry so
-vertices/faces/parts can be added or removed (tangents recomputed, skeleton re-posed). The
+animations; **Rebuild from glTF** brings edits back — regenerating geometry so
+vertices/faces/parts can be reshaped, added or removed (positions/UVs/weights
+re-quantised into the original formats, tangents recomputed, skeleton re-posed, morphs
+re-shaped; not byte-lossless, so verify in-game). The
 `code`/`codeentry` layers are decoded read-only (class names and the
 entrypoint/classpath manifest shown; the embedded Java `.class` can be exported).
 A read-only **dependency / reference view** surfaces what other resources a `.res`

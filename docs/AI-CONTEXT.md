@@ -52,15 +52,13 @@ a sibling project at `../hafen-client`).
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `gltf <file> [out.glb]` ·
-`import-gltf <orig.res> <edited.glb> [out.res]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
 `transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
-exports the 3D model as a Blender-ready binary glTF, `import-gltf` re-imports an
-edited `.glb` losslessly (same vertex count, matched by id), and `rebuild-gltf`
-regenerates geometry to allow added/removed vertices.)
+exports the 3D model as a Blender-ready binary glTF, and `rebuild-gltf`
+regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
@@ -74,10 +72,10 @@ tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 `src` exports as `.java`), **rig/light view** for `light`/`skel`/`skan`/`boneoff`/`manim`
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
-**Export/Import/Rebuild glTF**. Layer
+**Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar: Open, Fetch, Save As, **Export glTF** (Blender-ready .glb),
-**Import glTF** (re-import an edited .glb into the model),
+**Rebuild glTF** (regenerate geometry from an edited .glb),
 References… (aggregated reference report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
@@ -105,14 +103,13 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
-  `WEIGHTS_0`, plus a stable `_VID` per vertex for re-import — dependency-free),
-  `GltfImport` (re-import an edited `.glb` → maps each glTF vertex back to its
-  original index by `_VID`, re-quantises pos/nrm/both UVs into their original
-  on-wire formats, Y-up→Z-up, re-imports skinning weights to `bones2` via
-  `Vbuf2Codec.setBones2` and morph shapes to `manim` via `MeshAnimInfo.encodeWith`
-  when they changed, keeping all other layers byte-identical; and `rebuild` which
-  regenerates `vbuf2`+`mesh`(+`bones2`/`manim`) at a new vertex count to allow
-  added/removed geometry, recomputing tangents).
+  `WEIGHTS_0` — dependency-free),
+  `GltfImport.rebuild` (regenerate `vbuf2`+`mesh`(+`bones2`/`bones`/`manim`) from an
+  edited `.glb` at a new vertex count → re-quantises pos/nrm/both UVs into their original
+  on-wire formats, Y-up→Z-up, rebuilds skinning weights via
+  `Vbuf2Codec.setBones2` and morph shapes via `MeshAnimInfo.encodeWith`, recomputes
+  tangents and re-poses the `skel` skeleton, keeping all other layers; allows
+  reshaped/added/removed geometry, not byte-lossless).
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
@@ -133,7 +130,7 @@ References… (aggregated reference report dialog), **resource-version spinner**
 | `neg` | edit as JSON (click hotspot + bounds + endpoint groups; all int16, lossless) |
 | `obst` | edit as JSON (collision polygons; float16 coords, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
-| `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Import/Rebuild glTF; `transform` write path |
+| `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF; `transform` write path |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `light` | **read-only**: light source — type (point/spot/directional), id, ambient/diffuse/specular colours, attenuation/direction/exponent (cpfloat ver0, float32 ver1) |
@@ -194,52 +191,28 @@ References… (aggregated reference report dialog), **resource-version spinner**
   **skeletal animations** (`skan` → translation/rotation channels), **and mesh-morph
   animations** (`manim` → morph targets + weight animation). All Blender-confirmed
   (knarr: upright, textured, posable, sails ripple). External-skeleton characters
-  get identity-placed named joints. **Phase 2a (glTF import) is now done** —
-  `GltfImport` re-imports an edited `.glb` (CLI `import-gltf`, GUI **Import glTF**):
-  it re-quantises positions/normals/both UV sets into each attribute's *original*
-  on-wire format (f4/sn2/un2/uvec1…) and axis-inverts (Y-up→Z-up), while keeping
-  every other layer — bone weights, triangles, skeleton, materials, code —
-  byte-identical (a *patch*, not a rebuild). Blender re-splits vertices at seams
-  (the count changes), so the exporter tags each vertex with a stable id `_VID` and
-  the importer scatters each glTF vertex back to its original `vbuf2` slot by id
-  (reorder/duplicate/re-split safe); seam dups Blender merged away are filled from a
-  coincident matched vertex. `_VID` needs **"Data > Mesh > Attributes" enabled in
-  Blender's glTF export** (default off; normals/UVs/skins are default on). An
-  unchanged model survives res→glb→res byte-for-byte (verified male/knarr/mulberry/
-  bull/stallion, 100% matched). User-confirmed end-to-end (head resize in Blender →
-  re-import → correct in-game). **Phase 2b (skinning-weight import) is also done** —
-  it scatters `JOINTS_0`/`WEIGHTS_0` by `_VID`, maps glTF joints to bone *names* via
-  the skin (Blender reorders joints), and re-encodes the top-4 influences into
-  `bones2` (`Vbuf2Codec.setBones2`, original f4/un2/un1 format) — render-equivalent
-  since the client reduces to top-4. It's change-gated: a pure mesh edit leaves
-  `bones2` byte-identical (only actual weight-paint changes re-encode). User-confirmed
-  in-game. **Phase 2c morph-shape import is also done** — edited `manim` morph shapes
-  (Blender shape keys) re-import: each glTF morph target is a frame's vertex deltas,
-  scattered by `_VID`, axis-inverted, re-encoded into `manim` via
-  `MeshAnimInfo.encodeWith`, keeping the original timeline (only shapes change;
-  Blender's shape-key *animation* round-trip is deliberately sidestepped).
-  Change-gated (unchanged manim stays byte-identical). **Phase 2c skeleton import is
-  also done** — an edited `skel` rest pose re-imports: each bone's new local transform
-  is read from its glTF joint node by name, change-gated (a plain Blender round-trip
-  drifts only ~0.04°, verified by diffing knarr before/after Blender, so unchanged stays
-  byte-identical), and on a real edit the skeleton is re-encoded as version-1 via
-  `SkelInfo.encodeVer1` (mnorm16 angle + snorm16 octahedral axis + float32 pos).
-  Scope: topology-preserving edits (reshape/transform/sculpt + re-weight + re-shape
-  morphs + re-pose the skeleton; no new geometry). **A separate "rebuild" mode now adds
-  geometry changes** — `GltfImport.rebuild` (CLI `rebuild-gltf`, GUI **Rebuild from
-  glTF**) regenerates `vbuf2`+`mesh`(+`bones2`) from the glTF at its vertex count, so
-  you can add/remove/re-topologize vertices and faces. It needs no `_VID` and isn't
-  byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
-  becomes a submesh; the export now emits one material per matid (`rfmat_<matid>`) so
+  get identity-placed named joints. **Bringing edits back is done via topology
+  rebuild** — `GltfImport.rebuild` (CLI `rebuild-gltf`, GUI **Rebuild from
+  glTF**) regenerates `vbuf2`+`mesh`(+`bones2`/`bones`+`manim`) from the edited glTF at
+  its own vertex count, so you can reshape, re-UV, add, remove or re-topologize vertices
+  and faces (and whole parts). It re-quantises positions/normals/both UV sets into each
+  attribute's *original* on-wire format (f4/sn2/un2/uvec1…) and axis-inverts (Y-up→Z-up),
+  while keeping every other layer (materials, textures, code). It needs no per-vertex ids
+  and isn't byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
+  becomes a submesh; the export emits one material per matid (`rfmat_<matid>`) so
   rebuild recovers each part's id from its material name and Blender doesn't merge
-  parts sharing a texture. Handles positions/normals/UVs/bone-weights (both `bones2`
-  and the legacy `bones` v0 header) **and morph
+  parts sharing a texture. Handles **skinning weights** (both `bones2`
+  and the legacy `bones` v0 header — `JOINTS_0`/`WEIGHTS_0` mapped to bone *names* via
+  the skin, since Blender reorders joints; top-4 influences re-encoded via
+  `Vbuf2Codec.setBones2`) **and morph
   (`manim`) models** (frame shapes rebuilt from glTF morph targets, re-encoded at the
-  new vertex count, frame count unchanged). Normal-mapped models (`tan`/`bit`) work
+  new vertex count via `MeshAnimInfo.encodeWith`, frame count unchanged). Normal-mapped
+  models (`tan`/`bit`) work
   too — the tangent basis is recomputed from the new positions/UVs (Lengyel + Gram-
   Schmidt; Haven stores `bit` identical to `tan`, matched to ~1.3° median). **Rebuild
-  also re-poses the skeleton** (same `applySkel`/change-gate as the lossless import: a
-  plain reshape leaves `skel` byte-identical, a moved bone re-encodes it as ver1).
+  also re-poses the skeleton** (change-gated: a plain reshape leaves `skel`
+  byte-identical, a moved bone is re-encoded as ver1 via `SkelInfo.encodeVer1` —
+  mnorm16 angle + snorm16 octahedral axis + float32 pos).
   Validated
   no-op on male + mulberry/cutblade/fairystone + wisp/algaeblob + stallion/lilypadlotus
   (legacy `bones` v0 + skel) + **knarr** (multi-part
