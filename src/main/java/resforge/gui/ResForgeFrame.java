@@ -161,7 +161,7 @@ public class ResForgeFrame extends JFrame {
     private JComponent buildLayerBar() {
         JToolBar bar = new JToolBar();
         bar.setFloatable(false);
-        addBtn = new JButton(action("Add\u2026", this::addLayer));
+        addBtn = new JButton(action("Add", this::addLayer));
         addBtn.setToolTipText("Add a new layer (optionally from a file)");
         delBtn = new JButton(action("Delete", this::deleteLayer));
         upBtn = new JButton(action("Move \u2191", () -> moveLayer(-1)));
@@ -337,9 +337,9 @@ public class ResForgeFrame extends JFrame {
     private JMenuBar buildMenuBar() {
         JMenuBar bar = new JMenuBar();
         JMenu fileMenu = new JMenu("File");
-        fileMenu.add(item("Open\u2026", KeyEvent.VK_L, this::doOpen));
-        fileMenu.add(item("Fetch from server\u2026", KeyEvent.VK_R, this::doFetch));
-        fileMenu.add(item("Save As\u2026", KeyEvent.VK_S, this::doSaveAs));
+        fileMenu.add(item("Open", KeyEvent.VK_L, this::doOpen));
+        fileMenu.add(item("Fetch from server", KeyEvent.VK_R, this::doFetch));
+        fileMenu.add(item("Save As", KeyEvent.VK_S, this::doSaveAs));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
         bar.add(fileMenu);
@@ -381,13 +381,13 @@ public class ResForgeFrame extends JFrame {
     private JToolBar buildToolBar() {
         JToolBar tb = new JToolBar();
         tb.setFloatable(false);
-        tb.add(new JButton(action("Open\u2026", this::doOpen)));
-        tb.add(new JButton(action("Fetch\u2026", this::doFetch)));
-        tb.add(new JButton(action("Save As\u2026", this::doSaveAs)));
+        tb.add(new JButton(action("Open", this::doOpen)));
+        tb.add(new JButton(action("Fetch", this::doFetch)));
+        tb.add(new JButton(action("Save As", this::doSaveAs)));
         tb.addSeparator();
-        tb.add(new JButton(action("Export glTF\u2026", this::doExportGltf)));
-        tb.add(new JButton(action("Rebuild glTF\u2026", this::doRebuildGltf)));
-        tb.add(new JButton(action("References\u2026", this::doShowReferences)));
+        tb.add(new JButton(action("Export glTF", this::doExportGltf)));
+        tb.add(new JButton(action("Rebuild glTF", this::doRebuildGltf)));
+        tb.add(new JButton(action("References", this::doShowReferences)));
         tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
         tb.add(vl);
@@ -664,7 +664,7 @@ public class ResForgeFrame extends JFrame {
         JButton copy = new JButton(action("Copy", () ->
                 Toolkit.getDefaultToolkit().getSystemClipboard()
                         .setContents(new StringSelection(report), null)));
-        JButton save = new JButton(action("Save\u2026", () -> {
+        JButton save = new JButton(action("Save", () -> {
             JFileChooser fc = new JFileChooser(dir());
             fc.setFileFilter(new FileNameExtensionFilter("Text (*.txt)", "txt"));
             fc.setSelectedFile(new File(baseName() + "-references.txt"));
@@ -799,8 +799,8 @@ public class ResForgeFrame extends JFrame {
         content.add(view);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
-                new JButton(action("Replace image\u2026", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export image\u2026", () -> exportLayer(idx)))));
+                new JButton(action("Replace image", () -> replaceFromFile(idx, l.name))),
+                new JButton(action("Export image", () -> exportLayer(idx)))));
     }
 
     /** Editable header fields (id, offset, declared size) for a tex layer. */
@@ -931,7 +931,7 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(new JButton(action("Apply text", () -> {
             applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
             setStatus("Updated text in layer " + idx);
-        })), new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+        })), new JButton(action("Export", () -> exportLayer(idx)))));
     }
 
     private void buildJsonPanel(JPanel content, int idx, Layer l) {
@@ -944,7 +944,7 @@ public class ResForgeFrame extends JFrame {
             content.add(labeled("This " + l.name + " layer uses types this editor can't safely"
                     + " present as JSON; it is preserved as-is."));
             content.add(Box.createVerticalStrut(8));
-            content.add(buttonRow(new JButton(action("Export raw\u2026", () -> exportLayer(idx)))));
+            content.add(buttonRow(new JButton(action("Export raw", () -> exportLayer(idx)))));
             return;
         }
         JTextArea area = new JTextArea(json);
@@ -957,7 +957,7 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(new JButton(action("Apply JSON", () -> {
             applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
             setStatus("Updated " + l.name + " in layer " + idx);
-        })), new JButton(action("Export JSON\u2026", () -> exportLayer(idx)))));
+        })), new JButton(action("Export JSON", () -> exportLayer(idx)))));
     }
 
     /** anim layers: a live frame preview (resolving frame image-ids to sibling image layers) + the JSON editor. */
@@ -1042,8 +1042,8 @@ public class ResForgeFrame extends JFrame {
         content.add(labeled(media != null ? media : GuiSupport.summary(l)));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
-                new JButton(action("Replace\u2026", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+                new JButton(action("Replace", () -> replaceFromFile(idx, l.name))),
+                new JButton(action("Export", () -> exportLayer(idx)))));
     }
 
     /** Shows the audio clip id + volume, with an editable volume for ver-2 clips. */
@@ -1100,8 +1100,8 @@ public class ResForgeFrame extends JFrame {
                 + "model in Blender, then rebuild from the edited .glb to bring your changes back."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
-                new JButton(action("Export glTF (.glb)\u2026", this::doExportGltf)),
-                new JButton(action("Rebuild from glTF\u2026", this::doRebuildGltf))));
+                new JButton(action("Export glTF (.glb)", this::doExportGltf)),
+                new JButton(action("Rebuild from glTF", this::doRebuildGltf))));
     }
 
     private void buildCodePanel(JPanel content, int idx, Layer l) {
@@ -1113,7 +1113,7 @@ public class ResForgeFrame extends JFrame {
         sp.setPreferredSize(new Dimension(420, 320));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+        content.add(buttonRow(new JButton(action("Export", () -> exportLayer(idx)))));
     }
 
     private void buildReferencePanel(JPanel content, int idx, Layer l) {
@@ -1128,15 +1128,15 @@ public class ResForgeFrame extends JFrame {
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("Read-only: this resource references the items above; preserved exactly on save."));
         content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export\u2026", () -> exportLayer(idx)))));
+        content.add(buttonRow(new JButton(action("Export", () -> exportLayer(idx)))));
     }
 
     private void buildRawPanel(JPanel content, int idx, Layer l) {
         content.add(labeled("Raw layer, preserved exactly on save."));
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(
-                new JButton(action("Replace raw\u2026", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export raw\u2026", () -> exportLayer(idx)))));
+                new JButton(action("Replace raw", () -> replaceFromFile(idx, l.name))),
+                new JButton(action("Export raw", () -> exportLayer(idx)))));
     }
 
     private void buildRigPanel(JPanel content, int idx, Layer l) {
@@ -1151,7 +1151,7 @@ public class ResForgeFrame extends JFrame {
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("Read-only structural view; the layer is preserved exactly on save."));
         content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export raw\u2026", () -> exportLayer(idx)))));
+        content.add(buttonRow(new JButton(action("Export raw", () -> exportLayer(idx)))));
     }
 
     /* ------------------------------------------------------------ edit actions */
