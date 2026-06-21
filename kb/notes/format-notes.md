@@ -217,8 +217,27 @@ original would export, so a pure mesh edit leaves `bones2` **byte-identical** (a
 skinned no-op round-trips byte-for-byte on male/knarr/bull/stallion). Un-matched
 seam-dup vertices inherit a coincident vertex's weights, like positions. Validated:
 forcing every male vertex to a single bone re-encodes correctly and all 1325 bind to
-their originally dominant bone. New bones can't be added (skeleton is fixed). **Next:**
-Phase 2c (skeleton/animation import) and arbitrary-topology rebuild.
+their originally dominant bone. New bones can't be added (skeleton is fixed).
+
+### glTF morph-shape import (Phase 2c, part 1)
+`GltfImport` re-imports edited **morph (`manim`) shapes** — the per-frame vertex
+deltas behind effects like a rippling sail or a flickering wisp, which Blender holds
+as **shape keys**. Each glTF morph target is one frame's deltas; on import they are
+scattered back to original vertices by `_VID`, axis-inverted (a delta is a vector:
+`(gx,gy,gz)→(gx,-gz,gy)`), and re-encoded into the matching `manim` layer via
+`MeshAnimInfo.encodeWith` (run-length spans of fmt-3 float16, the only sampled
+format). Targets map to frames by position: the exporter concatenates every manim's
+frames in layer order, and Blender preserves shape-key order, so global target *t* →
+(manim, frame) by cumulative counts. **The timeline is kept from the original** —
+frame times, counts, len, play-order — only the shapes change; this deliberately
+sidesteps the brittle round-trip of Blender's shape-key *animation* (we never read
+the glTF weight-animation). Change-gated per manim: an unchanged manim stays
+byte-identical (a no-op round-trips byte-for-byte on wisp/knarr/algaeblob/woodheart,
+which have **2 manims each** of 8 fmt-3 frames). Un-matched seam-dup vertices inherit
+a coincident vertex's delta. If the shape-key count changed (frames added/removed) it
+keeps the original. Validated: doubling one manim's frame-0 deltas re-encodes exactly
+while the model's other manim stays byte-identical. **Next:** Phase 2c skeleton/skan
+import and arbitrary-topology rebuild.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

@@ -1,6 +1,7 @@
 package resforge.model;
 
 import resforge.io.Json;
+import resforge.layers.MeshAnimInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
 
@@ -41,9 +42,10 @@ public final class GltfImport {
         public final byte[] res;
         public final int vertices;     // original vbuf2 vertex count
         public final int matched;      // how many were updated directly from the glTF
-        public final boolean nrm, tex, otex, bones;
+        public final boolean nrm, tex, otex, bones, morphs;
 
-        Result(byte[] res, int vertices, int matched, boolean nrm, boolean tex, boolean otex, boolean bones) {
+        Result(byte[] res, int vertices, int matched, boolean nrm, boolean tex, boolean otex,
+               boolean bones, boolean morphs) {
             this.res = res;
             this.vertices = vertices;
             this.matched = matched;
@@ -51,6 +53,7 @@ public final class GltfImport {
             this.tex = tex;
             this.otex = otex;
             this.bones = bones;
+            this.morphs = morphs;
         }
     }
 
@@ -82,6 +85,7 @@ public final class GltfImport {
             throw new IllegalArgumentException("the resource has no vbuf2 geometry to replace");
 
         Vbuf2Codec codec = Vbuf2Codec.parse(res.layers.get(vbufIndex).data);
+        byte[] origVbuf = res.layers.get(vbufIndex).data;
 
         List<Map<String, Object>> prims = allPrimitiveAttributes(g.root);
         if(prims.isEmpty())
@@ -95,11 +99,12 @@ public final class GltfImport {
             }
 
         Result r = anyVid
-                ? applyById(g, prims, codec, res.layers.get(vbufIndex).data)
+                ? applyById(g, prims, codec, origVbuf)
                 : applyByOrder(g, prims, codec);
 
         res.layers.set(vbufIndex, new Layer("vbuf2", codec.encode()));
-        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex, r.bones);
+        boolean morphs = anyVid && applyMorphs(g, res, origVbuf);
+        return new Result(res.serialize(), r.vertices, r.matched, r.nrm, r.tex, r.otex, r.bones, morphs);
     }
 
     /* -------------------------------------------------- id-based scatter (Blender) */
@@ -193,7 +198,7 @@ public final class GltfImport {
             codec.setAttr("otex", otex);
 
         boolean didBones = applyWeights(g, prims, codec, origVbuf, origPos);
-        return new Result(null, num, matched, usedNrm, usedTex, usedOtex, didBones);
+        return new Result(null, num, matched, usedNrm, usedTex, usedOtex, didBones, false);
     }
 
     /**
@@ -354,6 +359,139 @@ public final class GltfImport {
         return (a * 1000003L + b) * 1000003L + c;
     }
 
+    /* ----------------------------------------------- morph (manim) shape re-import */
+
+    /**
+     * Re-imports edited morph (mesh-animation) <em>shapes</em>: each glTF morph
+     * target is a frame's per-vertex deltas, scattered back by {@code _VID} and
+     * axis-inverted, then re-encoded into the matching {@code manim} layer keeping
+     * its original timing/order/format. The animation timeline itself (frame times,
+     * counts) is kept from the original — only the shapes change — which sidesteps
+     * the brittle round-trip of Blender's shape-key animation. Change-gated: a manim
+     * whose shapes are unchanged is left byte-identical.
+     */
+    private static boolean applyMorphs(Glb g, ResContainer res, byte[] origVbuf) {
+        List<MeshAnimInfo> manims = new ArrayList<>();
+        List<Integer> manimLayer = new ArrayList<>();
+        for(int i = 0; i < res.layers.size(); i++)
+            if(res.layers.get(i).name.equals("manim")) {
+                MeshAnimInfo mi = MeshAnimInfo.parse(res.layers.get(i).data);
+                if(mi.recognized) {
+                    manims.add(mi);
+                    manimLayer.add(i);
+                }
+            }
+        if(manims.isEmpty())
+            return false;
+
+        Vbuf2Codec codec = Vbuf2Codec.parse(origVbuf);
+        int num = codec.num;
+        float[] origPos = codec.decodeAttr("pos");
+
+        int total = 0;
+        for(MeshAnimInfo mi : manims)
+            total += mi.frames.size();
+        float[][] origDense = new float[total][];
+        {
+            int gi = 0;
+            for(MeshAnimInfo mi : manims)
+                for(MeshAnimInfo.Frame fr : mi.frames) {
+                    float[] dd = new float[num * 3];
+                    if(fr.idx != null && fr.pos != null)
+                        for(int q = 0; q < fr.idx.length; q++) {
+                            int v = fr.idx[q];
+                            if(v >= 0 && v < num) {
+                                dd[v * 3] = fr.pos[q * 3];
+                                dd[v * 3 + 1] = fr.pos[q * 3 + 1];
+                                dd[v * 3 + 2] = fr.pos[q * 3 + 2];
+                            }
+                        }
+                    origDense[gi++] = dd;
+                }
+        }
+
+        List<Map<String, Object>> fullPrims = allPrimitives(g.root);
+        float[][] newDeltas = new float[total][];
+        for(int t = 0; t < total; t++)
+            newDeltas[t] = origDense[t].clone();
+        boolean[] hit = new boolean[num];
+        boolean sawTargets = false;
+
+        for(Map<String, Object> p : fullPrims) {
+            Object tg = p.get("targets");
+            Map<String, Object> at = attributesOf(p);
+            if(tg == null || at == null)
+                continue;
+            String vk = vidKey(at);
+            if(vk == null)
+                continue;
+            List<?> targets = (List<?>) tg;
+            if(targets.size() != total)
+                return false;                            // shape-key count changed: keep original
+            sawTargets = true;
+            float[] vid = readAccessor(g, idx(at.get(vk)), 1);
+            for(int t = 0; t < total; t++) {
+                Object posAcc = ((Map<?, ?>) targets.get(t)).get("POSITION");
+                if(posAcc == null)
+                    continue;
+                float[] tp = readAccessor(g, idx(posAcc), 3);
+                for(int j = 0; j < vid.length; j++) {
+                    int v = Math.round(vid[j]);
+                    if(v < 0 || v >= num)
+                        continue;
+                    hit[v] = true;
+                    newDeltas[t][v * 3] = tp[j * 3];
+                    newDeltas[t][v * 3 + 1] = -tp[j * 3 + 2];
+                    newDeltas[t][v * 3 + 2] = tp[j * 3 + 1];
+                }
+            }
+        }
+        if(!sawTargets)
+            return false;
+
+        int hits = 0;
+        for(boolean b : hit)
+            if(b)
+                hits++;
+        if(hits < num) {
+            int[] src = coincidentSource(origPos, hit, num);
+            for(int t = 0; t < total; t++)
+                for(int k = 0; k < num; k++)
+                    if(src[k] >= 0)
+                        System.arraycopy(newDeltas[t], src[k] * 3, newDeltas[t], k * 3, 3);
+        }
+
+        boolean any = false;
+        int gi = 0;
+        for(int m = 0; m < manims.size(); m++) {
+            MeshAnimInfo mi = manims.get(m);
+            int cnt = mi.frames.size();
+            boolean changed = false, allF3 = true;
+            for(int f = 0; f < cnt; f++) {
+                if(mi.frames.get(f).fmt != 3)
+                    allF3 = false;
+                if(maxDiff(newDeltas[gi + f], origDense[gi + f]) > 1e-3f)
+                    changed = true;
+            }
+            if(changed && allF3) {
+                float[][] fd = new float[cnt][];
+                for(int f = 0; f < cnt; f++)
+                    fd[f] = newDeltas[gi + f];
+                res.layers.set(manimLayer.get(m), new Layer("manim", mi.encodeWith(fd, num, 1e-6f)));
+                any = true;
+            }
+            gi += cnt;
+        }
+        return any;
+    }
+
+    private static float maxDiff(float[] a, float[] b) {
+        float m = 0;
+        for(int i = 0; i < a.length; i++)
+            m = Math.max(m, Math.abs(a[i] - b[i]));
+        return m;
+    }
+
     /* --------------------------------------------- order-based (no ids: exact count) */
 
     private static final String ATTR_HINT =
@@ -391,7 +529,7 @@ public final class GltfImport {
             codec.setAttr("otex", readAccessor(g, idx(a.get("TEXCOORD_1")), 2));
             didOtex = true;
         }
-        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex, false);
+        return new Result(null, glVerts, glVerts, didNrm, didTex, didOtex, false, false);
     }
 
     /* ----------------------------------------------------------- glb / accessors */
@@ -435,6 +573,27 @@ public final class GltfImport {
             if(attrs.containsKey(k))
                 return k;
         return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> allPrimitives(Map<String, Object> root) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        List<Object> meshes = (List<Object>) root.get("meshes");
+        if(meshes == null)
+            return out;
+        for(Object mo : meshes) {
+            List<Object> prims = (List<Object>) ((Map<String, Object>) mo).get("primitives");
+            if(prims == null)
+                continue;
+            for(Object po : prims)
+                out.add((Map<String, Object>) po);
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> attributesOf(Map<String, Object> prim) {
+        return (Map<String, Object>) prim.get("attributes");
     }
 
     private static int idx(Object o) {

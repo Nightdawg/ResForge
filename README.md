@@ -26,9 +26,9 @@ an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; and **3D model** actions — export to a Blender-ready binary **glTF**
 (`.glb`, carrying both of Haven's UV sets, textures, the **skeleton/skinning**,
 **skeletal animations** and **mesh-morph animations** in one file), **re-import**
-an edited `.glb` back into the model (reshape/transform vertices *and* re-paint
-skinning weights in Blender, then load the changes back, re-quantised into the
-original on-wire formats), and a simpler
+an edited `.glb` back into the model (reshape/transform vertices, re-paint
+skinning weights, *and* re-shape morph/shape-key animations in Blender, then load
+the changes back, re-quantised into the original on-wire formats), and a simpler
 **OBJ** (writes a `.mtl` + the texture image, single UV). You can also add,
 delete and reorder layers, edit the resource version, and undo/redo. For
 old-style image layers you can also **edit the header** (id, z/sub-z, draw
@@ -182,7 +182,7 @@ resforge pack   horse.resdir         # -> horse.res
 # Export a 3D model to a Blender-ready binary glTF (UV sets + textures + skeleton, one file):
 resforge gltf   horse.res horse.glb
 
-# Re-import an edited glTF back into the model (geometry + skinning weights, matched by id):
+# Re-import an edited glTF back into the model (geometry + skinning weights + morph shapes, matched by id):
 resforge import-gltf horse.res horse.glb horse-edited.res
 
 # ...or to a Wavefront OBJ + .mtl + texture (simpler, single UV):
