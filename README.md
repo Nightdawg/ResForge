@@ -222,7 +222,9 @@ resforge transform horse.res 2 2 2 horse-big.res
 
 `replace` is the easy path for re-skinning; pick the layer by name (`image`),
 name + occurrence (`tex#2`), or absolute index (`#5`). If the output path is
-omitted it overwrites the input in place, and the replacement media is
+omitted it overwrites the input in place — written atomically (to a temp file,
+then renamed), so an interrupted save can't truncate your only copy — and the
+replacement media is
 format-checked (PNG/JPEG for images, `OggS` for audio, sfnt for fonts), so a
 wrong file type is rejected rather than written. `unpack`/`pack` is the route for
 editing text (`tooltip`/`pagina`) and typed JSON (`props`, `action`); as in the

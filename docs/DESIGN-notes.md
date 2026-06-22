@@ -113,8 +113,11 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
 For `image`, the split point (where the encoded image begins) is found by
-parsing the simple header exactly, then validating against the image's magic
-bytes (PNG/JPEG/GIF/BMP); a magic-scan fallback covers the newer typed header.
+parsing the header **exactly** — including the new-style typed (`tto`) header,
+whose key/value block is stepped over with `TtoSkip` — and is accepted only when
+it lands on a real image magic (PNG/JPEG/GIF/BMP). There is no magic-byte scan,
+so a signature appearing inside header metadata can't be mistaken for the image
+start; a header whose end can't be proven simply stays raw (still lossless).
 The header is preserved verbatim in `*.imghdr`, so only the picture changes.
 The replacement PNG may be any size — the layer length is recomputed on pack.
 
@@ -323,7 +326,8 @@ java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
 - **Findings worth noting:**
   - The new-style typed (`tto`) `image` header (`ver-128 == 1`) did **not**
     occur in these samples — the one image (`apple`) is old-style. That decode
-    path is still only magic-scan-validated.
+    path was later reworked to parse the `tto` header exactly (via `TtoSkip`, no
+    magic-scan), though it remains untested on a real new-style image.
   - **3D model skins live in `tex` layers, not `image`.** A `tex` payload embeds
     an encoded picture after a short header (e.g. `male`'s first `tex` is a JPEG
     at byte +15). **Now handled** by the `tex` codec (see §3).
@@ -348,7 +352,8 @@ java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
   269 `tooltip`, 76 `action`, 32 `audio2`, 30 `pagina`, 21 `tex`, plus `font`,
   `light`, `code`, `src`, `anim`, `obst`, `mesh`/`vbuf2`/`mat2`/… The new-style
   (`tto`) `image` header did **not** appear in any of the 669 images — it is
-  effectively unused, and the magic-scan fallback covers it regardless.
+  effectively unused; the split now parses the `tto` header exactly (the earlier
+  magic-scan fallback was removed).
 - **`audio2` codec (2026-06-19)**: all **32** audio layers split into `*.ogg`
   (`OggS`-validated). End-to-end on `customclient/sfx/alchemistTheme.res`:
   `info` → `id="cl" vol=1.000 ogg @ +6`; unpack produced a 1.16 MB `.ogg`;
