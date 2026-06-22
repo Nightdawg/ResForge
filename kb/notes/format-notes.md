@@ -8,14 +8,26 @@ for quick lookups and grows as we learn more.
 `"Haven Resource 1"` (16 ASCII bytes) + `uint16` little-endian version, then
 repeated layers until EOF: a NUL-terminated UTF-8 name, an `int32` LE payload
 length, then that many payload bytes. Unknown layer names are skipped by the
-game client, so a tool can pass them through untouched.
+game client, so a tool can pass them through untouched. `ResContainer.parse`
+rejects a payload length that is negative or larger than the bytes remaining (a
+crafted huge length would otherwise try to allocate ~2 GB → OOM), and layer names
+are decoded as strict UTF-8 (malformed bytes are rejected, not turned into U+FFFD,
+so a name round-trips byte-exact). The reader's bounds check is overflow-safe
+(`n<0 || n>end-pos`), so a near-`Integer.MAX_VALUE` or negative length can't slip
+past it or rewind the cursor into an infinite loop.
 
 ## image layer
 `uint8 ver`. If ver < 128: `int8`*256+ver = z, `int16` subz, `uint8` flags
-(bit2 nooff, bit3 has-info), `int16` id, offset coord, optional info entries,
+(fl&2 nooff, fl&4 has-info), `int16` id, offset coord, optional info entries,
 then the encoded image (a normal PNG/JPEG) to the end. If ver-128 == 1: a typed
-(tto) header. We swap the embedded image and keep the header verbatim. The
-`off` coord is the frame's draw offset — the GUI's `AnimView` uses each frame's
+(tto) header — `int16` id then tto key/value pairs until an empty key, then the
+image. `ImageInfo` finds the image start by parsing the header **exactly** (the
+new-style tto block stepped over with `TtoSkip`), and only offers the split when
+that offset lands on a real image magic — it never magic-byte-scans, because a
+"BM"/JPEG signature inside header metadata would be a false start (harmless for the
+lossless concat repack, but it would corrupt a `replace`/export that slices the
+header at the wrong point). We swap the embedded image and keep the header verbatim.
+The `off` coord is the frame's draw offset — the GUI's `AnimView` uses each frame's
 size + offset to composite an `anim` preview at one shared scale, so
 differently-sized frames keep their true relative size and position (e.g.
 cleave's 8 frames range 44x27→23x25 with offsets sweeping (14,27)→(35,16)).
@@ -220,6 +232,23 @@ tangents within ~1.3°, legacy-`bones` weights round-trip with 100% dominant-bon
 synthetic glbs with added vertices / separate per-material blocks / a morph target /
 tangent recompute rebuild correctly. **Next:** animation-keyframe editing
 (`skan`/`manim` add/remove/retime frames).
+
+Rebuild **bakes un-applied glTF node transforms**: if a Blender object was moved,
+rotated or scaled without "Apply Transform", that transform lives on the glTF node
+(translation/rotation/scale or a `matrix`), not in the vertex data. `rebuild` walks
+the scene node tree, accumulates each mesh node's world matrix, and applies it to
+that primitive's positions (and to normals via the inverse-transpose 3×3, then
+renormalised) before axis-inverting — so the edit isn't silently dropped. Identity
+nodes (and our own exporter's output, which has none) change nothing. Skinned meshes
+are skipped (glTF ignores a skinned mesh's node transform; vertices live in skin
+space). Skinning weights are also **renormalised per vertex** after any glTF joint
+that doesn't map to a Haven bone is dropped, so the surviving influences still sum to
+1. The rebuild **validates its glTF input** before trusting it — GLB JSON/BIN chunk
+lengths within bounds, accessor indices in range, accessor reads inside the BIN
+chunk, sparse indices in range, triangle-list mode only, index count a multiple of 3
+with every index `< vertexCount`, and each `setAttr` array the expected
+`num*eln` length — so a malformed/hostile `.glb` fails with a clear error instead of
+producing a corrupt `vbuf2`/`mesh`.
 
 ## anim layer (sprite animation)
 From `haven.Resource.Anim`: `int16 id`, `uint16 delay` (frame duration in ms),

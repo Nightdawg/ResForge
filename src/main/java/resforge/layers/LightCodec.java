@@ -88,11 +88,10 @@ public final class LightCodec {
 
         MessageWriter out = new MessageWriter();
         out.uint8(ver);
-        int id = intVal(model.get("id"), "id");
         if(cp)
-            out.int8(id);
+            out.int8(Nums.i8(model.get("id")));
         else
-            out.int16(id);
+            out.int16(Nums.i16(model.get("id")));
         writeColor(out, cp, model.get("ambient"), "ambient");
         writeColor(out, cp, model.get("diffuse"), "diffuse");
         writeColor(out, cp, model.get("specular"), "specular");
@@ -163,11 +162,5 @@ public final class LightCodec {
         if(!(o instanceof Number))
             throw new Unsupported("expected a number, got " + o);
         return ((Number) o).doubleValue();
-    }
-
-    private static int intVal(Object o, String what) {
-        if(!(o instanceof Number))
-            throw new Unsupported("\"" + what + "\" must be an integer");
-        return ((Number) o).intValue();
     }
 }

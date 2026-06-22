@@ -46,7 +46,8 @@ public final class OggVorbis {
 
     public static Pcm decode(byte[] ogg) throws IOException {
         InputStream input = new ByteArrayInputStream(ogg);
-        ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(64, ogg.length * 4));
+        ByteArrayOutputStream out = new ByteArrayOutputStream(
+                (int) Math.max(64, Math.min((long) ogg.length * 4, 1 << 26)));   // cap initial guess at 64 MiB
 
         SyncState oy = new SyncState();
         StreamState os = new StreamState();
@@ -57,6 +58,7 @@ public final class OggVorbis {
         DspState vd = new DspState();
         Block vb = new Block(vd);
 
+        try {
         byte[] buffer;
         int bytes;
         oy.init();
@@ -172,13 +174,14 @@ public final class OggVorbis {
             }
         }
 
-        os.clear();
-        vb.clear();
-        vd.clear();
-        vi.clear();
-        oy.clear();
-
         return new Pcm(out.toByteArray(), rate, channels);
+        } finally {
+            os.clear();
+            vb.clear();
+            vd.clear();
+            vi.clear();
+            oy.clear();
+        }
     }
 
     private static int readSome(InputStream in, byte[] buf, int off, int len) throws IOException {

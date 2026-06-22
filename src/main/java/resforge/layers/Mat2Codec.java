@@ -92,7 +92,7 @@ public final class Mat2Codec {
         if(!(entriesObj instanceof List))
             throw new Unsupported("missing/invalid entries list");
         MessageWriter out = new MessageWriter();
-        out.uint16(((Number) idObj).intValue());
+        out.uint16(Nums.u16(idObj));
         for(Object eObj : (List<?>) entriesObj) {
             if(!(eObj instanceof Map))
                 throw new Unsupported("entry is not an object");
@@ -187,11 +187,11 @@ public final class Mat2Codec {
         String tag = String.valueOf(e.getKey());
         Object v = e.getValue();
         switch(tag) {
-            case "u8":    out.uint8(T_UINT8).uint8(intval(v)); break;
-            case "u16":   out.uint8(T_UINT16).uint16(intval(v)); break;
-            case "i8":    out.uint8(T_INT8).int8(intval(v)); break;
-            case "i16":   out.uint8(T_INT16).int16(intval(v)); break;
-            case "int":   out.uint8(T_INT).int32(intval(v)); break;
+            case "u8":    out.uint8(T_UINT8).uint8(Nums.u8(v)); break;
+            case "u16":   out.uint8(T_UINT16).uint16(Nums.u16(v)); break;
+            case "i8":    out.uint8(T_INT8).int8(Nums.i8(v)); break;
+            case "i16":   out.uint8(T_INT16).int16(Nums.i16(v)); break;
+            case "int":   out.uint8(T_INT).int32(Nums.i32(v)); break;
             case "long":  out.uint8(T_LONG).int64(((Number) v).longValue()); break;
             case "f32":   out.uint8(T_FLOAT32).float32((float) ((Number) v).doubleValue()); break;
             case "f64":   out.uint8(T_FLOAT64).float64(((Number) v).doubleValue()); break;
@@ -207,7 +207,7 @@ public final class Mat2Codec {
             throw new Unsupported("color must be a 4-element [r,g,b,a] array");
         out.uint8(T_COLOR);
         for(Object c : (List<?>) v)
-            out.uint8(intval(c));
+            out.uint8(Nums.u8(c));
     }
 
     private static void writeList(MessageWriter out, Object v) {
@@ -228,12 +228,6 @@ public final class Mat2Codec {
             writeValue(out, e.getValue());
         }
         out.uint8(T_END);
-    }
-
-    private static int intval(Object v) {
-        if(!(v instanceof Number))
-            throw new Unsupported("expected a number, got " + (v == null ? "null" : v.getClass().getSimpleName()));
-        return ((Number) v).intValue();
     }
 
     private static Map<String, Object> tag(String name, Object value) {

@@ -123,6 +123,16 @@ public class AudioPlayerPanel extends JPanel {
     private void startPlayback() {
         if(pcm == null || playing)
             return;
+        // Make sure a previous play loop (e.g. after a quick Pause then Play) has
+        // fully exited before starting a new one, so two threads never share the line.
+        Thread prev = playThread;
+        if(prev != null && prev.isAlive()) {
+            try {
+                prev.join(250);
+            } catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
         if(posFrame.get() >= totalFrames)
             posFrame.set(0);
         playing = true;

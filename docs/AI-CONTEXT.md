@@ -83,10 +83,21 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - `Main` — CLI dispatch + GUI launch.
 - `io/` — `MessageReader`/`MessageWriter` (LE primitives mirroring `haven.Message`,
   incl. `float16` half-precision ↔ float, `cpfloat` custom-packed float, and
-  `mnorm16`/`snorm16`/`unorm16`/`oct2uvec` norm helpers), `Json` (dependency-free JSON).
-- `res/` — `ResContainer` (parse/serialize the container), `Layer` (name+bytes,
-  immutable), `Manifest` (manifest.txt + per-layer codec), `Unpacker`/`Packer`
-  (the "parts" model; codecs `raw|tex|props|action|anim|neg|mat2`), `Replacer`
+  `mnorm16`/`snorm16`/`unorm16`/`oct2uvec` norm helpers), `Json` (dependency-free JSON),
+  `SafeFiles` (atomic write: temp file + `Files.move(ATOMIC_MOVE)` so a crash/full-disk
+  mid-save can't truncate the original — used by every CLI/GUI `.res`/`.glb` write).
+  `MessageReader` is hardened against hostile input: overflow-safe bounds
+  (`n<0 || n>end-pos`), strict-UTF-8 `string()` (rejects malformed bytes instead of
+  substituting U+FFFD, so decode→encode stays byte-exact). `Json` rejects truncated
+  `\u`/dangling escapes and duplicate object keys.
+- `res/` — `ResContainer` (parse/serialize the container; rejects implausible layer
+  lengths — negative or > remaining bytes — so a crafted file can't trigger an OOM),
+  `Layer` (name+bytes, immutable), `Manifest` (manifest.txt + per-layer codec; layer
+  names/codecs are backslash-escaped so a name containing a tab/newline still
+  round-trips, and `res-version` is range-checked to uint16), `Unpacker`/`Packer`
+  (the "parts" model; codecs `raw|tex|props|action|anim|neg|obst|boneoff|light|mat2`;
+  `Packer` rejects unknown codec names and part paths that escape the unpack dir —
+  no `../`/absolute traversal), `Replacer`
   (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder
   listing), `References` (aggregate the external resources a `.res` references).
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
@@ -97,7 +108,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   `AnimCodec`,   `NegCodec`, `ObstCodec`, `BoneOffCodec`, `LightCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
   `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
-  lossless-or-raw, image/audio bytes kept verbatim.
+  lossless-or-raw, image/audio bytes kept verbatim. The typed JSON codecs share a
+  `Nums` helper that range-checks integer fields/counts on encode, so an out-of-range
+  *edit* (e.g. `anim` `delay:70000`) fails loudly instead of silently wrapping on the
+  wire. `ImageInfo` locates the embedded image by parsing the header **exactly** (the
+  new-style tto block via `TtoSkip`) — no magic-byte scanning, so a stray "BM"/JPEG
+  byte pair in a header can't be mistaken for the image and corrupt a replace/export.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
@@ -109,11 +125,21 @@ References… (aggregated reference report dialog), **resource-version spinner**
   on-wire formats, Y-up→Z-up, rebuilds skinning weights via
   `Vbuf2Codec.setBones2` and morph shapes via `MeshAnimInfo.encodeWith`, recomputes
   tangents and re-poses the `skel` skeleton, keeping all other layers; allows
-  reshaped/added/removed geometry, not byte-lossless).
+  reshaped/added/removed geometry, not byte-lossless). Rebuild **bakes un-applied
+  glTF node transforms** (a Blender object moved/scaled/rotated without "Apply
+  Transform") into positions (and normals via the inverse-transpose) instead of
+  dropping them; **renormalizes** skin weights after dropping joints that don't map;
+  and **validates** its glТF input (GLB/JSON/BIN chunk bounds, accessor in-range,
+  triangle-mode + index range, `setAttr` length) so a malformed `.glb` fails cleanly
+  rather than corrupting a layer.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback).
+  Heavy work (open/parse, glTF export, glTF rebuild) runs on a background thread and
+  marshals the result back via `invokeLater`, so large files don't freeze the EDT;
+  the Ogg player joins the previous play thread before restarting so two threads
+  never share the line.
 
 ## 6. Per-layer status
 | Layer | Status |
@@ -172,6 +198,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
 ## 9. Conventions
 - Lossless-or-raw: never expose a typed editor unless decode→encode is byte-exact
   (verified). Untouched layers always pass through unchanged.
+- **Hostile-input safe**: the parser is hardened to fail cleanly (clear exception),
+  never OOM/hang/corrupt, on a crafted or truncated `.res` — overflow-safe reader
+  bounds, length validation, strict UTF-8, no magic-scanning. Typed-codec *edits*
+  are range-checked (`Nums`) so a bad value is rejected, not silently wrapped.
+- **Atomic writes**: all `.res`/`.glb` output goes through `io/SafeFiles` (temp +
+  atomic rename), so an interrupted save never destroys the original/only copy.
 - `Layer` is immutable; edits *replace* it (enables cheap snapshot undo).
 - Edits route through `Replacer` where possible (tested, format-checked).
 - Commit per feature with a `Co-authored-by: Copilot …` trailer; keep all three
@@ -184,6 +216,8 @@ References… (aggregated reference report dialog), **resource-version spinner**
 ## 10. Open / next steps
 - **In-game test of the `transform` write path** (user-side; the one thing not
   auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
+  Non-uniform scale only transforms positions (normals/tangents are left as-is), so
+  the CLI now prints a warning that lighting may look wrong in that case.
 - **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
   XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1
   (export) is complete** — `GltfExport` writes a static textured `.glb`
@@ -257,6 +291,20 @@ References… (aggregated reference report dialog), **resource-version spinner**
   samples is now decoded** (read-only or editable). These decoders + primitives are
   the groundwork for a future skeleton/animation **write** path (would benefit from
   the dev's `mkres` skeleton encoder — ask when starting that).
+- **Robustness/hardening pass is now done** (from a cross-model code review — GPT-5.5
+  + Claude Opus 4.8). Closed: container OOM bomb + infinite-loop on crafted lengths
+  (overflow-safe `MessageReader` bounds + length validation); malformed-UTF-8 /
+  tab/newline layer names (strict UTF-8 decode + escaped manifest fields); pack-side
+  path traversal (`Packer` containment check); non-atomic in-place saves (`io/SafeFiles`
+  temp+rename, CLI + GUI); silent numeric wrap on typed-JSON edits (`Nums` range
+  checks); image new-style split via magic-scan false-positive (exact `TtoSkip` parse);
+  unknown manifest codec (rejected); glTF rebuild dropping un-applied node transforms
+  (now baked, normals via inverse-transpose), un-renormalized skin weights, and missing
+  GLB/accessor/index validation; off-EDT open/export/rebuild; Ogg player double-thread +
+  cleanup-in-finally; JSON parser hostile-input (EOF-safe escapes, duplicate-key reject).
+  Regression tests: `HardeningTest`, `EditValidationTest`, `JsonParserTest`,
+  `GltfNodeTransformTest` (152 tests total, all green). Source-only changes — all three
+  builds stay in sync.
 - GUI niceties: fetch path history/autocomplete, batch
   re-skin a folder. (No layer search/filter — explicitly declined.)
 

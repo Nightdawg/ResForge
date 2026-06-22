@@ -77,7 +77,7 @@ ver = uint8
 if ver < 128:                       # common/legacy form
     z    = int8*256 + ver
     subz = int16
-    fl   = uint8                    # bit1 obsolete, bit2 = nooff, bit3 = has-info
+    fl   = uint8                    # fl&1 obsolete, fl&2 = nooff, fl&4 = has-info
     id   = int16
     off  = (int16 x, int16 y)
     if (fl & 4): repeat [ string key; uint8 len (or int32 if high bit set); len bytes ] until key==""

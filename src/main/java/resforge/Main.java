@@ -12,6 +12,7 @@ import resforge.res.Replacer;
 import resforge.res.ResContainer;
 import resforge.res.Unpacker;
 import resforge.res.Verifier;
+import resforge.io.SafeFiles;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -41,7 +42,8 @@ public class Main {
             usage();
             System.exit(2);
         } catch(Exception e) {
-            System.err.println("error: " + e.getMessage());
+            String msg = e.getMessage();
+            System.err.println("error: " + (msg != null ? msg : e.toString()));
             System.exit(1);
         }
     }
@@ -94,7 +96,7 @@ public class Main {
             throw new RuntimeException("fetch interrupted");
         }
         ResContainer res = ResContainer.parse(data);   // validate it is a real .res
-        Files.write(out, data);
+        SafeFiles.write(out, data);
         System.out.printf("Fetched %s (%d bytes, res-version %d, %d layers) -> %s%n",
                 resforge.net.ResourceFetcher.urlFor(null, path), data.length,
                 res.version, res.layers.size(), out);
@@ -306,7 +308,7 @@ public class Main {
             out = dir.resolveSibling(n + ".res");
         }
         ResContainer res = Packer.pack(dir);
-        Files.write(out, res.serialize());
+        SafeFiles.write(out, res.serialize());
         System.out.printf("Packed %d layers (res-version %d) into %s%n",
                 res.layers.size(), res.version, out);
     }
@@ -343,6 +345,9 @@ public class Main {
             out = file.resolveSibling(n + "-transformed.res");
         }
         ResContainer res = ResContainer.parse(Files.readAllBytes(file));
+        if(sx != sy || sy != sz)
+            System.out.println("WARNING: non-uniform scale (" + args[2] + ", " + args[3] + ", " + args[4]
+                    + ") scales positions only; normals/tangents are left unchanged, so lighting may look wrong in-game.");
         int edited = 0;
         long verts = 0;
         for(int i = 0; i < res.layers.size(); i++) {
@@ -365,7 +370,7 @@ public class Main {
         }
         if(edited == 0)
             throw new RuntimeException("no editable vbuf2 positions found in " + file);
-        Files.write(out, res.serialize());
+        SafeFiles.write(out, res.serialize());
         System.out.printf("Scaled %d vertices across %d vbuf2 by (%s, %s, %s) -> %s%n",
                 verts, edited, args[2], args[3], args[4], out);
         System.out.println("NOTE: this is a write path - load the result in-game to confirm it renders.");
@@ -389,7 +394,7 @@ public class Main {
         GltfExport.Result r = GltfExport.toGlb(res, name);
         if(r.vertices == 0 || r.triangles == 0)
             throw new RuntimeException("no 3D geometry (vbuf2/mesh) found in " + file);
-        Files.write(out, r.glb);
+        SafeFiles.write(out, r.glb);
         System.out.printf("Exported %d vertices, %d triangles (%d submeshes, %d texture(s)) -> %s%n",
                 r.vertices, r.triangles, r.submeshes, r.textures, out);
     }
@@ -403,7 +408,7 @@ public class Main {
         byte[] orig = Files.readAllBytes(resFile);
         byte[] glb = Files.readAllBytes(glbFile);
         GltfImport.RebuildResult r = GltfImport.rebuild(orig, glb);
-        Files.write(out, r.res);
+        SafeFiles.write(out, r.res);
         String extra = (r.skinned ? " (with skinning)" : "") + (r.skel ? " (skeleton re-posed)" : "");
         System.out.printf("Rebuilt geometry: %d vertices, %d triangles%s from %s -> %s%n",
                 r.vertices, r.triangles, extra, glbFile, out);
@@ -418,7 +423,7 @@ public class Main {
         Path out = (args.length >= 5) ? Path.of(args[4]) : file;
         ResContainer res = ResContainer.parse(Files.readAllBytes(file));
         int idx = Replacer.replace(res, selector, Files.readAllBytes(newFile));
-        Files.write(out, res.serialize());
+        SafeFiles.write(out, res.serialize());
         System.out.printf("Replaced layer [%d] %s in %s with %s -> %s%n",
                 idx, res.layers.get(idx).name, file, newFile, out);
     }

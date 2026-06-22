@@ -4,10 +4,15 @@ Why the project is shaped the way it is. Each heading is one decision so the RAG
 can surface them on their own.
 
 ## Parts model
-Unpacking a `.res` produces a `manifest.json` plus one file per layer. Every
-layer can round-trip even if we don't understand it: unknown layers become
-`.bin` blobs, so unpack->pack is byte-identical by construction. Understanding a
-layer just means giving it a friendlier on-disk form (`.png`, `.txt`, `.json`).
+Unpacking a `.res` produces a `manifest.txt` plus one file per layer (under
+`layers/`). Every layer can round-trip even if we don't understand it: unknown
+layers become `.bin` blobs, so unpack->pack is byte-identical by construction.
+Understanding a layer just means giving it a friendlier on-disk form (`.png`,
+`.txt`, `.json`). The manifest is a small tab-delimited text file; layer names and
+codec names are backslash-escaped (`\t`/`\n`/`\r`/`\\`) so a layer name containing a
+delimiter still round-trips, and on repack `Packer` rejects part paths that escape
+the unpack directory (no `../` or absolute-path traversal) and any unknown codec
+name (so a manifest typo fails loudly instead of packing JSON text as raw bytes).
 
 ## Lossless-or-raw principle
 A typed editor is only exposed when decode -> typed form -> encode reproduces the
@@ -55,5 +60,46 @@ for a particular dev box doesn't belong in the repo.
 `transform <file> <sx> <sy> <sz>` scales vbuf2 positions. The encoder is proven
 byte-identical on a decode->encode round-trip of all real vbuf2 layers, but the
 *scaled* output still needs an in-game visual check (a uniform scale like `2 2 2`
-should render correct but bigger). Normals are left untouched (correct for
-uniform scale).
+should render correct but bigger). Normals are left untouched — correct for a
+uniform scale; for a *non-uniform* scale that's wrong (normals would need the
+inverse-transpose), so the CLI prints a warning when `sx`/`sy`/`sz` differ.
+
+## Hostile-input hardening (lossless-or-raw isn't enough on its own)
+The lossless-or-raw guard protects *editing*, but the *parser* must also survive
+crafted/corrupt input — the whole point of the tool is opening untrusted, fetched
+`.res` files. So: `MessageReader.ensure` is overflow-safe (`n<0 || n>end-pos`, not
+`pos+n>end` which overflows for a huge length), `ResContainer.parse` rejects a layer
+length that's negative or larger than the bytes remaining (a 28-byte crafted file
+otherwise tried to allocate ~2 GB → OOM), and `string()` decodes strict UTF-8
+(reporting, not substituting U+FFFD — a lenient decode would change the bytes on
+re-encode and silently break the invariant). A negative internal length used to
+rewind the cursor and hang; the same `ensure` fix closes that. `Json` rejects
+truncated `\u`/dangling escapes and duplicate object keys. Rule: a corrupt file
+must fail with a clear exception, never OOM, hang, or corrupt.
+
+## Atomic writes (never destroy the only copy)
+Every `.res`/`.glb` write goes through `io/SafeFiles.write`: data is written to a
+sibling temp file, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)` renames it
+over the target (with a non-atomic fallback where the filesystem can't do an atomic
+move). CLI `replace`/`transform`/`rebuild-gltf` and GUI Save all default to
+overwriting their input, so a crash, full disk, or I/O error mid-write would
+otherwise leave a truncated/corrupt original with no backup. The temp file is
+cleaned up on failure.
+
+## Edit-time range validation (Nums)
+A typed codec's `encode` runs twice: at unpack (on values it just decoded — always
+in range) and at pack (on the user's edited JSON). Without a check, an edited value
+outside a field's width silently truncates/wraps on the wire (e.g. `anim` `delay:
+70000` → `4464`). The shared `layers/Nums` helper range-checks every fixed-width
+integer field and derived count on encode, so a bad edit throws instead of writing
+corrupt bytes. Floats still re-quantise (and the per-layer byte-equality guard keeps
+the unpack side honest).
+
+## Image split is parsed exactly, never magic-scanned
+`ImageInfo` finds where the embedded image starts by parsing the header precisely —
+including the new-style typed (tto) info block, stepped over with `TtoSkip`. It does
+**not** scan for an image magic, because a 2-byte BMP ("BM") or 3-byte JPEG signature
+can appear inside header metadata and would be picked as a false image start —
+harmless for lossless repack (it's a concat) but corrupting for a `replace`/export
+that slices `[0, offset)` as the header. If the parsed offset isn't exactly on a
+known image magic, the layer simply stays raw.

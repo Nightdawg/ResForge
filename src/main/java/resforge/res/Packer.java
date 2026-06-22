@@ -151,6 +151,9 @@ public class Packer {
                 throw new IOException("Failed to encode mat2 layer '" + e.name + "': " + ex.getMessage(), ex);
             }
         }
+        if(!e.codec.equals("raw"))
+            throw new IOException("Unknown codec '" + e.codec + "' for layer '" + e.name
+                    + "' in manifest (expected one of: raw, tex, props, action, anim, neg, obst, boneoff, light, mat2)");
         ByteArrayOutputStream payload = new ByteArrayOutputStream();
         for(String part : e.parts)
             payload.writeBytes(read(dir, part));
@@ -158,7 +161,10 @@ public class Packer {
     }
 
     private static byte[] read(Path dir, String part) throws IOException {
-        Path p = dir.resolve(part);
+        Path base = dir.toAbsolutePath().normalize();
+        Path p = base.resolve(part).normalize();
+        if(!p.startsWith(base))
+            throw new IOException("Manifest part escapes the unpack directory: " + part);
         if(!Files.exists(p))
             throw new IOException("Missing part file referenced by manifest: " + part);
         return Files.readAllBytes(p);
