@@ -7,6 +7,9 @@
  */
 package resforge.io;
 
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
 /** Sequential little-endian reader over a byte array, matching haven.Message. */
@@ -20,6 +23,8 @@ public class MessageReader {
     }
 
     public MessageReader(byte[] buf, int off, int len) {
+        if(off < 0 || len < 0 || off > buf.length - len)
+            throw new IllegalArgumentException("invalid range off=" + off + " len=" + len + " (buf=" + buf.length + ")");
         this.buf = buf;
         this.pos = off;
         this.end = off + len;
@@ -38,7 +43,7 @@ public class MessageReader {
     }
 
     private void ensure(int n) {
-        if(pos + n > end)
+        if(n < 0 || n > end - pos)
             throw new IllegalStateException("Required " + n + " bytes, only " + (end - pos) + " left");
     }
 
@@ -183,7 +188,18 @@ public class MessageReader {
             pos++;
         if(pos >= end)
             throw new IllegalStateException("Found no NUL terminator");
-        String s = new String(buf, start, pos - start, StandardCharsets.UTF_8);
+        // Strict UTF-8: reject malformed bytes rather than substituting U+FFFD, so
+        // a decode -> encode is byte-identical (the lossless invariant) and a
+        // non-round-trippable name/string is surfaced instead of silently changed.
+        String s;
+        try {
+            s = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(buf, start, pos - start)).toString();
+        } catch(CharacterCodingException e) {
+            throw new IllegalStateException("Invalid UTF-8 string", e);
+        }
         pos++;
         return s;
     }

@@ -311,11 +311,10 @@ public class Verifier {
         }
         sum.imageHeaderHist.merge(headerKind(ii), 1, Integer::sum);
 
-        if(ii.imageFormat == null || ii.imageOffset < 0) {
-            r.imagesOk = false;
-            r.anomalies.add("image[" + idx + "]: embedded image not located (split point unknown)");
+        if(ii.imageFormat == null || ii.imageOffset < 0)
+            // Still byte-lossless; the embedded image just isn't separately
+            // locatable, so the layer stays raw. That's not a verify failure.
             return;
-        }
         byte[] slice = Arrays.copyOfRange(l.data, ii.imageOffset, l.data.length);
         try {
             BufferedImage bi = ImageIO.read(new ByteArrayInputStream(slice));

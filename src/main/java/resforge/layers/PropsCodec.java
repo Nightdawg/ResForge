@@ -87,7 +87,7 @@ public final class PropsCodec {
         if(!(propsObj instanceof Map))
             throw new Unsupported("missing/invalid props map");
         MessageWriter out = new MessageWriter();
-        out.uint8(((Number) verObj).intValue());
+        out.uint8(Nums.u8(verObj));
         for(Map.Entry<?, ?> e : ((Map<?, ?>) propsObj).entrySet()) {
             writeValue(out, String.valueOf(e.getKey()));
             writeValue(out, e.getValue());

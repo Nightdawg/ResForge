@@ -5,6 +5,7 @@ import resforge.model.GltfImport;
 import resforge.res.Layer;
 import resforge.res.Replacer;
 import resforge.res.ResContainer;
+import resforge.io.SafeFiles;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
@@ -432,14 +433,30 @@ public class ResForgeFrame extends JFrame {
     /* ------------------------------------------------------------- file logic */
 
     public void openFile(Path p) {
-        try {
-            ResContainer parsed = ResContainer.parse(Files.readAllBytes(p));
-            applyLoaded(parsed, p, p.toAbsolutePath().toString(),
-                    "Opened " + p.getFileName() + " \u2014 res-version " + parsed.version
-                            + ", " + parsed.layers.size() + " layers");
-        } catch(Exception e) {
-            error("Could not open " + p + ":\n" + e.getMessage());
-        }
+        setStatus("Opening " + p.getFileName() + " \u2026");
+        Thread t = new Thread(() -> {
+            ResContainer parsed = null;
+            String err = null;
+            try {
+                parsed = ResContainer.parse(Files.readAllBytes(p));
+            } catch(Exception e) {
+                err = e.getMessage();
+            }
+            final ResContainer result = parsed;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                if(result == null) {
+                    error("Could not open " + p + ":\n" + error);
+                    setStatus("Open failed");
+                    return;
+                }
+                applyLoaded(result, p, p.toAbsolutePath().toString(),
+                        "Opened " + p.getFileName() + " \u2014 res-version " + result.version
+                                + ", " + result.layers.size() + " layers");
+            });
+        }, "res-open");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Loads already-fetched remote bytes (no local file yet; Save As will prompt). */
@@ -581,7 +598,7 @@ public class ResForgeFrame extends JFrame {
 
     private void writeRes(Path p) {
         try {
-            Files.write(p, res.serialize());
+            SafeFiles.write(p, res.serialize());
             dirty = false;
             updateTitle();
             setStatus("Saved " + p.getFileName());
@@ -610,40 +627,85 @@ public class ResForgeFrame extends JFrame {
         fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
         if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
-        try {
-            byte[] glb = Files.readAllBytes(fc.getSelectedFile().toPath());
-            GltfImport.RebuildResult r = GltfImport.rebuild(res.serialize(), glb);
-            applyLoaded(ResContainer.parse(r.res), file, pathField.getText(),
-                    "Rebuilt " + r.vertices + " vertices, " + r.triangles + " triangles"
-                            + (r.skinned ? " (with skinning)" : "") + (r.skel ? " (skeleton re-posed)" : "")
-                            + " from " + fc.getSelectedFile().getName() + " \u2014 Save to keep changes");
-            markDirty();
-        } catch(Exception e) {
-            error("glTF rebuild failed: " + e.getMessage());
-        }
+        final java.io.File sel = fc.getSelectedFile();
+        final byte[] orig = res.serialize();
+        final Path curFile = file;
+        final String curPath = pathField.getText();
+        setStatus("Rebuilding from " + sel.getName() + " \u2026");
+        Thread t = new Thread(() -> {
+            GltfImport.RebuildResult r = null;
+            String err = null;
+            try {
+                byte[] glb = Files.readAllBytes(sel.toPath());
+                r = GltfImport.rebuild(orig, glb);
+            } catch(Exception e) {
+                err = e.getMessage();
+            }
+            final GltfImport.RebuildResult rr = r;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                if(rr == null) {
+                    error("glTF rebuild failed: " + error);
+                    return;
+                }
+                try {
+                    applyLoaded(ResContainer.parse(rr.res), curFile, curPath,
+                            "Rebuilt " + rr.vertices + " vertices, " + rr.triangles + " triangles"
+                                    + (rr.skinned ? " (with skinning)" : "") + (rr.skel ? " (skeleton re-posed)" : "")
+                                    + " from " + sel.getName() + " \u2014 Save to keep changes");
+                    markDirty();
+                } catch(Exception e) {
+                    error("glTF rebuild failed: " + e.getMessage());
+                }
+            });
+        }, "gltf-rebuild");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void doExportGltf() {
         if(res == null)
             return;
-        try {
-            GltfExport.Result r = GltfExport.toGlb(res, file != null ? file.getFileName().toString() : "model");
-            if(r.vertices == 0 || r.triangles == 0) {
-                info("This resource has no 3D geometry (vbuf2/mesh) to export.");
-                return;
+        final String modelName = file != null ? file.getFileName().toString() : "model";
+        final byte[] snapshot = res.serialize();
+        setStatus("Exporting glTF \u2026");
+        Thread t = new Thread(() -> {
+            GltfExport.Result r = null;
+            String err = null;
+            try {
+                r = GltfExport.toGlb(ResContainer.parse(snapshot), modelName);
+            } catch(Exception e) {
+                err = e.getMessage();
             }
-            JFileChooser fc = new JFileChooser(dir());
-            fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
-            fc.setSelectedFile(new File(baseName() + ".glb"));
-            if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                Files.write(fc.getSelectedFile().toPath(), r.glb);
-                setStatus("Exported " + r.vertices + " vertices, " + r.triangles
-                        + " triangles (" + r.submeshes + " submeshes, " + r.textures
-                        + " texture(s)) as glTF");
-            }
-        } catch(Exception e) {
-            error("glTF export failed: " + e.getMessage());
-        }
+            final GltfExport.Result rr = r;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                if(rr == null) {
+                    error("glTF export failed: " + error);
+                    return;
+                }
+                if(rr.vertices == 0 || rr.triangles == 0) {
+                    info("This resource has no 3D geometry (vbuf2/mesh) to export.");
+                    setStatus("Ready");
+                    return;
+                }
+                JFileChooser fc = new JFileChooser(dir());
+                fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
+                fc.setSelectedFile(new File(baseName() + ".glb"));
+                if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                    try {
+                        SafeFiles.write(fc.getSelectedFile().toPath(), rr.glb);
+                        setStatus("Exported " + rr.vertices + " vertices, " + rr.triangles
+                                + " triangles (" + rr.submeshes + " submeshes, " + rr.textures
+                                + " texture(s)) as glTF");
+                    } catch(Exception e) {
+                        error("glTF export failed: " + e.getMessage());
+                    }
+                }
+            });
+        }, "gltf-export");
+        t.setDaemon(true);
+        t.start();
     }
 
     private void doShowReferences() {
@@ -1200,7 +1262,7 @@ public class ResForgeFrame extends JFrame {
         if(fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
             return;
         try {
-            Files.write(fc.getSelectedFile().toPath(), ex.data);
+            SafeFiles.write(fc.getSelectedFile().toPath(), ex.data);
             setStatus("Exported layer " + idx + " \u2192 " + fc.getSelectedFile().getName());
         } catch(Exception e) {
             error("Export failed: " + e.getMessage());

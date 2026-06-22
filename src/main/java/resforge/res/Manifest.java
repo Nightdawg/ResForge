@@ -42,10 +42,10 @@ public class Manifest {
         sb.append("# Layer order is significant — do not reorder entries.\n");
         sb.append("res-version: ").append(version).append('\n');
         for(Entry e : entries) {
-            sb.append("layer\t").append(e.name).append('\t')
+            sb.append("layer\t").append(esc(e.name)).append('\t')
               .append(String.join(",", e.parts));
             if(!e.codec.equals("raw"))
-                sb.append('\t').append(e.codec);
+                sb.append('\t').append(esc(e.codec));
             sb.append('\n');
         }
         Files.write(dir.resolve(FILENAME), sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -59,7 +59,16 @@ public class Manifest {
             if(trimmed.isEmpty() || trimmed.startsWith("#"))
                 continue;
             if(trimmed.startsWith("res-version:")) {
-                m.version = Integer.parseInt(trimmed.substring("res-version:".length()).strip());
+                String vs = trimmed.substring("res-version:".length()).strip();
+                int v;
+                try {
+                    v = Integer.parseInt(vs);
+                } catch(NumberFormatException e) {
+                    throw new IOException("Invalid res-version '" + vs + "' in manifest");
+                }
+                if(v < 0 || v > 0xffff)
+                    throw new IOException("res-version out of range [0, 65535]: " + v);
+                m.version = v;
                 haveVersion = true;
             } else if(line.startsWith("layer\t")) {
                 String[] f = line.split("\t", 4);
@@ -70,8 +79,8 @@ public class Manifest {
                     if(!p.isEmpty())
                         parts.add(p);
                 }
-                String codec = (f.length >= 4) ? f[3].strip() : "raw";
-                m.entries.add(new Entry(f[1], parts, codec));
+                String codec = (f.length >= 4) ? unesc(f[3].strip()) : "raw";
+                m.entries.add(new Entry(unesc(f[1]), parts, codec));
             } else {
                 throw new IOException("Unrecognized manifest line: " + line);
             }
@@ -79,5 +88,42 @@ public class Manifest {
         if(!haveVersion)
             throw new IOException("Manifest missing res-version");
         return m;
+    }
+
+    /** Backslash-escapes the manifest field delimiters so a layer name containing
+     *  a tab/newline/CR (permitted in the container format) still round-trips. */
+    private static String esc(String s) {
+        StringBuilder b = new StringBuilder(s.length());
+        for(int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch(c) {
+                case '\\': b.append("\\\\"); break;
+                case '\t': b.append("\\t");  break;
+                case '\n': b.append("\\n");  break;
+                case '\r': b.append("\\r");  break;
+                default:   b.append(c);
+            }
+        }
+        return b.toString();
+    }
+
+    private static String unesc(String s) {
+        StringBuilder b = new StringBuilder(s.length());
+        for(int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if(c == '\\' && i + 1 < s.length()) {
+                char n = s.charAt(++i);
+                switch(n) {
+                    case '\\': b.append('\\'); break;
+                    case 't':  b.append('\t'); break;
+                    case 'n':  b.append('\n'); break;
+                    case 'r':  b.append('\r'); break;
+                    default:   b.append(n);
+                }
+            } else {
+                b.append(c);
+            }
+        }
+        return b.toString();
     }
 }

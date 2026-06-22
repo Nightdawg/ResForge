@@ -142,6 +142,10 @@ public class Vbuf2Codec {
         Attr a = attr(base);
         if(a == null)
             throw new IllegalStateException("no attribute: " + base);
+        int eln = elnOf(a);
+        if(vals.length != num * eln)
+            throw new IllegalStateException("attribute '" + base + "' expects " + (num * eln)
+                    + " floats (" + num + " vertices x " + eln + "), got " + vals.length);
         if(a.bare()) {
             MessageWriter w = new MessageWriter();
             for(float v : vals)

@@ -11,6 +11,7 @@ import resforge.res.ResContainer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -150,6 +151,7 @@ public final class GltfImport {
         List<List<float[]>> tChunks = new ArrayList<>();     // morph target deltas, per target -> chunks
         int[] targetN = {-1};
 
+        IdentityHashMap<Map<String, Object>, double[]> primMatrix = primitiveMatrices(g.root);
         for(Map<String, Object> prim : allPrimitives(g.root)) {
             Map<String, Object> a = attributesOf(prim);
             if(a == null || !a.containsKey("POSITION"))
@@ -160,9 +162,17 @@ public final class GltfImport {
                 offset = posOffset.get(posAcc);
             } else {
                 float[] p = readAccessor(g, posAcc, 3);
+                double[] m = primMatrix.get(prim);
+                if(m != null)
+                    applyMatrix(p, m);
                 int cnt = p.length / 3;
                 cPos.add(axisInvert(p));
-                if(hasNrm) cNrm.add(axisInvert(readVec(g, a, "NORMAL", 3, "normals")));
+                if(hasNrm) {
+                    float[] nrm = readVec(g, a, "NORMAL", 3, "normals");
+                    if(m != null)
+                        applyNormalMatrix(nrm, m);
+                    cNrm.add(axisInvert(nrm));
+                }
                 if(hasTex) cTex.add(readVec(g, a, "TEXCOORD_0", 2, "UVs"));
                 if(hasOtex) cOtex.add(readVec(g, a, "TEXCOORD_1", 2, "a second UV set"));
                 if(hasBones) {
@@ -426,24 +436,46 @@ public final class GltfImport {
                     }
                 }
             }
+        // Renormalize each vertex's surviving weights: dropping an unmapped joint
+        // (above) would otherwise leave the influences summing to < 1, skewing the
+        // skin deformation. Vertices with no mapped influence are left as-is.
+        for(int v = 0; v < num; v++) {
+            float sum = 0;
+            for(int k = 0; k < 4; k++)
+                sum += vWeights[v * 4 + k];
+            if(sum > 0)
+                for(int k = 0; k < 4; k++)
+                    vWeights[v * 4 + k] /= sum;
+        }
         codec.setBones2(sd.boneNames, vJoints, vWeights);
     }
 
     /** Reads the primitive's triangle indices (or generates a trivial list over its own vertices if non-indexed). */
     @SuppressWarnings("unchecked")
     private static int[] readIndices(Glb g, Map<String, Object> prim) {
+        Object mode = prim.get("mode");
+        if(mode != null && ((Number) mode).intValue() != 4)
+            throw new IllegalArgumentException("rebuild only supports triangle-list primitives (glTF mode 4), got mode "
+                    + ((Number) mode).intValue());
+        int pc = accessorCount(g, idx(((Map<String, Object>) prim.get("attributes")).get("POSITION")));
         Object idxAcc = prim.get("indices");
         if(idxAcc == null) {
-            int pc = accessorCount(g, idx(((Map<String, Object>) prim.get("attributes")).get("POSITION")));
             int[] t = new int[pc - (pc % 3)];
             for(int i = 0; i < t.length; i++)
                 t[i] = i;
             return t;
         }
         float[] raw = readAccessor(g, ((Number) idxAcc).intValue(), 1);
+        if(raw.length % 3 != 0)
+            throw new IllegalArgumentException("primitive has " + raw.length
+                    + " indices, not a multiple of 3 (not a triangle list)");
         int[] tris = new int[raw.length];
-        for(int i = 0; i < raw.length; i++)
-            tris[i] = Math.round(raw[i]);
+        for(int i = 0; i < raw.length; i++) {
+            int v = Math.round(raw[i]);
+            if(v < 0 || v >= pc)
+                throw new IllegalArgumentException("triangle index " + v + " out of range [0, " + pc + ")");
+            tris[i] = v;
+        }
         return tris;
     }
 
@@ -603,12 +635,17 @@ public final class GltfImport {
         if(glb.length < 20 || le32(glb, 0) != 0x46546C67)
             throw new IllegalArgumentException("not a binary glTF (.glb) file");
         int jsonLen = le32(glb, 12);
+        if(jsonLen < 0 || 20L + jsonLen + 8 > glb.length)
+            throw new IllegalArgumentException("malformed glTF: JSON chunk length out of bounds");
         if(le32(glb, 16) != 0x4E4F534A)
             throw new IllegalArgumentException("malformed glTF: missing JSON chunk");
         Object parsed = Json.parse(new String(glb, 20, jsonLen, StandardCharsets.UTF_8));
         int binHeader = 20 + jsonLen;
         if(binHeader + 8 > glb.length || le32(glb, binHeader + 4) != 0x004E4942)
             throw new IllegalArgumentException("malformed glTF: missing BIN chunk");
+        int binLen = le32(glb, binHeader);
+        if(binHeader + 8L + binLen > glb.length)
+            throw new IllegalArgumentException("malformed glTF: BIN chunk length out of bounds");
         return new Glb((Map<String, Object>) parsed, glb, binHeader + 8);
     }
 
@@ -640,10 +677,14 @@ public final class GltfImport {
     @SuppressWarnings("unchecked")
     private static float[] readAccessor(Glb g, int index, int comps) {
         List<Object> accessors = (List<Object>) g.root.get("accessors");
+        if(accessors == null || index < 0 || index >= accessors.size())
+            throw new IllegalArgumentException("glTF references missing accessor " + index);
         Map<String, Object> acc = (Map<String, Object>) accessors.get(index);
         int ct = ((Number) acc.get("componentType")).intValue();
         boolean normalized = Boolean.TRUE.equals(acc.get("normalized"));
         int count = ((Number) acc.get("count")).intValue();
+        if(count < 0)
+            throw new IllegalArgumentException("glTF accessor " + index + " has a negative count");
         List<Object> bufferViews = (List<Object>) g.root.get("bufferViews");
         float[] out = new float[count * comps];
 
@@ -656,6 +697,11 @@ public final class GltfImport {
             int compSize = compSize(ct);
             int stride = bv.get("byteStride") == null ? comps * compSize : ((Number) bv.get("byteStride")).intValue();
             int base = g.binStart + bvOff + accOff;
+            if(count > 0) {
+                long last = (long) base + (long) (count - 1) * stride + (long) (comps - 1) * compSize + compSize;
+                if(base < g.binStart || last > g.data.length)
+                    throw new IllegalArgumentException("glTF accessor " + index + " reads past the binary chunk");
+            }
             for(int i = 0; i < count; i++)
                 for(int c = 0; c < comps; c++)
                     out[i * comps + c] = decodeComp(g.data, base + i * stride + c * compSize, ct, normalized);
@@ -676,6 +722,8 @@ public final class GltfImport {
             int valBase = g.binStart + num(valBv.get("byteOffset")) + num(sVal.get("byteOffset"));
             for(int s = 0; s < sc; s++) {
                 int ei = (int) leUint(g.data, idxBase + s * idxSize, idxSize);
+                if(ei < 0 || ei >= count)
+                    throw new IllegalArgumentException("glTF sparse accessor " + index + " index " + ei + " out of range");
                 for(int c = 0; c < comps; c++)
                     out[ei * comps + c] = decodeComp(g.data, valBase + (s * comps + c) * valSize, ct, normalized);
             }
@@ -733,6 +781,169 @@ public final class GltfImport {
             out[i + 2] = v[i + 1];
         }
         return out;
+    }
+
+    /* --------------------------------------------------------- node transforms */
+
+    /**
+     * Maps each glTF primitive to the world matrix of the (non-skinned) node that
+     * instances it, so object-level transforms a user left un-applied in Blender
+     * (move/rotate/scale without "Apply Transform") are baked into the rebuilt
+     * geometry instead of being silently dropped. Only non-identity transforms are
+     * recorded — identity nodes (and resources our own exporter wrote) map to
+     * nothing, leaving the existing behaviour untouched. Skinned meshes are skipped
+     * because glTF ignores their node transform (vertices live in skin space).
+     */
+    @SuppressWarnings("unchecked")
+    private static IdentityHashMap<Map<String, Object>, double[]> primitiveMatrices(Map<String, Object> root) {
+        IdentityHashMap<Map<String, Object>, double[]> out = new IdentityHashMap<>();
+        List<Object> nodes = (List<Object>) root.get("nodes");
+        List<Object> meshes = (List<Object>) root.get("meshes");
+        if(nodes == null || meshes == null)
+            return out;
+        boolean[] isChild = new boolean[nodes.size()];
+        for(Object no : nodes) {
+            List<Object> ch = (List<Object>) ((Map<String, Object>) no).get("children");
+            if(ch != null)
+                for(Object c : ch) {
+                    int ci = idx(c);
+                    if(ci >= 0 && ci < isChild.length)
+                        isChild[ci] = true;
+                }
+        }
+        List<Integer> roots = new ArrayList<>();
+        List<Object> scenes = (List<Object>) root.get("scenes");
+        if(scenes != null && !scenes.isEmpty()) {
+            Object si = root.get("scene");
+            Map<String, Object> scene = (Map<String, Object>) scenes.get(si == null ? 0 : idx(si));
+            List<Object> sn = (List<Object>) scene.get("nodes");
+            if(sn != null)
+                for(Object o : sn)
+                    roots.add(idx(o));
+        }
+        if(roots.isEmpty())
+            for(int i = 0; i < nodes.size(); i++)
+                if(!isChild[i])
+                    roots.add(i);
+        for(int r : roots)
+            accumulate(nodes, meshes, r, identity(), out);
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void accumulate(List<Object> nodes, List<Object> meshes, int ni, double[] parent,
+                                   IdentityHashMap<Map<String, Object>, double[]> out) {
+        if(ni < 0 || ni >= nodes.size())
+            return;
+        Map<String, Object> n = (Map<String, Object>) nodes.get(ni);
+        double[] world = mul(parent, localMatrix(n));
+        if(n.containsKey("mesh") && !n.containsKey("skin") && !isIdentity(world)) {
+            Map<String, Object> mesh = (Map<String, Object>) meshes.get(idx(n.get("mesh")));
+            List<Object> prims = (List<Object>) mesh.get("primitives");
+            if(prims != null)
+                for(Object p : prims)
+                    out.put((Map<String, Object>) p, world);
+        }
+        List<Object> ch = (List<Object>) n.get("children");
+        if(ch != null)
+            for(Object c : ch)
+                accumulate(nodes, meshes, idx(c), world, out);
+    }
+
+    /** A node's local transform: an explicit column-major {@code matrix} or T*R*S. */
+    private static double[] localMatrix(Map<String, Object> n) {
+        Object m = n.get("matrix");
+        if(m instanceof List) {
+            List<?> l = (List<?>) m;
+            double[] r = new double[16];
+            for(int i = 0; i < 16; i++)
+                r[i] = ((Number) l.get(i)).doubleValue();
+            return r;
+        }
+        double[] t = vecd(n.get("translation"), 3, 0);
+        double[] q = vecd(n.get("rotation"), 4, Double.NaN);   // x,y,z,w; default identity below
+        if(Double.isNaN(q[3])) { q[0] = 0; q[1] = 0; q[2] = 0; q[3] = 1; }
+        double[] s = vecd(n.get("scale"), 3, 1);
+        double x = q[0], y = q[1], z = q[2], w = q[3];
+        double r00 = 1 - 2 * (y * y + z * z), r01 = 2 * (x * y - w * z), r02 = 2 * (x * z + w * y);
+        double r10 = 2 * (x * y + w * z), r11 = 1 - 2 * (x * x + z * z), r12 = 2 * (y * z - w * x);
+        double r20 = 2 * (x * z - w * y), r21 = 2 * (y * z + w * x), r22 = 1 - 2 * (x * x + y * y);
+        return new double[]{
+            s[0] * r00, s[0] * r10, s[0] * r20, 0,
+            s[1] * r01, s[1] * r11, s[1] * r21, 0,
+            s[2] * r02, s[2] * r12, s[2] * r22, 0,
+            t[0],       t[1],       t[2],       1
+        };
+    }
+
+    private static double[] vecd(Object o, int n, double def) {
+        double[] v = new double[n];
+        for(int i = 0; i < n; i++)
+            v[i] = def;
+        if(o instanceof List) {
+            List<?> l = (List<?>) o;
+            for(int i = 0; i < n && i < l.size(); i++)
+                v[i] = ((Number) l.get(i)).doubleValue();
+        }
+        return v;
+    }
+
+    private static double[] identity() {
+        return new double[]{1, 0, 0, 0,  0, 1, 0, 0,  0, 0, 1, 0,  0, 0, 0, 1};
+    }
+
+    /** Column-major 4x4 product a*b. */
+    private static double[] mul(double[] a, double[] b) {
+        double[] r = new double[16];
+        for(int col = 0; col < 4; col++)
+            for(int row = 0; row < 4; row++) {
+                double s = 0;
+                for(int k = 0; k < 4; k++)
+                    s += a[k * 4 + row] * b[col * 4 + k];
+                r[col * 4 + row] = s;
+            }
+        return r;
+    }
+
+    private static boolean isIdentity(double[] m) {
+        double[] id = identity();
+        for(int i = 0; i < 16; i++)
+            if(Math.abs(m[i] - id[i]) > 1e-9)
+                return false;
+        return true;
+    }
+
+    /** Applies a column-major matrix (w=1) to each xyz triple, in place. */
+    private static void applyMatrix(float[] p, double[] m) {
+        for(int i = 0; i + 2 < p.length; i += 3) {
+            double x = p[i], y = p[i + 1], z = p[i + 2];
+            p[i]     = (float) (m[0] * x + m[4] * y + m[8] * z + m[12]);
+            p[i + 1] = (float) (m[1] * x + m[5] * y + m[9] * z + m[13]);
+            p[i + 2] = (float) (m[2] * x + m[6] * y + m[10] * z + m[14]);
+        }
+    }
+
+    /** Applies the inverse-transpose of a matrix's 3x3 to each normal, then renormalizes. */
+    private static void applyNormalMatrix(float[] nrm, double[] m) {
+        double a00 = m[0], a10 = m[1], a20 = m[2];
+        double a01 = m[4], a11 = m[5], a21 = m[6];
+        double a02 = m[8], a12 = m[9], a22 = m[10];
+        // Cofactor matrix == det * inverse-transpose; the det scale cancels on normalize.
+        double c00 = a11 * a22 - a12 * a21, c01 = -(a10 * a22 - a12 * a20), c02 = a10 * a21 - a11 * a20;
+        double c10 = -(a01 * a22 - a02 * a21), c11 = a00 * a22 - a02 * a20, c12 = -(a00 * a21 - a01 * a20);
+        double c20 = a01 * a12 - a02 * a11, c21 = -(a00 * a12 - a02 * a10), c22 = a00 * a11 - a01 * a10;
+        for(int i = 0; i + 2 < nrm.length; i += 3) {
+            double x = nrm[i], y = nrm[i + 1], z = nrm[i + 2];
+            double nx = c00 * x + c01 * y + c02 * z;
+            double ny = c10 * x + c11 * y + c12 * z;
+            double nz = c20 * x + c21 * y + c22 * z;
+            double len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            if(len > 1e-12) {
+                nrm[i]     = (float) (nx / len);
+                nrm[i + 1] = (float) (ny / len);
+                nrm[i + 2] = (float) (nz / len);
+            }
+        }
     }
 
     private static int le32(byte[] b, int off) {

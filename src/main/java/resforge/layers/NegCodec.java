@@ -81,7 +81,7 @@ public final class NegCodec {
         if(!(endpoints instanceof List))
             throw new Unsupported("missing/invalid endpoints list");
         List<?> groups = (List<?>) endpoints;
-        out.uint8(groups.size());
+        out.uint8(Nums.count(groups.size(), 0xff, "neg endpoint groups"));
         for(Object gObj : groups) {
             if(!(gObj instanceof Map))
                 throw new Unsupported("endpoint group is not an object");
@@ -92,8 +92,8 @@ public final class NegCodec {
                 throw new Unsupported("endpoint group missing numeric id");
             if(!(coords instanceof List))
                 throw new Unsupported("endpoint group missing coords list");
-            out.uint8(((Number) id).intValue());
-            out.uint16(((List<?>) coords).size());
+            out.uint8(Nums.u8(id));
+            out.uint16(Nums.count(((List<?>) coords).size(), 0xffff, "neg coords"));
             for(Object c : (List<?>) coords)
                 writeCoord(out, c);
         }
@@ -128,7 +128,7 @@ public final class NegCodec {
         List<?> c = (List<?>) o;
         if(!(c.get(0) instanceof Number) || !(c.get(1) instanceof Number))
             throw new Unsupported("coord components must be numbers");
-        out.int16(((Number) c.get(0)).intValue());
-        out.int16(((Number) c.get(1)).intValue());
+        out.int16(Nums.i16(c.get(0)));
+        out.int16(Nums.i16(c.get(1)));
     }
 }

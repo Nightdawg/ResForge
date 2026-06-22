@@ -12,7 +12,7 @@ import resforge.io.MessageReader;
  *   if ver < 128:
  *       z    = int8*256 + ver
  *       subz = int16
- *       fl   = uint8           (bit2 = nooff, bit3 = has-info)
+ *       fl   = uint8           (fl&2 = nooff, fl&4 = has-info)
  *       id   = int16
  *       off  = (int16,int16)
  *       if (fl & 4): repeated [ string key; uint8/int32 len; len bytes ] until key==""
@@ -61,36 +61,32 @@ public class ImageInfo {
             } else if(ver - 128 == 1) {
                 ii.headerVer = ver;
                 ii.id = in.int16();
-                // New-style header uses typed (tto) values which this tool does
-                // not fully decode; fall back to magic-scanning for the split.
+                // New-style header: typed (tto) key/value pairs until an empty key.
+                // Step over them precisely so the image offset is the real header end.
+                while(true) {
+                    String key = in.string();
+                    if(key.isEmpty())
+                        break;
+                    TtoSkip.skipValue(in);
+                }
                 ii.recognized = true;
+                ii.imageOffset = in.position();
             }
         } catch(RuntimeException e) {
             ii.recognized = false;
+            ii.imageOffset = -1;
         }
 
-        // Validate / locate the embedded image by its magic bytes.
-        int scanFrom = (ii.imageOffset >= 0) ? ii.imageOffset : 1;
-        int magic = magicAt(payload, scanFrom);
-        if(magic < 0 || ii.imageOffset < 0) {
-            int found = findMagic(payload, Math.max(1, ii.imageOffset < 0 ? 1 : ii.imageOffset));
-            if(found >= 0) {
-                ii.imageOffset = found;
-                magic = magicAt(payload, found);
-            }
-        }
+        // The split is only offered when the parsed header ends exactly on a known
+        // image magic. There is deliberately NO magic-scanning fallback: a stray
+        // "BM"/JPEG byte pair inside a header must never be mistaken for the embedded
+        // image (which would corrupt a replace/export). If the offset isn't a real
+        // image start, the layer simply stays raw (still byte-lossless on repack).
+        int magic = (ii.imageOffset >= 0) ? magicAt(payload, ii.imageOffset) : -1;
         ii.imageFormat = formatName(magic);
         if(ii.imageFormat == null)
             ii.imageOffset = -1;
         return ii;
-    }
-
-    private static int findMagic(byte[] b, int from) {
-        for(int i = Math.max(0, from); i < b.length; i++) {
-            if(magicAt(b, i) >= 0)
-                return i;
-        }
-        return -1;
     }
 
     /** Returns a small format code (0=png,1=jpg,2=gif,3=bmp) or -1 if no match. */

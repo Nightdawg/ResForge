@@ -35,6 +35,8 @@ public class Catalog {
         KIND.put("pagina", "text");
         KIND.put("neg", "hitbox");
         KIND.put("obst", "collision");
+        KIND.put("boneoff", "equip-point");
+        KIND.put("light", "light");
         KIND.put("vbuf2", "3D-model");
         KIND.put("mesh", "3D-model");
     }

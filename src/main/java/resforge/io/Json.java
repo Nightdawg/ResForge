@@ -169,6 +169,8 @@ public final class Json {
                 ws();
                 expect(':');
                 ws();
+                if(m.containsKey(key))
+                    throw err("duplicate object key: " + key);
                 m.put(key, value());
                 ws();
                 char c = next();
@@ -211,6 +213,8 @@ public final class Json {
                 if(c == '"')
                     break;
                 if(c == '\\') {
+                    if(eof())
+                        throw err("unterminated escape");
                     char e = s.charAt(i++);
                     switch(e) {
                         case '"':  sb.append('"');  break;
@@ -222,7 +226,13 @@ public final class Json {
                         case 'b':  sb.append('\b'); break;
                         case 'f':  sb.append('\f'); break;
                         case 'u':
-                            sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16));
+                            if(i + 4 > s.length())
+                                throw err("truncated \\u escape");
+                            try {
+                                sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16));
+                            } catch(NumberFormatException nf) {
+                                throw err("invalid \\u escape");
+                            }
                             i += 4;
                             break;
                         default: throw err("invalid escape \\" + e);

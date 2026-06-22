@@ -40,8 +40,9 @@ public class ResContainer {
         while(!in.eom()) {
             String name = in.string();
             int len = in.int32();
-            if(len < 0)
-                throw new IllegalArgumentException("Negative layer length for '" + name + "'");
+            if(len < 0 || len > in.remaining())
+                throw new IllegalArgumentException("Invalid layer length " + len + " for '" + name
+                        + "' (" + in.remaining() + " bytes left)");
             res.layers.add(new Layer(name, in.bytes(len)));
         }
         return res;

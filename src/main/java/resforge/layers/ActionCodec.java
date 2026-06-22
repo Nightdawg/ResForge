@@ -77,7 +77,7 @@ public final class ActionCodec {
         if(!(adObj instanceof List))
             throw new Unsupported("'ad' must be a list of strings");
         List<?> ad = (List<?>) adObj;
-        out.uint16(ad.size());
+        out.uint16(Nums.count(ad.size(), 0xffff, "ad"));
         for(Object a : ad) {
             if(!(a instanceof String))
                 throw new Unsupported("'ad' entries must be strings");

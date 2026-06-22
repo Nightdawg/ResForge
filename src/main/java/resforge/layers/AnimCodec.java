@@ -71,13 +71,13 @@ public final class AnimCodec {
             throw new Unsupported("missing/invalid frames list");
         List<?> f = (List<?>) frames;
         MessageWriter out = new MessageWriter();
-        out.int16(((Number) id).intValue());
-        out.uint16(((Number) delay).intValue());
-        out.uint16(f.size());
+        out.int16(Nums.i16(id));
+        out.uint16(Nums.u16(delay));
+        out.uint16(Nums.count(f.size(), 0xffff, "anim frames"));
         for(Object fr : f) {
             if(!(fr instanceof Number))
                 throw new Unsupported("frame id is not a number");
-            out.int16(((Number) fr).intValue());
+            out.int16(Nums.i16(fr));
         }
         return out.toByteArray();
     }
