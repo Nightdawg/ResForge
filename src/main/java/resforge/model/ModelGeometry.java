@@ -1,0 +1,143 @@
+package resforge.model;
+
+import resforge.layers.MeshInfo;
+import resforge.res.Layer;
+import resforge.res.ResContainer;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * Assembles a flat triangle mesh (a "soup" of per-triangle vertices with
+ * positions and normals) from a resource's {@code vbuf2} + {@code mesh} layers,
+ * for the in-app 3D viewer. Reuses the same decoders as the glTF export
+ * ({@link Vbuf2Data} + {@link MeshInfo}); coordinates are kept in Haven's native
+ * Z-up space (the viewer orients its camera with +Z up).
+ *
+ * <p>Skinned models are assembled in their bind / rest pose (no bone transforms),
+ * matching the static-geometry view the glTF export gives. Returns {@code null}
+ * from {@link #from} when the resource has no usable geometry.
+ */
+public final class ModelGeometry {
+    /** 9 floats per triangle (3 vertices × xyz), Haven Z-up. */
+    public final float[] positions;
+    /** 9 floats per triangle (3 vertices × xyz), unit normals. */
+    public final float[] normals;
+    public final int triangleCount;
+    public final int vertexCount;       // distinct source vertices that fed the soup
+    public final int submeshCount;
+    /** Axis-aligned bounding box min/max (xyz) and its centre + radius. */
+    public final float[] min = {Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY};
+    public final float[] max = {Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY, Float.NEGATIVE_INFINITY};
+    public final float[] center = new float[3];
+    public final float radius;
+
+    private ModelGeometry(float[] positions, float[] normals, int triangleCount,
+                          int vertexCount, int submeshCount) {
+        this.positions = positions;
+        this.normals = normals;
+        this.triangleCount = triangleCount;
+        this.vertexCount = vertexCount;
+        this.submeshCount = submeshCount;
+        for(int i = 0; i < positions.length; i += 3)
+            for(int a = 0; a < 3; a++) {
+                float v = positions[i + a];
+                if(v < min[a]) min[a] = v;
+                if(v > max[a]) max[a] = v;
+            }
+        float r = 0;
+        if(triangleCount > 0) {
+            for(int a = 0; a < 3; a++)
+                center[a] = (min[a] + max[a]) / 2f;
+            for(int i = 0; i < positions.length; i += 3) {
+                float dx = positions[i] - center[0];
+                float dy = positions[i + 1] - center[1];
+                float dz = positions[i + 2] - center[2];
+                float d2 = dx * dx + dy * dy + dz * dz;
+                if(d2 > r) r = d2;
+            }
+            r = (float) Math.sqrt(r);
+        }
+        this.radius = (r > 0) ? r : 1f;
+    }
+
+    /** Build the geometry for a resource, or {@code null} if it has no geometry. */
+    public static ModelGeometry from(ResContainer res) {
+        Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
+        for(Layer l : res.layers)
+            if(l.name.equals("vbuf2")) {
+                Vbuf2Data d = Vbuf2Data.parse(l.data);
+                if(d != null)
+                    vbufs.putIfAbsent(d.id, d);
+            }
+        java.util.List<MeshInfo> meshes = new java.util.ArrayList<>();
+        int tris = 0;
+        for(Layer l : res.layers)
+            if(l.name.equals("mesh")) {
+                MeshInfo mi = MeshInfo.parse(l.data);
+                if(mi.recognized && mi.indices != null && vbufs.containsKey(mi.vbufid)
+                        && vbufs.get(mi.vbufid).get("pos") != null) {
+                    meshes.add(mi);
+                    tris += mi.indices.length / 3;
+                }
+            }
+        if(tris == 0)
+            return null;
+
+        float[] pos = new float[tris * 9];
+        float[] nrm = new float[tris * 9];
+        int o = 0;
+        java.util.Set<Integer> usedVbufs = new java.util.LinkedHashSet<>();
+        for(MeshInfo m : meshes) {
+            Vbuf2Data d = vbufs.get(m.vbufid);
+            float[] vp = d.get("pos");
+            float[] vn = d.get("nrm");
+            usedVbufs.add(m.vbufid);
+            short[] idx = m.indices;
+            for(int t = 0; t + 2 < idx.length; t += 3) {
+                int a = idx[t] & 0xffff, b = idx[t + 1] & 0xffff, c = idx[t + 2] & 0xffff;
+                if(a >= d.num || b >= d.num || c >= d.num)
+                    continue;
+                int[] tri = {a, b, c};
+                // Per-vertex normals from the data, or a computed face normal if absent.
+                float[] face = (vn == null) ? faceNormal(vp, a, b, c) : null;
+                for(int k = 0; k < 3; k++) {
+                    int v = tri[k];
+                    pos[o] = vp[v * 3];
+                    pos[o + 1] = vp[v * 3 + 1];
+                    pos[o + 2] = vp[v * 3 + 2];
+                    if(vn != null) {
+                        nrm[o] = vn[v * 3];
+                        nrm[o + 1] = vn[v * 3 + 1];
+                        nrm[o + 2] = vn[v * 3 + 2];
+                    } else {
+                        nrm[o] = face[0];
+                        nrm[o + 1] = face[1];
+                        nrm[o + 2] = face[2];
+                    }
+                    o += 3;
+                }
+            }
+        }
+        if(o == 0)
+            return null;
+        if(o != pos.length) {   // some triangles were skipped (out-of-range indices)
+            pos = java.util.Arrays.copyOf(pos, o);
+            nrm = java.util.Arrays.copyOf(nrm, o);
+        }
+        int verts = 0;          // distinct source vertices (vbufs are shared across submeshes)
+        for(int id : usedVbufs)
+            verts += vbufs.get(id).num;
+        return new ModelGeometry(pos, nrm, o / 9, verts, meshes.size());
+    }
+
+    private static float[] faceNormal(float[] vp, int a, int b, int c) {
+        float ux = vp[b * 3] - vp[a * 3], uy = vp[b * 3 + 1] - vp[a * 3 + 1], uz = vp[b * 3 + 2] - vp[a * 3 + 2];
+        float wx = vp[c * 3] - vp[a * 3], wy = vp[c * 3 + 1] - vp[a * 3 + 1], wz = vp[c * 3 + 2] - vp[a * 3 + 2];
+        float nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
+        float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
+        if(len < 1e-9f)
+            return new float[]{0, 0, 1};
+        return new float[]{nx / len, ny / len, nz / len};
+    }
+}

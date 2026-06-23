@@ -39,6 +39,19 @@ via `<build><directory>`, and its fat jar is built by the shade plugin (with
 dep/version change must be applied to all three (`build.gradle`, `pom.xml`,
 `build.xml`/`lib/`).
 
+## 3D viewer is a pure-Java software renderer (no OpenGL/JavaFX)
+The in-app **View 3D** preview (`gui/Model3DView`) is a hand-written z-buffered
+triangle rasteriser drawing into a `BufferedImage` via Java2D — no JOGL/LWJGL
+(native libs) and no JavaFX (separate module + natives). This keeps the tool
+dependency-light and the three builds (Gradle/Maven/Ant) in lockstep, exactly as
+`GltfExport` is hand-built rather than pulling a glTF library. All the geometry is
+already decoded in-app (`Vbuf2Data` positions/normals, `MeshInfo` indices), so the
+viewer only adds rendering: `model/ModelGeometry` assembles a triangle soup
+(reusing the glTF-export decoders) and the renderer shades it two-sided from a
+head-light with optional wireframe and orbit/zoom/pan. Models shown in bind/rest
+pose (no skinning/animation) — the same static view the glTF export gives. Tier 1
+is untextured; texturing and animation playback are deferred follow-ons.
+
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords
 are `org.jcraft:jorbis:0.0.17` (LGPL, ~97KB) — note `org.jcraft`, not

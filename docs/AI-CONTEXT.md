@@ -78,11 +78,12 @@ tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**/**obst**/**boneo
 **JSON** (lossless-or-raw), `code`/`codeentry` **read-only** view (+ `.class`
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 `src` exports as `.java`), **rig view** for `skel`/`skan`/`manim`
-(read-only structural display), font/midi replace+export, raw replace+export, 3D →
+(read-only structural display), font/midi replace+export, raw replace+export, a
+built-in **3D viewer** (whole-model, software-rendered — see below), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
-Cache (AppData)**; row 2 **Export to glTF · Rebuild from glTF · References…**; the
+Cache (AppData)**; row 2 **View 3D · Export to glTF · Rebuild from glTF · References…**; the
 **resource-version spinner** (uint16) sits on the file-path bar below. Menu accelerators:
 Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
@@ -123,6 +124,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   new-style tto block via `TtoSkip`) — no magic-byte scanning, so a stray "BM"/JPEG
   byte pair in a header can't be mistaken for the image and corrupt a replace/export.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
+  `ModelGeometry` (assemble a triangle soup — positions+normals, Haven Z-up — from
+  `vbuf2`+`mesh` for the in-app 3D viewer; reuses the same decoders as the glTF export),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
@@ -149,11 +152,14 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   re-fetch it fresh. Implemented from the client format; no third-party code).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
-  `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested).
-  Heavy work (open/parse, glTF export, glTF rebuild) runs on a background thread and
-  marshals the result back via `invokeLater`, so large files don't freeze the EDT;
-  the Ogg player joins the previous play thread before restarting so two threads
-  never share the line.
+  `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),
+  `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle
+  rasteriser into a `BufferedImage`, two-sided Lambert head-light shading + optional
+  wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`).
+  Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
+  background thread and marshals the result back via `invokeLater`, so large files
+  don't freeze the EDT; the Ogg player joins the previous play thread before restarting
+  so two threads never share the line.
 
 ## 6. Per-layer status
 | Layer | Status |
@@ -334,6 +340,17 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   be removed server-side, so they're set apart). Unit-tested (`CacheIndexTest`). (Idea
   prompted by the read-only Rust tool `ancientchina/hafen-res`; implemented clean-room
   from the client format.)
+- **In-app 3D viewer is now done** (`model/ModelGeometry` + `gui/Model3DView`, GUI
+  **View 3D** toolbar button): a dependency-free **software renderer** (hand-written
+  z-buffered triangle rasteriser into a `BufferedImage`, two-sided Lambert head-light
+  shading, optional wireframe overlay, mouse orbit/zoom/pan) showing the model in its
+  bind/rest pose — no native libs/OpenGL/JavaFX, matching the project's pure-Java ethos.
+  `ModelGeometry` assembles a triangle soup from `vbuf2`+`mesh` (reusing the glTF-export
+  decoders), unit-tested (`ModelGeometryTest`); confirmed visually on male (humanoid)
+  and knarr (21-part ship, 12838 verts/16952 tris). **Tier 1** (untextured shaded +
+  wireframe). Possible next tiers: **textured** (perspective-correct UVs sampling the
+  `tex` image; materials already resolved by the glTF path) and **animation playback**
+  (skeletal/morph).
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
   `replace`, and a true batch needs a per-file mapping few users would set up), as
