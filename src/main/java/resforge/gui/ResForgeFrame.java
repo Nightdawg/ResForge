@@ -2,6 +2,7 @@ package resforge.gui;
 
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
+import resforge.model.ModelGeometry;
 import resforge.res.Layer;
 import resforge.res.Replacer;
 import resforge.res.ResContainer;
@@ -16,6 +17,7 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -411,6 +413,8 @@ public class ResForgeFrame extends JFrame {
         JToolBar row2 = new JToolBar();
         row2.setFloatable(false);
         row2.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row2.add(new JButton(action("View 3D", this::doView3D)));
+        row2.addSeparator();
         row2.add(new JButton(action("Export to glTF", this::doExportGltf)));
         row2.addSeparator();
         row2.add(new JButton(action("Rebuild from glTF", this::doRebuildGltf)));
@@ -914,6 +918,65 @@ public class ResForgeFrame extends JFrame {
         }, "gltf-rebuild");
         t.setDaemon(true);
         t.start();
+    }
+
+    private void doView3D() {
+        if(res == null)
+            return;
+        final byte[] snapshot = res.serialize();
+        final String title = file != null ? file.getFileName().toString() : "model";
+        setStatus("Building 3D model \u2026");
+        Thread t = new Thread(() -> {
+            ModelGeometry g = null;
+            String err = null;
+            try {
+                g = ModelGeometry.from(ResContainer.parse(snapshot));
+            } catch(Exception e) {
+                err = e.getMessage();
+            }
+            final ModelGeometry geo = g;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                setStatus("Ready");
+                if(geo == null) {
+                    info(error != null ? "Could not build the 3D model: " + error
+                            : "This resource has no 3D geometry (vbuf2/mesh) to view.");
+                    return;
+                }
+                show3DDialog(title, geo);
+            });
+        }, "model-3d");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    private void show3DDialog(String title, ModelGeometry geo) {
+        JDialog dlg = new JDialog(this, "3D view \u2014 " + title, false);
+        Model3DView view = new Model3DView(geo);
+
+        JCheckBox shaded = new JCheckBox("Shaded", true);
+        JCheckBox wire = new JCheckBox("Wireframe", false);
+        shaded.addActionListener(e -> view.setShaded(shaded.isSelected()));
+        wire.addActionListener(e -> view.setWireframe(wire.isSelected()));
+        JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        controls.add(shaded);
+        controls.add(wire);
+        controls.add(new JButton(action("Reset view", view::resetView)));
+        controls.add(new JLabel("   " + geo.vertexCount + " verts \u00b7 "
+                + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"));
+
+        JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
+                + " \u2014 shown in bind pose (no skinning/animation)");
+        hint.setForeground(java.awt.Color.GRAY);
+        hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+
+        dlg.setLayout(new BorderLayout());
+        dlg.add(controls, BorderLayout.NORTH);
+        dlg.add(view, BorderLayout.CENTER);
+        dlg.add(hint, BorderLayout.SOUTH);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
     }
 
     private void doExportGltf() {

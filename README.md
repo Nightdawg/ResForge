@@ -29,7 +29,9 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
-and fonts; and a full **3D model round-trip** — export to a Blender-ready binary
+and fonts; a built-in **3D viewer** (**View 3D** — a dependency-free software
+renderer that shows the model shaded, with an optional wireframe and mouse
+orbit/zoom/pan, in its bind pose); and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
 file); **Rebuild from glTF** to bring edits back — regenerate geometry so you can
