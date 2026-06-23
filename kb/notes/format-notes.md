@@ -351,15 +351,19 @@ These three are **read-only reference views** — they show which other resource
   file's bytes to EOM. One source file per layer; resources that ship `code`
   bytecode also carry the pre-processed Java source here. Exports as `.java`.
   Confirmed on globfx/tree/vmat/reeling (16 layers).
-- **`rlink`** (`RLinkInfo`): `uint8 ver`, then entries to EOM, each `uint16 id`,
-  `uint8 type`; for `type==3`: `string res`, `uint16 ver` (the linked resource),
-  then a `tto` value list (the link's spec/args) read until a `0` tag or EOM. The
-  spec frequently nests `res(name@ver)` references (tto tag 34), which are
-  collected too. A redirect/parameterize mechanism: "serve <res> with this spec."
-  Parser is tolerant (unknown entry type stops cleanly, keeps prior links).
-  Confirmed on mulberry (1 link, EOM-terminated spec) and villageidol (4 links,
-  map specs with nested `res()` to candle-flare64/flight). The reusable `tto`
-  reader mirrors the one in `CodeEntryInfo`.
+- **`rlink`** (`RLinkInfo`): one render-link per layer (mirrors `haven.RenderLink.Res`).
+  `uint8 lver`; if `lver < 3` the version byte **is** the link type (id `-1`); if `lver`
+  is 3/4, `int16 id` + `uint8 type`, and for `lver >= 4` a `string`-keyed `tto` metadata
+  map (empty key ends). Then a type body: **0 MeshMat** (`string mesh, u16 ver, i16
+  meshid, string mat, u16 ver, i16 matid` — two refs), **1 AmbientLink** / **4 ResSprite**
+  (`string, u16 ver`), **2 Collect** (`string, u16 ver, i16 meshid, [i16 meshmask]`),
+  **3 Parameters** (`string, u16 ver` + a `tto` arg list, which often nests `res()` refs,
+  tto tag 34). `references()` collects every resource a link points at (empty name = self,
+  no ref). Earlier we only decoded type 3; a real-cache census showed **type 0 is ~80% of
+  all rlink layers** (990/1225), so the old `refs` was missing the large majority of link
+  references — now all five types decode (1205/1225 recognized). Parser is tolerant
+  (an unknown type/version leaves the layer raw, contributing no refs). The reusable
+  `tto` reader mirrors the one in `CodeEntryInfo`.
 
 ### aggregated references (`res/References`, CLI `refs`, GUI References… dialog)
 One deduped report of every *external* resource a `.res` references, gathered from
