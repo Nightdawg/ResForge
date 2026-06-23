@@ -23,6 +23,12 @@ public final class ModelGeometry {
     public final float[] positions;
     /** 9 floats per triangle (3 vertices × xyz), unit normals. */
     public final float[] normals;
+    /** 6 floats per triangle (3 vertices × uv) — texture coordinates (may be 0 where absent). */
+    public final float[] uv;
+    /** Per triangle: index into {@link #textures}, or -1 if the triangle is untextured. */
+    public final int[] triTex;
+    /** Raw encoded image bytes (PNG/JPEG) for each distinct texture used, in slot order. */
+    public final java.util.List<byte[]> textures;
     public final int triangleCount;
     public final int vertexCount;       // distinct source vertices that fed the soup
     public final int submeshCount;
@@ -32,10 +38,14 @@ public final class ModelGeometry {
     public final float[] center = new float[3];
     public final float radius;
 
-    private ModelGeometry(float[] positions, float[] normals, int triangleCount,
+    private ModelGeometry(float[] positions, float[] normals, float[] uv, int[] triTex,
+                          java.util.List<byte[]> textures, int triangleCount,
                           int vertexCount, int submeshCount) {
         this.positions = positions;
         this.normals = normals;
+        this.uv = uv;
+        this.triTex = triTex;
+        this.textures = textures;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.submeshCount = submeshCount;
@@ -61,6 +71,11 @@ public final class ModelGeometry {
         this.radius = (r > 0) ? r : 1f;
     }
 
+    /** True if at least one triangle has a resolvable local texture. */
+    public boolean hasTextures() {
+        return !textures.isEmpty();
+    }
+
     /** Build the geometry for a resource, or {@code null} if it has no geometry. */
     public static ModelGeometry from(ResContainer res) {
         Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
@@ -84,25 +99,46 @@ public final class ModelGeometry {
         if(tris == 0)
             return null;
 
+        LocalTextures lt = LocalTextures.from(res);
+        java.util.List<byte[]> textures = new java.util.ArrayList<>();
+        Map<Integer, Integer> ordToSlot = new java.util.HashMap<>();
+
         float[] pos = new float[tris * 9];
         float[] nrm = new float[tris * 9];
-        int o = 0;
+        float[] uv = new float[tris * 6];
+        int[] triTex = new int[tris];
+        int o = 0;          // pos/nrm cursor (9 per triangle)
+        int uo = 0;         // uv cursor (6 per triangle)
+        int tri = 0;        // emitted-triangle counter
         java.util.Set<Integer> usedVbufs = new java.util.LinkedHashSet<>();
         for(MeshInfo m : meshes) {
             Vbuf2Data d = vbufs.get(m.vbufid);
             float[] vp = d.get("pos");
             float[] vn = d.get("nrm");
+            float[] vt = d.get("tex");
             usedVbufs.add(m.vbufid);
+
+            int slot = -1;
+            Integer ord = (vt != null) ? lt.ordForMatid(m.matid) : null;
+            if(ord != null) {
+                Integer s = ordToSlot.get(ord);
+                if(s == null) {
+                    textures.add(lt.images.get(ord));
+                    s = textures.size() - 1;
+                    ordToSlot.put(ord, s);
+                }
+                slot = s;
+            }
+
             short[] idx = m.indices;
             for(int t = 0; t + 2 < idx.length; t += 3) {
                 int a = idx[t] & 0xffff, b = idx[t + 1] & 0xffff, c = idx[t + 2] & 0xffff;
                 if(a >= d.num || b >= d.num || c >= d.num)
                     continue;
-                int[] tri = {a, b, c};
-                // Per-vertex normals from the data, or a computed face normal if absent.
+                int[] vidx = {a, b, c};
                 float[] face = (vn == null) ? faceNormal(vp, a, b, c) : null;
                 for(int k = 0; k < 3; k++) {
-                    int v = tri[k];
+                    int v = vidx[k];
                     pos[o] = vp[v * 3];
                     pos[o + 1] = vp[v * 3 + 1];
                     pos[o + 2] = vp[v * 3 + 2];
@@ -115,20 +151,28 @@ public final class ModelGeometry {
                         nrm[o + 1] = face[1];
                         nrm[o + 2] = face[2];
                     }
+                    if(vt != null) {
+                        uv[uo] = vt[v * 2];
+                        uv[uo + 1] = vt[v * 2 + 1];
+                    }
                     o += 3;
+                    uo += 2;
                 }
+                triTex[tri++] = slot;
             }
         }
         if(o == 0)
             return null;
-        if(o != pos.length) {   // some triangles were skipped (out-of-range indices)
+        if(tri != tris) {   // some triangles were skipped (out-of-range indices)
             pos = java.util.Arrays.copyOf(pos, o);
             nrm = java.util.Arrays.copyOf(nrm, o);
+            uv = java.util.Arrays.copyOf(uv, uo);
+            triTex = java.util.Arrays.copyOf(triTex, tri);
         }
         int verts = 0;          // distinct source vertices (vbufs are shared across submeshes)
         for(int id : usedVbufs)
             verts += vbufs.get(id).num;
-        return new ModelGeometry(pos, nrm, o / 9, verts, meshes.size());
+        return new ModelGeometry(pos, nrm, uv, triTex, textures, tri, verts, meshes.size());
     }
 
     private static float[] faceNormal(float[] vp, int a, int b, int c) {

@@ -956,14 +956,19 @@ public class ResForgeFrame extends JFrame {
 
         JCheckBox shaded = new JCheckBox("Shaded", true);
         JCheckBox wire = new JCheckBox("Wireframe", false);
+        JCheckBox tex = new JCheckBox("Textured", geo.hasTextures());
+        tex.setEnabled(geo.hasTextures());
         shaded.addActionListener(e -> view.setShaded(shaded.isSelected()));
         wire.addActionListener(e -> view.setWireframe(wire.isSelected()));
+        tex.addActionListener(e -> view.setTextured(tex.isSelected()));
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         controls.add(shaded);
+        controls.add(tex);
         controls.add(wire);
         controls.add(new JButton(action("Reset view", view::resetView)));
         controls.add(new JLabel("   " + geo.vertexCount + " verts \u00b7 "
-                + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"));
+                + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"
+                + (geo.hasTextures() ? "" : " \u00b7 no local textures")));
 
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
                 + " \u2014 shown in bind pose (no skinning/animation)");

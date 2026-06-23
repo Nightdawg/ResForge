@@ -48,9 +48,15 @@ dependency-light and the three builds (Gradle/Maven/Ant) in lockstep, exactly as
 already decoded in-app (`Vbuf2Data` positions/normals, `MeshInfo` indices), so the
 viewer only adds rendering: `model/ModelGeometry` assembles a triangle soup
 (reusing the glTF-export decoders) and the renderer shades it two-sided from a
-head-light with optional wireframe and orbit/zoom/pan. Models shown in bind/rest
-pose (no skinning/animation) — the same static view the glTF export gives. Tier 1
-is untextured; texturing and animation playback are deferred follow-ons.
+head-light with optional wireframe and orbit/zoom/pan. **Texturing** (Tier 2 part 1)
+samples the model's *local* textures with perspective-correct UVs (alpha-mask cutout
+honoured), resolving the `matid→mat2→local tex` chain via `model/LocalTextures` —
+the same chain the glTF export uses. Models shown in bind/rest pose (no
+skinning/animation). **Variable materials (`varmat`)** — where a part's texture comes
+from a `code`/`codeentry`-declared variable material or an external `mlink` rather
+than a local `tex` (e.g. knarr's sail/hull) — are *not* resolved yet; those parts fall
+back to flat shading. Resolving varmat is **Tier 2 part 2** (deferred). Animation
+playback is a later tier.
 
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords
