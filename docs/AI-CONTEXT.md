@@ -61,7 +61,8 @@ regenerates geometry from an edited `.glb` to allow reshaped/added/removed verti
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
-Open / drag-drop / **Fetch from server…**; layer table with **thumbnails** for
+Open / drag-drop / **Fetch from server…** (remembers successful paths; offers them
+as substring-matched, click-to-use suggestions below the input); layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
 offset — **editable** for old-style image headers)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
@@ -134,7 +135,8 @@ References… (aggregated reference report dialog), **resource-version spinner**
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
-  decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback).
+  decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
+  `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested).
   Heavy work (open/parse, glTF export, glTF rebuild) runs on a background thread and
   marshals the result back via `invokeLater`, so large files don't freeze the EDT;
   the Ogg player joins the previous play thread before restarting so two threads
@@ -300,8 +302,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   Regression tests: `HardeningTest`, `EditValidationTest`, `JsonParserTest`,
   `GltfNodeTransformTest` (152 tests total, all green). Source-only changes — all three
   builds stay in sync.
-- GUI niceties: fetch path history/autocomplete, batch
-  re-skin a folder. (No layer search/filter — explicitly declined.)
+- **Fetch path history/autocomplete is now done** (`gui/FetchHistory`): the Fetch
+  dialog remembers successful resource paths (persisted via `Preferences`, same as the
+  base URL) and lists them below the input as substring-matched, click-to-use
+  suggestions (double-click fetches); most-recent-first, case-insensitively deduped,
+  capped at 50. Pure-logic helper is unit-tested (`FetchHistoryTest`). Remaining GUI
+  nicety: batch re-skin a folder. (No layer search/filter — explicitly declined.)
 
 ## 11. The other tool (context)
 CarryGun's **HafenResourceTool** (GitLab, Qt/C++): broader typed coverage +
