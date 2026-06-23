@@ -1184,6 +1184,78 @@ public class ResForgeFrame extends JFrame {
         content.add(buttonRow(
                 new JButton(action("Replace image", () -> replaceFromFile(idx, l.name))),
                 new JButton(action("Export image", () -> exportLayer(idx)))));
+
+        // A tex layer may carry a separate alpha mask (part tag 4) — expose it too.
+        if(l.name.equals("tex")) {
+            resforge.layers.TexInfo ti = resforge.layers.TexInfo.parse(l.data);
+            if(ti.maskFound)
+                addTexMaskSection(content, idx, l, ti);
+        }
+    }
+
+    /** Preview + export/replace for a tex layer's alpha mask (the foliage/cutout shape). */
+    private void addTexMaskSection(JPanel content, int idx, Layer l, resforge.layers.TexInfo ti) {
+        content.add(Box.createVerticalStrut(12));
+        content.add(labeled("Alpha mask"));
+        ImageView maskView = new ImageView();
+        byte[] maskBytes = resforge.layers.TexMaskCodec.mask(l.data);
+        java.awt.image.BufferedImage mimg = null;
+        if(maskBytes != null) {
+            try {
+                mimg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(maskBytes));
+            } catch(Exception ignored) {
+            }
+        }
+        if(mimg != null) {
+            maskView.setImage(mimg);
+            content.add(labeled(mimg.getWidth() + " \u00d7 " + mimg.getHeight()
+                    + " pixels (" + ti.maskFormat + ")"));
+        } else {
+            maskView.setPlaceholder("(mask could not be decoded)");
+        }
+        maskView.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(maskView);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(action("Replace mask", () -> replaceTexMask(idx))),
+                new JButton(action("Export mask", () -> exportTexMask(idx)))));
+    }
+
+    private void replaceTexMask(int idx) {
+        JFileChooser fc = new JFileChooser(dir());
+        fc.setFileFilter(filterFor("tex"));
+        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        try {
+            byte[] newMask = Files.readAllBytes(fc.getSelectedFile().toPath());
+            byte[] payload = resforge.layers.TexMaskCodec.replaceMask(res.layers.get(idx).data, newMask);
+            setLayerPayload(idx, payload);
+            setStatus("Replaced alpha mask in layer " + idx);
+        } catch(Exception e) {
+            error("Replace mask failed: " + e.getMessage());
+        }
+    }
+
+    private void exportTexMask(int idx) {
+        Layer l = res.layers.get(idx);
+        resforge.layers.TexInfo ti = resforge.layers.TexInfo.parse(l.data);
+        byte[] maskBytes = resforge.layers.TexMaskCodec.mask(l.data);
+        if(maskBytes == null) {
+            error("This layer has no alpha mask to export.");
+            return;
+        }
+        String ext = ti.maskFormat != null ? ti.maskFormat : "png";
+        JFileChooser fc = new JFileChooser(dir());
+        fc.setFileFilter(new FileNameExtensionFilter(ext.toUpperCase() + " mask (*." + ext + ")", ext));
+        fc.setSelectedFile(new File(baseName() + "_" + idx + "_tex_mask." + ext));
+        if(fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+            return;
+        try {
+            SafeFiles.write(fc.getSelectedFile().toPath(), maskBytes);
+            setStatus("Exported mask of layer " + idx + " \u2192 " + fc.getSelectedFile().getName());
+        } catch(Exception e) {
+            error("Export mask failed: " + e.getMessage());
+        }
     }
 
     /** Editable header fields (id, offset, declared size) for a tex layer. */
