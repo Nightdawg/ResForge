@@ -43,7 +43,7 @@ class Vbuf2CodecTest {
     }
 
     @Test
-    void transformScalesPositionsExactlyForF4() {
+    void f4PositionEditReEncodesExactly() {
         float[] xyz = {1, 2, 3, -4, 5, -6};
         Vbuf2Codec c = Vbuf2Codec.parse(posF4(2, xyz));
         float[] p = c.decodePositions();

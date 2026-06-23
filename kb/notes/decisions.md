@@ -56,13 +56,16 @@ Gradle and Maven require `JAVA_HOME` to point at the **JDK root** (the folder th
 This is generic JDK-21 guidance (any vendor's JDK works); machine-specific setup
 for a particular dev box doesn't belong in the repo.
 
-## transform write path is the one unverified feature
-`transform <file> <sx> <sy> <sz>` scales vbuf2 positions. The encoder is proven
-byte-identical on a decode->encode round-trip of all real vbuf2 layers, but the
-*scaled* output still needs an in-game visual check (a uniform scale like `2 2 2`
-should render correct but bigger). Normals are left untouched — correct for a
-uniform scale; for a *non-uniform* scale that's wrong (normals would need the
-inverse-transpose), so the CLI prints a warning when `sx`/`sy`/`sz` differ.
+## The transform command was removed (glTF round-trip supersedes it)
+An early CLI `transform <file> <sx> <sy> <sz>` scaled a model's `vbuf2` positions —
+the first write path, built to prove the structure-preserving `vbuf2` encoder. It
+only touched positions (correct for a uniform scale, wrong for a non-uniform one
+where normals need the inverse-transpose), and its *output* was the one feature
+never confirmed in-game. The glTF round-trip (Export → edit in Blender → Rebuild)
+now covers scaling — handling normals/tangents properly and in-game validated — so
+the command was dropped to keep the tool's promise sharp: every feature is either
+provably lossless or in-game validated. The structure-preserving encoder it was
+built on lives on as the foundation of the glTF rebuild.
 
 ## Hostile-input hardening (lossless-or-raw isn't enough on its own)
 The lossless-or-raw guard protects *editing*, but the *parser* must also survive
@@ -81,7 +84,7 @@ must fail with a clear exception, never OOM, hang, or corrupt.
 Every `.res`/`.glb` write goes through `io/SafeFiles.write`: data is written to a
 sibling temp file, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)` renames it
 over the target (with a non-atomic fallback where the filesystem can't do an atomic
-move). CLI `replace`/`transform`/`rebuild-gltf` and GUI Save all default to
+move). CLI `replace`/`rebuild-gltf` and GUI Save all default to
 overwriting their input, so a crash, full disk, or I/O error mid-write would
 otherwise leave a truncated/corrupt original with no backup. The temp file is
 cleaned up on failure.
