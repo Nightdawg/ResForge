@@ -340,7 +340,7 @@ public class ResForgeFrame extends JFrame {
         JMenu fileMenu = new JMenu("File");
         fileMenu.add(item("Open", KeyEvent.VK_L, this::doOpen));
         fileMenu.add(item("Fetch from server", KeyEvent.VK_R, this::doFetch));
-        fileMenu.add(menuItem("Open from game cache", this::doOpenFromCache));
+        fileMenu.add(item("Open from game cache", KeyEvent.VK_O, this::doOpenFromCache));
         fileMenu.add(item("Save As", KeyEvent.VK_S, this::doSaveAs));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
@@ -372,28 +372,8 @@ public class ResForgeFrame extends JFrame {
         pathField.setToolTipText("Full path of the open file (read-only; select to copy)");
         bar.add(lab, BorderLayout.WEST);
         bar.add(pathField, BorderLayout.CENTER);
-        return bar;
-    }
 
-    private void updatePath() {
-        pathField.setText(file != null ? file.toAbsolutePath().toString() : "(no file open)");
-        pathField.setCaretPosition(0);
-    }
-
-    private JToolBar buildToolBar() {
-        JToolBar tb = new JToolBar();
-        tb.setFloatable(false);
-        tb.add(new JButton(action("Open", this::doOpen)));
-        tb.add(new JButton(action("Fetch", this::doFetch)));
-        tb.add(new JButton(action("Cache", this::doOpenFromCache)));
-        tb.add(new JButton(action("Save As", this::doSaveAs)));
-        tb.addSeparator();
-        tb.add(new JButton(action("Export glTF", this::doExportGltf)));
-        tb.add(new JButton(action("Rebuild glTF", this::doRebuildGltf)));
-        tb.add(new JButton(action("References", this::doShowReferences)));
-        tb.addSeparator();
         JLabel vl = new JLabel("Resource version: ");
-        tb.add(vl);
         versionSpinner.setToolTipText("Resource format version (0\u201365535). Saved into the file header.");
         versionSpinner.setEnabled(false);
         versionSpinner.setMaximumSize(new Dimension(90, 28));
@@ -406,8 +386,42 @@ public class ResForgeFrame extends JFrame {
             markDirty();
             setStatus("Resource version set to " + res.version);
         });
-        tb.add(versionSpinner);
-        return tb;
+        JPanel east = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        east.add(vl);
+        east.add(versionSpinner);
+        bar.add(east, BorderLayout.EAST);
+        return bar;
+    }
+
+    private void updatePath() {
+        pathField.setText(file != null ? file.toAbsolutePath().toString() : "(no file open)");
+        pathField.setCaretPosition(0);
+    }
+
+    private JComponent buildToolBar() {
+        JToolBar row1 = new JToolBar();
+        row1.setFloatable(false);
+        row1.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row1.add(new JButton(action("Open File", this::doOpen)));
+        row1.addSeparator();
+        row1.add(new JButton(action("Fetch from Server", this::doFetch)));
+        row1.addSeparator();
+        row1.add(new JButton(action("Open from Cache (AppData)", this::doOpenFromCache)));
+
+        JToolBar row2 = new JToolBar();
+        row2.setFloatable(false);
+        row2.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row2.add(new JButton(action("Export to glTF", this::doExportGltf)));
+        row2.addSeparator();
+        row2.add(new JButton(action("Rebuild from glTF", this::doRebuildGltf)));
+        row2.addSeparator();
+        row2.add(new JButton(action("References", this::doShowReferences)));
+
+        JPanel rows = new JPanel();
+        rows.setLayout(new BoxLayout(rows, BoxLayout.Y_AXIS));
+        rows.add(row1);
+        rows.add(row2);
+        return rows;
     }
 
     private JMenuItem item(String text, int key, Runnable r) {
@@ -649,8 +663,83 @@ public class ResForgeFrame extends JFrame {
                 return;
             cacheDir = fc.getSelectedFile().toPath();
         }
-        final Path dir = cacheDir;
-        prefs.put("cacheDir", dir.toString());
+        prefs.put("cacheDir", cacheDir.toString());
+        showCachePicker(cacheDir);
+    }
+
+    /** Modal picker over the cache's resource names (substring-filtered); the
+     *  chosen path is fetched fresh from the server via {@link #fetchFromServer}.
+     *  The dialog opens immediately showing a "scanning" message and is filled in
+     *  by a background scan (which can take a moment on a large cache), so the UI
+     *  never appears frozen while the cache is read. */
+    private void showCachePicker(Path dir) {
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+        String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
+
+        JTextField filterFld = new JTextField(30);
+        filterFld.setEnabled(false);
+        JTextField baseFld = new JTextField(base, 30);
+        javax.swing.DefaultListModel<String> listModel = new javax.swing.DefaultListModel<>();
+        listModel.addElement("Scanning game cache for resource names\u2026");
+        javax.swing.JList<String> list = new javax.swing.JList<>(listModel);
+        list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        list.setVisibleRowCount(16);
+        // Render dynamic (dyn/) entries greyed, with a divider above the first one,
+        // so the volatile account-attached resources are visually set apart.
+        list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(javax.swing.JList<?> l, Object value,
+                    int index, boolean sel, boolean focus) {
+                super.getListCellRendererComponent(l, value, index, sel, focus);
+                String s = String.valueOf(value);
+                if(resforge.net.CacheIndex.isDynamic(s)) {
+                    if(!sel)
+                        setForeground(java.awt.Color.GRAY);
+                    boolean firstDyn = index == 0 || !resforge.net.CacheIndex.isDynamic(
+                            String.valueOf(l.getModel().getElementAt(index - 1)));
+                    if(firstDyn)
+                        setBorder(BorderFactory.createCompoundBorder(
+                                BorderFactory.createMatteBorder(1, 0, 0, 0, java.awt.Color.LIGHT_GRAY),
+                                getBorder()));
+                }
+                return this;
+            }
+        });
+        JScrollPane scroll = new JScrollPane(list);
+        javax.swing.border.TitledBorder border = BorderFactory.createTitledBorder(
+                "Scanning game cache for resource names\u2026");
+        scroll.setBorder(border);
+
+        // Holds the loaded names once the background scan finishes (empty until then).
+        final List<String>[] all = new List[]{ java.util.Collections.<String>emptyList() };
+        Runnable refilter = () -> {
+            listModel.clear();
+            for(String n : FetchHistory.filter(all[0], filterFld.getText()))
+                listModel.addElement(n);
+            if(!listModel.isEmpty())
+                list.setSelectedIndex(0);
+        };
+        filterFld.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+        });
+        list.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent ev) {
+                if(ev.getClickCount() < 2 || all[0].isEmpty())
+                    return;
+                int idx = list.locationToIndex(ev.getPoint());
+                if(idx < 0 || idx >= listModel.size()
+                        || !list.getCellBounds(idx, idx).contains(ev.getPoint()))
+                    return;
+                list.setSelectedIndex(idx);
+                JOptionPane pane = (JOptionPane)
+                        SwingUtilities.getAncestorOfClass(JOptionPane.class, list);
+                if(pane != null)
+                    pane.setValue(JOptionPane.OK_OPTION);
+            }
+        });
+
+        // Scan on a background thread and populate the (already-visible) dialog.
         setStatus("Scanning game cache " + dir + " \u2026");
         Thread t = new Thread(() -> {
             List<String> found = null;
@@ -664,68 +753,26 @@ public class ResForgeFrame extends JFrame {
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 if(names == null) {
-                    error("Could not scan the cache:\n" + error);
+                    border.setTitle("Cache scan failed: " + error);
+                    listModel.clear();
                     setStatus("Cache scan failed");
+                    scroll.revalidate();
+                    scroll.repaint();
                     return;
                 }
+                all[0] = names;
+                filterFld.setEnabled(true);
+                border.setTitle(names.isEmpty()
+                        ? "No resources found in " + dir
+                        : names.size() + " resources in your game cache (fetched fresh from the server)");
+                refilter.run();
+                scroll.revalidate();
+                scroll.repaint();
                 setStatus(names.size() + " resource(s) found in cache");
-                if(names.isEmpty()) {
-                    info("No resources found in:\n" + dir);
-                    return;
-                }
-                showCachePicker(names);
             });
         }, "cache-scan");
         t.setDaemon(true);
         t.start();
-    }
-
-    /** Modal picker over the cache's resource names (substring-filtered); the
-     *  chosen path is fetched fresh from the server via {@link #fetchFromServer}. */
-    private void showCachePicker(List<String> names) {
-        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
-        String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
-
-        JTextField filterFld = new JTextField(30);
-        JTextField baseFld = new JTextField(base, 30);
-        javax.swing.DefaultListModel<String> listModel = new javax.swing.DefaultListModel<>();
-        for(String n : names)
-            listModel.addElement(n);
-        javax.swing.JList<String> list = new javax.swing.JList<>(listModel);
-        list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        list.setVisibleRowCount(16);
-        list.setSelectedIndex(0);
-        JScrollPane scroll = new JScrollPane(list);
-        scroll.setBorder(BorderFactory.createTitledBorder(
-                names.size() + " resources in your game cache (fetched fresh from the server)"));
-
-        Runnable refilter = () -> {
-            listModel.clear();
-            for(String n : FetchHistory.filter(names, filterFld.getText()))
-                listModel.addElement(n);
-            if(!listModel.isEmpty())
-                list.setSelectedIndex(0);
-        };
-        filterFld.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-        });
-        list.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent ev) {
-                if(ev.getClickCount() < 2)
-                    return;
-                int idx = list.locationToIndex(ev.getPoint());
-                if(idx < 0 || idx >= listModel.size()
-                        || !list.getCellBounds(idx, idx).contains(ev.getPoint()))
-                    return;
-                list.setSelectedIndex(idx);
-                JOptionPane pane = (JOptionPane)
-                        SwingUtilities.getAncestorOfClass(JOptionPane.class, list);
-                if(pane != null)
-                    pane.setValue(JOptionPane.OK_OPTION);
-            }
-        });
 
         JPanel form = new JPanel(new java.awt.GridBagLayout());
         java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
@@ -741,6 +788,11 @@ public class ResForgeFrame extends JFrame {
         form.add(scroll, gc);
         gc.weighty = 0;
         gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        JLabel dynHint = new JLabel("Greyed \u201cdyn/\u201d entries are dynamic, account-attached "
+                + "resources (listed last; may not be fetchable).");
+        dynHint.setForeground(java.awt.Color.GRAY);
+        dynHint.setFont(dynHint.getFont().deriveFont(dynHint.getFont().getSize2D() - 1f));
+        form.add(dynHint, gc);
         form.add(new JLabel("Server base URL:"), gc);
         form.add(baseFld, gc);
 
@@ -748,9 +800,13 @@ public class ResForgeFrame extends JFrame {
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if(ok != JOptionPane.OK_OPTION)
             return;
+        if(all[0].isEmpty()) {
+            error("The cache is still being scanned (or holds no resources). Please try again.");
+            return;
+        }
         String path = list.getSelectedValue();
         String useBase = baseFld.getText().strip();
-        if(path == null || path.isBlank()) {
+        if(path == null || !all[0].contains(path)) {
             error("Please select a resource.");
             return;
         }

@@ -65,9 +65,11 @@ ready to `fetch`.)
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…** (remembers successful paths; offers them
 as substring-matched, click-to-use suggestions below the input) / **Open from game
-cache…** (scans the local Haven cache at `%APPDATA%\Haven and Hearth\data`, lists the
-resource names found there, and fetches the chosen one *fresh from the server* — the
-cache supplies names only, so you always open the latest version); layer table with **thumbnails** for
+cache…** (Ctrl+O; scans the local Haven cache at `%APPDATA%\Haven and Hearth\data`,
+opening immediately with a "scanning…" state then filling in a filterable list — `dyn/`
+account-attached resources sort last and are greyed — and fetches the chosen one *fresh
+from the server*, so the cache supplies names only and you always open the latest
+version); layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
 offset — **editable** for old-style image headers)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
@@ -79,9 +81,10 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
-Toolbar: Open, Fetch, **Cache** (Open from game cache), Save As, **Export glTF** (Blender-ready .glb),
-**Rebuild glTF** (regenerate geometry from an edited .glb),
-References… (aggregated reference report dialog), **resource-version spinner** (uint16).
+Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
+Cache (AppData)**; row 2 **Export to glTF · Rebuild from glTF · References…**; the
+**resource-version spinner** (uint16) sits on the file-path bar below. Menu accelerators:
+Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
 
 ## 5. Architecture (packages under `src/main/java/resforge/`)
@@ -324,9 +327,13 @@ References… (aggregated reference report dialog), **resource-version spinner**
   only, so you always open the latest version; never opens stale cached bytes). Header
   decoded with `DataInputStream.readUTF` per the client's `HashDirCache`; `res/` names
   are the fetchable paths; parallel scan (~0.7 s over ~44k files), sorted/deduped (~8k
-  resources on a real cache). Picker reuses `FetchHistory.filter` for live substring
-  filtering. Unit-tested (`CacheIndexTest`). (Idea prompted by the read-only Rust tool
-  `ancientchina/hafen-res`; implemented clean-room from the client format.)
+  resources on a real cache). The picker (Ctrl+O) opens immediately showing a
+  "scanning…" state and is populated by the background scan (so the UI never looks
+  frozen), reuses `FetchHistory.filter` for live substring filtering, and sorts/greys
+  the `dyn/` account-attached resources last (`CacheIndex.ORDER`/`isDynamic`; they may
+  be removed server-side, so they're set apart). Unit-tested (`CacheIndexTest`). (Idea
+  prompted by the read-only Rust tool `ancientchina/hafen-res`; implemented clean-room
+  from the client format.)
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
   `replace`, and a true batch needs a per-file mapping few users would set up), as
