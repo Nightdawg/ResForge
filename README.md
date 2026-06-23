@@ -18,7 +18,9 @@ java -jar build-gradle/libs/resforge-0.1.0.jar gui horse.res   # opens a file
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
-`gfx/borka/male`). Selecting a layer shows the right tool for it: a **picture preview** with
+`gfx/borka/male`). The Fetch dialog **remembers your successful paths** and lists
+them below the input as substring-matched, click-to-use suggestions (type any part
+of a path, e.g. `borka`, to filter; double-click to fetch). Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
