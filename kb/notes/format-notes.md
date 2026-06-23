@@ -45,6 +45,18 @@ parts; the color image part is `int32 len` + encoded image (JPEG/PNG). Because
 the length is stored *inside* the payload, our `tex` codec recomputes that int32
 when the texture is swapped, so a replacement of any size repacks correctly.
 
+A tex layer can also carry an **alpha mask** as a separate part — part tag `4`
+(`int32 len` + encoded image, usually a PNG silhouette), often alongside a filter
+part (tag 1, e.g. the "Mipmapper" value) — because the color image is frequently an
+opaque JPEG (no alpha), so the cutout shape (e.g. a tree's foliage outline) lives in
+the mask. `TexInfo` locates **both** the color image (tag 0) and the mask (tag 4):
+it scans the whole part stream, but once the color image is found any later trouble
+just stops the scan with the color result intact, so the (byte-exact) color split is
+never weakened. The 3D viewer uses the mask as the alpha channel for cutout (mask
+luminance `< 128` ⇒ transparent), which is why foliage renders as proper leaf shapes
+rather than black cards. Real example: every mulberry tex is `tag0 JPEG color +
+tag1 filter(4) + tag4 PNG mask`.
+
 ## audio2 layer
 `uint8 ver` (1..3), `string id`, `uint16 vol` (ver 2, bvol = vol*0.001), optional
 tto metadata (ver 3), then an Ogg Vorbis stream to the end. We split into header

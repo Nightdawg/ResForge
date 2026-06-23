@@ -36,6 +36,10 @@ final class Model3DView extends JPanel {
     private final int[][] texPix;
     private final int[] texW;
     private final int[] texH;
+    // Decoded alpha masks (tag 4), aligned with the texture slots; null where none.
+    private final int[][] maskPix;
+    private final int[] maskW;
+    private final int[] maskH;
 
     private BufferedImage img;
     private int[] pix;
@@ -50,24 +54,22 @@ final class Model3DView extends JPanel {
     Model3DView(ModelGeometry geo) {
         this.geo = geo;
         this.dist = geo.radius * 3.0;
-        // Decode any local textures once (raw PNG/JPEG bytes -> ARGB pixels).
+        // Decode any local textures (and their alpha masks) once.
         int n = geo.textures.size();
         texPix = new int[n][];
         texW = new int[n];
         texH = new int[n];
+        maskPix = new int[n][];
+        maskW = new int[n];
+        maskH = new int[n];
         for(int i = 0; i < n; i++) {
-            byte[] bytes = geo.textures.get(i);
-            if(bytes == null)
-                continue;
-            try {
-                BufferedImage bi = javax.imageio.ImageIO.read(new ByteArrayInputStream(bytes));
-                if(bi != null) {
-                    texW[i] = bi.getWidth();
-                    texH[i] = bi.getHeight();
-                    texPix[i] = bi.getRGB(0, 0, texW[i], texH[i], null, 0, texW[i]);
-                }
-            } catch(Exception ignored) {
-            }
+            int[] dim = new int[2];
+            texPix[i] = decode(geo.textures.get(i), dim);
+            texW[i] = dim[0];
+            texH[i] = dim[1];
+            maskPix[i] = decode(geo.maskTextures.get(i), dim);
+            maskW[i] = dim[0];
+            maskH[i] = dim[1];
         }
         textured = geo.hasTextures();
         setPreferredSize(new Dimension(640, 520));
@@ -222,6 +224,8 @@ final class Model3DView extends JPanel {
         boolean tex = slot >= 0;
         int[] tp = tex ? texPix[slot] : null;
         int tw = tex ? texW[slot] : 0, th = tex ? texH[slot] : 0;
+        int[] mp = tex ? maskPix[slot] : null;          // separate alpha mask (tag 4), or null
+        int mw = tex ? maskW[slot] : 0, mh = tex ? maskH[slot] : 0;
         // Perspective-correct attribute setup: interpolate u/z, v/z and 1/z linearly.
         double iz0 = 1 / z[0], iz1 = 1 / z[1], iz2 = 1 / z[2];
         double uoz0 = 0, uoz1 = 0, uoz2 = 0, voz0 = 0, voz1 = 0, voz2 = 0;
@@ -250,10 +254,18 @@ final class Model3DView extends JPanel {
                     double vv = (l0 * voz0 + l1 * voz1 + l2 * voz2) / izp;
                     uu -= Math.floor(uu);                 // wrap
                     vv -= Math.floor(vv);
+                    if(mp != null) {
+                        // Foliage etc.: alpha lives in a separate mask (the colour is
+                        // an opaque JPEG). Cut out where the mask is dark.
+                        int mxp = (int) (uu * mw); if(mxp >= mw) mxp = mw - 1;
+                        int myp = (int) (vv * mh); if(myp >= mh) myp = mh - 1;
+                        if((mp[myp * mw + mxp] & 0xff) < 128)
+                            continue;
+                    }
                     int sxp = (int) (uu * tw); if(sxp >= tw) sxp = tw - 1;
                     int syp = (int) (vv * th); if(syp >= th) syp = th - 1;
                     int argb = tp[syp * tw + sxp];
-                    if(((argb >>> 24) & 0xff) < 128)      // alpha-mask cutout
+                    if(mp == null && ((argb >>> 24) & 0xff) < 128)   // else use the colour's own alpha
                         continue;
                     br = (argb >> 16) & 0xff;
                     bg = (argb >> 8) & 0xff;
@@ -304,6 +316,26 @@ final class Model3DView extends JPanel {
     }
 
     private static int clamp(int v) { return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+    /** Decode encoded image bytes to an ARGB pixel array; writes width/height into
+     *  {@code dim} (both 0 and a null return when {@code bytes} is null/undecodable). */
+    private static int[] decode(byte[] bytes, int[] dim) {
+        dim[0] = 0;
+        dim[1] = 0;
+        if(bytes == null)
+            return null;
+        try {
+            BufferedImage bi = javax.imageio.ImageIO.read(new ByteArrayInputStream(bytes));
+            if(bi == null)
+                return null;
+            int w = bi.getWidth(), h = bi.getHeight();
+            dim[0] = w;
+            dim[1] = h;
+            return bi.getRGB(0, 0, w, h, null, 0, w);
+        } catch(Exception e) {
+            return null;
+        }
+    }
 
     private static double[] cross(double[] a, double[] b) {
         return new double[]{

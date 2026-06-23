@@ -28,6 +28,9 @@ import java.util.Map;
 public final class LocalTextures {
     /** Raw encoded image bytes (PNG/JPEG) for each local {@code tex} layer, in order. */
     public final List<byte[]> images = new ArrayList<>();
+    /** Raw alpha-mask bytes (tag 4) per local {@code tex} layer, aligned with
+     *  {@link #images}; {@code null} where a texture has no mask. */
+    public final List<byte[]> masks = new ArrayList<>();
     private final Map<Integer, Integer> matidToTex = new LinkedHashMap<>();
 
     private LocalTextures() {}
@@ -40,12 +43,15 @@ public final class LocalTextures {
                 continue;
             try {
                 TexInfo ti = TexInfo.parse(l.data);
-                if(ti.found)
-                    lt.images.add(Arrays.copyOfRange(l.data, ti.imageOffset, ti.imageOffset + ti.imageLen));
-                else
-                    lt.images.add(null);     // keep ordinal alignment with the tex layers
+                lt.images.add(ti.found
+                        ? Arrays.copyOfRange(l.data, ti.imageOffset, ti.imageOffset + ti.imageLen)
+                        : null);
+                lt.masks.add(ti.maskFound
+                        ? Arrays.copyOfRange(l.data, ti.maskOffset, ti.maskOffset + ti.maskLen)
+                        : null);
             } catch(RuntimeException e) {
                 lt.images.add(null);
+                lt.masks.add(null);
             }
         }
         int texCount = lt.images.size();
