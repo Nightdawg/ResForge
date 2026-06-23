@@ -71,7 +71,8 @@ account-attached resources sort last and are greyed — and fetches the chosen o
 from the server*, so the cache supplies names only and you always open the latest
 version); layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
-offset — **editable** for old-style image headers)+replace+export, **Ogg player**
+offset — **editable** for old-style image headers)+replace+export (and a tex layer's
+**alpha mask** gets its own preview+replace+export), **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
 sibling image layers, composited at their true relative size + per-frame offset),
 tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**/**obst**/**boneoff**/**light**
@@ -116,7 +117,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `ActionCodec`, `Mat2Codec`,
   `AnimCodec`,   `NegCodec`, `ObstCodec`, `BoneOffCodec`, `LightCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
-  `TexHeaderCodec` (id/offset/size), `AudioHeaderCodec` (clip id + volume) — all
+  `TexHeaderCodec` (id/offset/size), `TexMaskCodec` (extract/replace a tex layer's
+  alpha mask — part tag 4 — recomputing its int32 length, format-checked),
+  `AudioHeaderCodec` (clip id + volume) — all
   lossless-or-raw, image/audio bytes kept verbatim. The typed JSON codecs share a
   `Nums` helper that range-checks integer fields/counts on encode, so an out-of-range
   *edit* (e.g. `anim` `delay:70000`) fails loudly instead of silently wrapping on the
@@ -170,7 +173,7 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | Layer | Status |
 |-------|--------|
 | `image` | edit: swap embedded PNG/JPEG; **edit header** (id/z/sub-z/offset/nooff) for old-style; new image layers get a wrapped header |
-| `tex` | edit: swap 3D texture (`tex` codec recomputes int32 length); **edit header** (id/offset/declared size) |
+| `tex` | edit: swap 3D texture + **alpha mask** (`tex`/`TexMaskCodec` recompute the int32 length); **edit header** (id/offset/declared size) |
 | `audio2` | edit: swap Ogg; **edit clip id + volume** (ver-2 header); GUI plays it |
 | `font` | edit: swap TTF/OTF (sfnt). 2-byte header + font tail |
 | `midi` | edit: swap `.mid` (whole payload) |

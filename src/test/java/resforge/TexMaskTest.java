@@ -59,6 +59,29 @@ class TexMaskTest {
     }
 
     @Test
+    void replaceMaskKeepsColorAndSwapsMaskLosslessly() {
+        byte[] payload = texColorFilterMask();
+        byte[] newMask = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4, 5, 6};  // bigger PNG
+        byte[] edited = resforge.layers.TexMaskCodec.replaceMask(payload, newMask);
+
+        TexInfo ti = TexInfo.parse(edited);
+        assertTrue(ti.found, "color still present");
+        assertArrayEquals(JPG, Arrays.copyOfRange(edited, ti.imageOffset, ti.imageOffset + ti.imageLen),
+                "color image untouched");
+        assertTrue(ti.maskFound);
+        assertEquals(newMask.length, ti.maskLen, "mask length field recomputed");
+        assertArrayEquals(newMask, Arrays.copyOfRange(edited, ti.maskOffset, ti.maskOffset + ti.maskLen));
+    }
+
+    @Test
+    void replaceMaskRejectsNonImageAndMissingMask() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> resforge.layers.TexMaskCodec.replaceMask(texColorFilterMask(), new byte[]{1, 2, 3}));
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> resforge.layers.TexMaskCodec.replaceMask(texColorOnly(), PNG));
+    }
+
+    @Test
     void colorSplitIsUnchangedByMaskScanning() {
         // The color image's offset/length must be identical whether or not a mask follows.
         TexInfo withMask = TexInfo.parse(texColorFilterMask());

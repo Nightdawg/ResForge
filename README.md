@@ -100,7 +100,11 @@ mod (re-skinning). The PNG may be any size; the layer length is recomputed.
 `tex` layers hold the textures used by 3D models (the embedded picture is a
 JPEG or PNG after a short header). The texture is exposed as a normal image file
 between two verbatim `.bin` parts; on repack its length is recomputed, so you can
-drop in a replacement of any size.
+drop in a replacement of any size. Some `tex` layers also carry a separate **alpha
+mask** (a PNG silhouette — the cutout shape for foliage and the like, since the
+colour image is often an opaque JPEG); in the GUI the mask gets its own
+preview with Replace/Export, and the 3D viewer uses it so foliage renders as proper
+leaf shapes rather than black cards.
 
 `props` layers hold typed key/value properties (a `tto` stream). They are
 exposed as editable `*.json`, but **only when the round-trip is provably
