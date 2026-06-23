@@ -89,7 +89,7 @@ final class Model3DView extends JPanel {
                     panX -= dx * dist / Math.max(1, getHeight());
                     panY += dy * dist / Math.max(1, getHeight());
                 } else {
-                    yaw -= dx * 0.01;
+                    yaw += dx * 0.01;
                     pitch += dy * 0.01;
                     double lim = Math.toRadians(89);
                     pitch = Math.max(-lim, Math.min(lim, pitch));
