@@ -50,6 +50,21 @@ Real game `.res` files are copyrighted. They live in a gitignored `samples/`
 folder and are never committed. Validation runs locally; CI stays green without
 the assets.
 
+## Open from game cache: names only, always re-fetch from the server
+The local Haven cache (`HashDirCache` at `%APPDATA%\Haven and Hearth\data`) holds
+the resources the player already downloaded, with each file's header carrying the
+resource *name*. ResForge reads that cache for **names only** (via `net/CacheIndex`)
+and then fetches the chosen resource **fresh from the server** — it never opens the
+cached bytes. Why: the cache can hold a stale version, and opening-then-saving stale
+bytes is a subtle way to ship an out-of-date mod; re-fetching guarantees the latest.
+It also keeps the cache reader trivial and robust (we only parse a tiny header, not
+every cached payload) and reuses the already-tested `ResourceFetcher` path. The
+header decodes with `DataInputStream.readUTF` exactly as the client's `readhead`
+does, so it's authoritative; resource entries are the `res/`-prefixed names. The
+idea was prompted by the read-only Rust tool `ancientchina/hafen-res`, but the
+implementation is clean-room from the client's `HashDirCache.java` (MIT vs. its
+LGPL-3 — no code taken).
+
 ## Environment gotcha: JAVA_HOME
 Gradle and Maven require `JAVA_HOME` to point at the **JDK root** (the folder that
 *contains* `bin`), not the `\bin` sub-directory — a `\bin` JAVA_HOME is rejected.

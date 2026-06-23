@@ -29,6 +29,7 @@ import java.nio.file.Path;
  *   gltf    <file.res> [out.glb]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
  *   catalog <file.res | dir>
+ *   cache-list [cacheDir]
  *   verify  <file.res | dir>
  */
 public class Main {
@@ -65,6 +66,7 @@ public class Main {
             case "gltf":   gltf(args);   break;
             case "rebuild-gltf": rebuildGltf(args); break;
             case "catalog": catalog(args); break;
+            case "cache-list": cacheList(args); break;
             case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
             default: throw new UsageException("unknown command: " + args[0]);
@@ -325,6 +327,22 @@ public class Main {
         Catalog.run(Path.of(args[1]), System.out);
     }
 
+    private static void cacheList(String[] args) throws IOException {
+        Path dir;
+        if(args.length >= 2) {
+            dir = Path.of(args[1]);
+        } else {
+            dir = resforge.net.CacheIndex.defaultCacheDir().orElseThrow(() ->
+                    new UsageException("could not locate the default cache dir; pass one explicitly"));
+        }
+        if(!Files.isDirectory(dir))
+            throw new RuntimeException("not a directory: " + dir);
+        java.util.List<String> names = resforge.net.CacheIndex.scan(dir);
+        for(String n : names)
+            System.out.println(n);
+        System.err.printf("%d resource(s) in %s%n", names.size(), dir);
+    }
+
     private static void gltf(String[] args) throws IOException {
         if(args.length < 2)
             throw new UsageException("gltf requires a .res file");
@@ -395,6 +413,8 @@ public class Main {
         System.out.println("  rebuild-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Rebuild geometry from a glTF (allows added/removed vertices)");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
+        System.out.println("  cache-list [cacheDir]        List resource names in the local game cache");
+        System.out.println("                               (default: %APPDATA%\\Haven and Hearth\\data)");
         System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
 

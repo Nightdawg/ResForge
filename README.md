@@ -20,7 +20,11 @@ Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
 `gfx/borka/male`). The Fetch dialog **remembers your successful paths** and lists
 them below the input as substring-matched, click-to-use suggestions (type any part
-of a path, e.g. `borka`, to filter; double-click to fetch). Selecting a layer shows the right tool for it: a **picture preview** with
+of a path, e.g. `borka`, to filter; double-click to fetch). Or **Open from game
+cache…** to browse the resources you already have locally: it scans Haven's cache
+(`%APPDATA%\Haven and Hearth\data`), lists every resource name found there, and
+fetches the one you pick **fresh from the server** — the cache supplies only the
+names, so you always open the latest version. Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
@@ -196,6 +200,10 @@ resforge refs    horse.res
 # Download a resource straight from the game server (by its in-game path):
 resforge fetch   gfx/borka/male            # -> male.res
 resforge fetch   gfx/borka/male male.res   # choose the output name
+
+# List the resource names in your local game cache (then fetch any of them):
+resforge cache-list                        # default: %APPDATA%\Haven and Hearth\data
+resforge cache-list "C:\path\to\data"      # a non-default cache folder
 
 # Swap a single asset in one command (the originals are format-checked):
 resforge replace horse.res image  newicon.png    horse.res   # 2D icon / sprite

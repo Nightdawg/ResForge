@@ -53,16 +53,21 @@ a sibling project at `../hafen-client`).
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `gltf <file> [out.glb]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
-`catalog <file|dir>` · `verify <file|dir>`.
+`catalog <file|dir>` · `cache-list [cacheDir]` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
 exports the 3D model as a Blender-ready binary glTF, and `rebuild-gltf`
-regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.)
+regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.
+`cache-list` scans the local game cache and prints the resource names found there,
+ready to `fetch`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
 
 ## 4. GUI (`resforge.gui.ResForgeFrame`)
 Open / drag-drop / **Fetch from server…** (remembers successful paths; offers them
-as substring-matched, click-to-use suggestions below the input); layer table with **thumbnails** for
+as substring-matched, click-to-use suggestions below the input) / **Open from game
+cache…** (scans the local Haven cache at `%APPDATA%\Haven and Hearth\data`, lists the
+resource names found there, and fetches the chosen one *fresh from the server* — the
+cache supplies names only, so you always open the latest version); layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
 offset — **editable** for old-style image headers)+replace+export, **Ogg player**
 (play/stop/draggable seek), **live animation playback** (anim frames resolved to
@@ -74,7 +79,7 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 (read-only structural display), font/midi replace+export, raw replace+export, 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
-Toolbar: Open, Fetch, Save As, **Export glTF** (Blender-ready .glb),
+Toolbar: Open, Fetch, **Cache** (Open from game cache), Save As, **Export glTF** (Blender-ready .glb),
 **Rebuild glTF** (regenerate geometry from an edited .glb),
 References… (aggregated reference report dialog), **resource-version spinner** (uint16).
 **Edit → Undo/Redo** (Ctrl+Z/Y, snapshot-based). Full **file-path bar** under the toolbar.
@@ -133,7 +138,12 @@ References… (aggregated reference report dialog), **resource-version spinner**
   triangle-mode + index range, `setAttr` length) so a malformed `.glb` fails cleanly
   rather than corrupting a layer.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
-- `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient).
+- `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient), `CacheIndex`
+  (reads the local Haven `HashDirCache` at `%APPDATA%\Haven and Hearth\data`: each
+  `%016x.%d` file's header is `byte(1)`+`writeUTF(cid)`+`writeUTF(name)`, decoded with
+  `DataInputStream.readUTF`; `res/`-prefixed names are the fetchable resource paths —
+  scanned in parallel, sorted/deduped — so the GUI/CLI can list what the player has and
+  re-fetch it fresh. Implemented from the client format; no third-party code).
 - `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested).
@@ -307,6 +317,16 @@ References… (aggregated reference report dialog), **resource-version spinner**
   base URL) and lists them below the input as substring-matched, click-to-use
   suggestions (double-click fetches); most-recent-first, case-insensitively deduped,
   capped at 50. Pure-logic helper is unit-tested (`FetchHistoryTest`).
+- **Open from game cache is now done** (`net/CacheIndex`, CLI `cache-list`, GUI
+  **Cache**/File→*Open from game cache…*): scans the local Haven `HashDirCache`
+  (`%APPDATA%\Haven and Hearth\data`) to recover the resource *names* the player
+  already has, then re-fetches the chosen one **fresh from the server** (cache → names
+  only, so you always open the latest version; never opens stale cached bytes). Header
+  decoded with `DataInputStream.readUTF` per the client's `HashDirCache`; `res/` names
+  are the fetchable paths; parallel scan (~0.7 s over ~44k files), sorted/deduped (~8k
+  resources on a real cache). Picker reuses `FetchHistory.filter` for live substring
+  filtering. Unit-tested (`CacheIndexTest`). (Idea prompted by the read-only Rust tool
+  `ancientchina/hafen-res`; implemented clean-room from the client format.)
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
   `replace`, and a true batch needs a per-file mapping few users would set up), as
