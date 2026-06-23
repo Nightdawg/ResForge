@@ -215,9 +215,6 @@ resforge rebuild-gltf horse.res horse.glb horse-edited.res
 
 # Validate round-trip + image splitting for one file or a whole folder:
 resforge verify path/to/folder-of-res
-
-# Experimental write path: scale a model's geometry (then load in-game to check):
-resforge transform horse.res 2 2 2 horse-big.res
 ```
 
 `replace` is the easy path for re-skinning; pick the layer by name (`image`),

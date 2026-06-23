@@ -207,7 +207,7 @@ resforge/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
   src/main/java/resforge/
-    Main.java                        # CLI: gui|fetch|info|unpack|pack|replace|obj|transform|catalog|verify
+    Main.java                        # CLI: gui|fetch|info|refs|unpack|pack|replace|gltf|rebuild-gltf|catalog|verify
     gui/ResForgeFrame.java           # Swing editor window (layer table + preview/edit)
     gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
     gui/ImageView.java               # scaled/centred image preview component
@@ -393,13 +393,14 @@ java -jar build-gradle/libs/resforge-0.1.0.jar info horse.res
   bounding boxes are geometrically plausible. *(OBJ export was later removed once the
   glTF round-trip superseded it — glTF carries both UV sets, the skeleton and
   animations, and round-trips back to `.res`.)*
-- **Structure-preserving vbuf2 encoder + `transform` (2026-06-20)**: the
+- **Structure-preserving vbuf2 encoder (2026-06-20)**: the
   automated oracle — decode→encode of every real `vbuf2` is **byte-identical**
-  (`verify` → `Vbuf2 re-encode histogram: exact 11`). The `transform` command
-  scales a model's positions (re-quantising only `pos`); on `male.res` a z×2
-  stretch produced a file that `verify`s clean with the z bounding box exactly
-  doubled (`[-0.06,12.79]` → `[-0.13,25.58]`) and all other attributes preserved.
-  In-game rendering of the result is the user-side verification step.
+  (`verify` → `Vbuf2 re-encode histogram: exact 11`). A single attribute can be
+  re-quantised after an edit (into its original format/scale, i.e. the game's own
+  precision) while every untouched attribute stays byte-exact — the foundation the
+  glTF rebuild stands on. *(An early CLI `transform` command exercised this by
+  scaling a model's vertex positions; it was removed once the glTF round-trip —
+  which also handles normals/tangents and is in-game validated — superseded it.)*
 
 ---
 
@@ -479,24 +480,20 @@ layers remain lossless raw `.bin`.
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
 
-### What is built for the write path (`model/Vbuf2Codec.java`, `transform`)
+### What is built for the write path (`model/Vbuf2Codec.java`)
 
 A **structure-preserving** `vbuf2` codec captures each attribute's exact data
 bytes, so an *unchanged* buffer re-encodes **byte-identically** — verified on all
 real layers (`verify` → `Vbuf2 re-encode histogram: exact 11`). A single
 attribute can then be re-quantised after an edit (into its original format/scale,
-i.e. the game's own precision) while every untouched attribute stays exact. The
-`transform <file.res> <sx> <sy> <sz>` command exercises this end to end by
-scaling a model's vertex positions. Self-checks pass at the byte level (output
-verifies, geometry scales correctly — e.g. `male.res` z×2 doubles the z bounding
-box, other attributes unchanged), but **a write path's final proof is loading the
-result in-game** — which is the one check that can't be automated here. (A
-non-uniform scale leaves normals untransformed; uniform scale is fully correct.)
-The first half of a full Blender round-trip — importing *topology-preserving*
-edits (reshape/transform/sculpt the existing vertices) — is now done (`GltfImport`,
-§9); the remaining step is importing *arbitrary new topology* (re-stripping the
-index buffer + a fresh `mkres`-style encode), which genuinely needs the in-game
-feedback loop.
+i.e. the game's own precision) while every untouched attribute stays exact. This
+encoder is the foundation of the glTF rebuild (`GltfImport`, §9), which brings
+Blender edits back by re-quantising each attribute into its original on-wire
+format and now imports both *topology-preserving* edits (reshape/sculpt) and
+*arbitrary new topology* (add/remove/re-topologize vertices and faces). (An early
+CLI `transform <file.res> <sx> <sy> <sz>` command exercised the encoder by scaling
+a model's vertex positions, but was removed once the glTF round-trip — which also
+handles normals/tangents and is in-game validated — superseded it.)
 
 ## 9. Possible next steps
 

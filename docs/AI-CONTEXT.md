@@ -53,7 +53,6 @@ a sibling project at `../hafen-client`).
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `gltf <file> [out.glb]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
-`transform <file> <sx> <sy> <sz> [out]` ·
 `catalog <file|dir>` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
@@ -158,7 +157,7 @@ References… (aggregated reference report dialog), **resource-version spinner**
 | `boneoff` | edit as JSON (equip-point opcode program: translate/rotate/eqpoint/bonealign/scale; cpfloat exact, quantised rotation kept as raw octahedral ints, lossless-or-raw) |
 | `light` | edit as JSON (light source: id, ambient/diffuse/specular colours 0..1, optional attenuation/direction/exponent; cpfloat ver0 / float32 ver1, lossless-or-raw) |
 | `tooltip`/`pagina` | edit as UTF-8 text |
-| `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF; `transform` write path |
+| `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `skel`/`skan` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events) |
@@ -214,10 +213,6 @@ References… (aggregated reference report dialog), **resource-version spinner**
   done until its docs match — treat stale docs as a bug.
 
 ## 10. Open / next steps
-- **In-game test of the `transform` write path** (user-side; the one thing not
-  auto-verifiable). Uniform scale e.g. `2 2 2` should render correct-but-bigger.
-  Non-uniform scale only transforms positions (normals/tangents are left as-is), so
-  the CLI now prints a warning that lighting may look wrong in that case.
 - **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
   XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1
   (export) is complete** — `GltfExport` writes a static textured `.glb`

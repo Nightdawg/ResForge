@@ -3,7 +3,6 @@ package resforge;
 import resforge.layers.ImageInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
-import resforge.model.Vbuf2Codec;
 import resforge.res.Catalog;
 import resforge.res.Layer;
 import resforge.res.Manifest;
@@ -29,7 +28,6 @@ import java.nio.file.Path;
  *   replace <file.res> <selector> <newfile> [out.res]
  *   gltf    <file.res> [out.glb]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
- *   transform <file.res> <sx> <sy> <sz> [out.res]
  *   catalog <file.res | dir>
  *   verify  <file.res | dir>
  */
@@ -66,7 +64,6 @@ public class Main {
             case "replace": replace(args); break;
             case "gltf":   gltf(args);   break;
             case "rebuild-gltf": rebuildGltf(args); break;
-            case "transform": transform(args); break;
             case "catalog": catalog(args); break;
             case "verify": verify(args); break;
             case "-h": case "--help": case "help": usage(); break;
@@ -328,54 +325,6 @@ public class Main {
         Catalog.run(Path.of(args[1]), System.out);
     }
 
-    private static void transform(String[] args) throws IOException {
-        if(args.length < 5)
-            throw new UsageException("transform requires <file.res> <sx> <sy> <sz> [out.res]");
-        Path file = Path.of(args[1]);
-        float sx = Float.parseFloat(args[2]);
-        float sy = Float.parseFloat(args[3]);
-        float sz = Float.parseFloat(args[4]);
-        Path out;
-        if(args.length >= 6) {
-            out = Path.of(args[5]);
-        } else {
-            String n = file.getFileName().toString();
-            if(n.toLowerCase().endsWith(".res"))
-                n = n.substring(0, n.length() - 4);
-            out = file.resolveSibling(n + "-transformed.res");
-        }
-        ResContainer res = ResContainer.parse(Files.readAllBytes(file));
-        if(sx != sy || sy != sz)
-            System.out.println("WARNING: non-uniform scale (" + args[2] + ", " + args[3] + ", " + args[4]
-                    + ") scales positions only; normals/tangents are left unchanged, so lighting may look wrong in-game.");
-        int edited = 0;
-        long verts = 0;
-        for(int i = 0; i < res.layers.size(); i++) {
-            Layer l = res.layers.get(i);
-            if(!l.name.equals("vbuf2"))
-                continue;
-            Vbuf2Codec c = Vbuf2Codec.parse(l.data);
-            if(c.position() == null)
-                continue;
-            float[] p = c.decodePositions();
-            for(int v = 0; v < c.num; v++) {
-                p[v * 3]     *= sx;
-                p[v * 3 + 1] *= sy;
-                p[v * 3 + 2] *= sz;
-            }
-            c.setPositions(p);
-            res.layers.set(i, new Layer("vbuf2", c.encode()));
-            edited++;
-            verts += c.num;
-        }
-        if(edited == 0)
-            throw new RuntimeException("no editable vbuf2 positions found in " + file);
-        SafeFiles.write(out, res.serialize());
-        System.out.printf("Scaled %d vertices across %d vbuf2 by (%s, %s, %s) -> %s%n",
-                verts, edited, args[2], args[3], args[4], out);
-        System.out.println("NOTE: this is a write path - load the result in-game to confirm it renders.");
-    }
-
     private static void gltf(String[] args) throws IOException {
         if(args.length < 2)
             throw new UsageException("gltf requires a .res file");
@@ -445,8 +394,6 @@ public class Main {
         System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
         System.out.println("  rebuild-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Rebuild geometry from a glTF (allows added/removed vertices)");
-        System.out.println("  transform <file.res> <sx> <sy> <sz> [out.res]");
-        System.out.println("                               Scale a model's vertices (re-quantizes positions)");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
         System.out.println("  verify <file.res | dir>      Round-trip + image-split validation");
     }
