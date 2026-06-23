@@ -301,10 +301,15 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   summary + CLI catalog.)
 - **Read-only dependency/reference view is now done** for `deps`/`rlink`/`src`
   (`DepsInfo`/`RLinkInfo`/`SrcInfo`) — shows what other resources a `.res` references.
+  `RLinkInfo` decodes **all five render-link types** (0 MeshMat / 1 Ambient / 2 Collect /
+  3 Parameters / 4 Sprite), plus old `lver<3` and the `lver≥4` info map, one link per
+  layer per `haven.RenderLink.Res`. (Originally only type 3 was handled; a cache census
+  showed type 0 alone is ~80% of all rlink layers, so the aggregated report had been
+  missing the large majority of link references.)
   The **aggregated cross-layer reference report is also done** (`res/References`,
   CLI `refs`, GUI **References…** toolbar dialog): collects every external resource
-  from `deps` + `rlink` + `codeentry` classpath + `mat2` links (string command
-  values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
+  from `deps` + `rlink` (every link type) + `codeentry` classpath + `mat2` links (string
+  command values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
   (`anim` frames are local image-ids, so they contribute nothing.)
 - **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
   (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`) and `manim`

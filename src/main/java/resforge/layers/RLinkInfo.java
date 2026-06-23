@@ -8,24 +8,31 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Read-only decoder for the {@code rlink} layer (from haven.Resource): resource
- * links / redirects. The payload is a {@code uint8} version followed by, until
- * end of message, a sequence of link entries. Each observed entry is:
+ * Read-only decoder for the {@code rlink} (render-link) layer, faithfully
+ * mirroring {@code haven.RenderLink.Res}. Each {@code rlink} layer holds exactly
+ * <strong>one</strong> link (multiple links = multiple layers).
+ *
+ * <p>Header: {@code uint8 lver}. If {@code lver < 3} the version byte is itself
+ * the link <em>type</em> and the id is {@code -1}; if {@code lver} is 3 or 4 an
+ * {@code int16 id} and {@code uint8 type} follow, and for {@code lver >= 4} a
+ * {@code string}-keyed {@code tto} metadata map (terminated by an empty key).
+ * Then a type-specific body:
  *
  * <ul>
- *   <li>{@code uint16 id} — the local id this link is bound to;</li>
- *   <li>{@code uint8 type};</li>
- *   <li>for {@code type == 3}: {@code string res}, {@code uint16 ver} (the
- *       linked resource and its version), then a {@code tto} value list (the
- *       link's specification / arguments) read until a {@code 0} tag or end of
- *       message.</li>
+ *   <li><b>0 MeshMat</b> — {@code string mesh, uint16 ver, int16 meshid,
+ *       string mat, uint16 ver, int16 matid} (two resource references);</li>
+ *   <li><b>1 AmbientLink</b> — {@code string res, uint16 ver};</li>
+ *   <li><b>2 Collect</b> — {@code string res, uint16 ver, int16 meshid,
+ *       [int16 meshmask]};</li>
+ *   <li><b>3 Parameters</b> — {@code string res, uint16 ver}, then a {@code tto}
+ *       argument list (which may nest further {@code res()} references);</li>
+ *   <li><b>4 ResSprite</b> — {@code string res, uint16 ver}.</li>
  * </ul>
  *
- * <p>The specification commonly nests further resource references (tto tag
- * {@code 34}); those are collected too. This lets a modder see which other
- * resources a {@code .res} links to and how it parameterises them. The parser
- * is tolerant: an unrecognised entry type stops decoding without throwing, and
- * whatever was decoded so far is still reported. The layer stays raw/lossless.
+ * <p>This decoder surfaces which other resources a link points at (so the
+ * dependency view and the aggregated {@code refs} report are complete across all
+ * link types) — the layer itself stays raw/lossless. An empty resource name means
+ * the link refers back to its own resource and contributes no external reference.
  */
 public final class RLinkInfo {
     public static final class Ref {
@@ -39,18 +46,25 @@ public final class RLinkInfo {
     }
 
     public static final class Link {
-        public final int id;
-        public final String res;
-        public final int ver;
-        public final String spec;           // rendered tto specification, or null
-        public final List<Ref> refs;        // resource references nested in the spec
+        public final int id;                 // -1 for old (lver < 3) links
+        public final int type;
+        public final String typeName;
+        public final String res;             // primary referenced resource ("" = self)
+        public final int ver;                // primary version (-1 if none)
+        public final String spec;            // human description of extra params, or null
+        public final List<Ref> refs;         // every resource this link references
+        public final Map<String, Object> info;  // lver>=4 metadata map (may be empty)
 
-        Link(int id, String res, int ver, String spec, List<Ref> refs) {
+        Link(int id, int type, String typeName, String res, int ver, String spec,
+             List<Ref> refs, Map<String, Object> info) {
             this.id = id;
+            this.type = type;
+            this.typeName = typeName;
             this.res = res;
             this.ver = ver;
             this.spec = spec;
             this.refs = refs;
+            this.info = info;
         }
     }
 
@@ -63,41 +77,108 @@ public final class RLinkInfo {
         RLinkInfo ri = new RLinkInfo();
         try {
             MessageReader in = new MessageReader(payload);
-            ri.ver = in.uint8();
-            while(!in.eom()) {
-                int id = in.uint16();
-                int t = in.uint8();
-                if(t == 3) {
-                    String res = in.string();
-                    int ver = in.uint16();
-                    List<Ref> refs = new ArrayList<>();
-                    List<Object> spec = new ArrayList<>();
-                    while(!in.eom()) {
-                        int tag = in.uint8();
-                        if(tag == 0)
+            int lver = in.uint8();
+            ri.ver = lver;
+
+            int id, type;
+            List<Ref> refs = new ArrayList<>();
+            Map<String, Object> info = new LinkedHashMap<>();
+            if(lver < 3) {
+                type = lver;
+                id = -1;
+            } else if(lver <= 4) {
+                id = in.int16();
+                type = in.uint8();
+                if(lver >= 4) {
+                    while(true) {
+                        String key = in.string();
+                        if(key.isEmpty())
                             break;
-                        spec.add(readValue(in, tag, refs));
+                        info.put(key, readValue(in, in.uint8(), refs));
                     }
-                    ri.links.add(new Link(id, res, ver, spec.isEmpty() ? null : render(spec), refs));
-                } else {
-                    throw new IllegalStateException("unknown rlink entry type " + t);
                 }
+            } else {
+                throw new IllegalStateException("unknown rlink version " + lver);
             }
+
+            ri.links.add(parseBody(in, id, type, refs, info));
             ri.recognized = true;
             ri.reachedEnd = in.eom();
         } catch(RuntimeException e) {
-            /* tolerant: keep whatever links decoded before the unknown entry */
+            /* tolerant: a malformed/unknown link leaves the layer raw and contributes
+               no references, rather than throwing. */
         }
         return ri;
     }
 
-    /** All resources referenced by this layer: each link target plus nested refs. */
+    private static Link parseBody(MessageReader in, int id, int type, List<Ref> refs,
+                                  Map<String, Object> info) {
+        switch(type) {
+            case 0: {   // MeshMat
+                String mesh = in.string();
+                int mver = in.uint16();
+                int meshid = in.int16();
+                String mat = in.string();
+                int matver = in.uint16();
+                int matid = in.int16();
+                addRef(refs, mesh, mver);
+                addRef(refs, mat, matver);
+                String spec = "material " + named(mat, matver) + " #" + matid + " on mesh #" + meshid;
+                return new Link(id, type, "mesh+material", mesh, mver, spec, refs, info);
+            }
+            case 1: {   // AmbientLink
+                String nm = in.string();
+                int ver = in.uint16();
+                addRef(refs, nm, ver);
+                return new Link(id, type, "ambient", nm, ver, null, refs, info);
+            }
+            case 2: {   // Collect
+                String nm = in.string();
+                int ver = in.uint16();
+                int meshid = in.int16();
+                int meshmask = in.eom() ? -1 : in.int16();
+                addRef(refs, nm, ver);
+                String spec = "mesh #" + meshid + (meshmask != -1 ? " mask 0x" + Integer.toHexString(meshmask) : "");
+                return new Link(id, type, "collect", nm, ver, spec, refs, info);
+            }
+            case 3: {   // Parameters
+                String nm = in.string();
+                int ver = in.uint16();
+                addRef(refs, nm, ver);
+                List<Object> args = new ArrayList<>();
+                while(!in.eom()) {
+                    int tag = in.uint8();
+                    if(tag == 0)
+                        break;
+                    args.add(readValue(in, tag, refs));
+                }
+                return new Link(id, type, "parameters", nm, ver, args.isEmpty() ? null : render(args), refs, info);
+            }
+            case 4: {   // ResSprite
+                String nm = in.string();
+                int ver = in.uint16();
+                addRef(refs, nm, ver);
+                return new Link(id, type, "sprite", nm, ver, null, refs, info);
+            }
+            default:
+                throw new IllegalStateException("unknown rlink type " + type);
+        }
+    }
+
+    private static void addRef(List<Ref> refs, String name, int ver) {
+        if(name != null && !name.isEmpty())
+            refs.add(new Ref(name, ver));
+    }
+
+    private static String named(String name, int ver) {
+        return name.isEmpty() ? "<self>" : name + "@v" + ver;
+    }
+
+    /** All resources referenced by this layer's link (union of every ref). */
     public List<Ref> references() {
         List<Ref> all = new ArrayList<>();
-        for(Link l : links) {
-            all.add(new Ref(l.res, l.ver));
+        for(Link l : links)
             all.addAll(l.refs);
-        }
         return all;
     }
 

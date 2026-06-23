@@ -243,7 +243,8 @@ public class Main {
             } else if(l.name.equals("rlink")) {
                 resforge.layers.RLinkInfo ri = resforge.layers.RLinkInfo.parse(l.data);
                 for(resforge.layers.RLinkInfo.Link lk : ri.links)
-                    System.out.printf("  link %s@v%d", lk.res, lk.ver);
+                    System.out.printf("  link[%s] %s@v%d", lk.typeName,
+                            lk.res.isEmpty() ? "<self>" : lk.res, lk.ver);
             } else if(l.name.equals("light")) {
                 resforge.layers.LightInfo li = resforge.layers.LightInfo.parse(l.data);
                 if(li.recognized)

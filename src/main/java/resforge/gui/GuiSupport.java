@@ -327,13 +327,22 @@ public final class GuiSupport {
                         : "(unrecognized rlink layer)";
             StringBuilder sb = new StringBuilder("Resource links (read-only).\n");
             for(RLinkInfo.Link lk : ri.links) {
-                sb.append("\n  id ").append(lk.id).append("  ->  ")
-                  .append(lk.res).append(" @ v").append(lk.ver).append('\n');
+                sb.append("\n  ");
+                if(lk.id >= 0)
+                    sb.append("id ").append(lk.id).append("  ");
+                sb.append('[').append(lk.typeName).append("]  ->  ")
+                  .append(lk.res.isEmpty() ? "<self>" : lk.res)
+                  .append(lk.ver >= 0 && !lk.res.isEmpty() ? " @ v" + lk.ver : "").append('\n');
                 if(lk.spec != null)
-                    sb.append("      spec: ").append(lk.spec).append('\n');
+                    sb.append("      ").append(lk.spec).append('\n');
+                if(!lk.info.isEmpty())
+                    sb.append("      info: ").append(lk.info).append('\n');
+                for(RLinkInfo.Ref r : lk.refs)
+                    if(!r.name.equals(lk.res))
+                        sb.append("      also -> ").append(r.name).append(" @ v").append(r.ver).append('\n');
             }
             if(!ri.recognized)
-                sb.append("\n(\u2026remaining entries use an unrecognized form and were skipped)\n");
+                sb.append("\n(this rlink layer uses an unrecognized form)\n");
             return sb.toString();
         }
         if(l.name.equals("src")) {
