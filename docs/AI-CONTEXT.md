@@ -124,8 +124,11 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   new-style tto block via `TtoSkip`) — no magic-byte scanning, so a stray "BM"/JPEG
   byte pair in a header can't be mistaken for the image and corrupt a replace/export.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
-  `ModelGeometry` (assemble a triangle soup — positions+normals, Haven Z-up — from
-  `vbuf2`+`mesh` for the in-app 3D viewer; reuses the same decoders as the glTF export),
+  `ModelGeometry` (assemble a triangle soup — positions+normals+**UVs**, Haven Z-up,
+  with a per-triangle texture slot — from `vbuf2`+`mesh` for the in-app 3D viewer;
+  reuses the same decoders as the glTF export), `LocalTextures` (resolve the
+  `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; external
+  `mlink`/variable-material textures are left unresolved),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
@@ -154,8 +157,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),
   `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle
-  rasteriser into a `BufferedImage`, two-sided Lambert head-light shading + optional
-  wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`).
+  rasteriser into a `BufferedImage`, two-sided Lambert head-light shading,
+  **perspective-correct texture mapping** (local textures, alpha-mask cutout) + optional
+  wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`
+  + `model/LocalTextures`).
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT; the Ogg player joins the previous play thread before restarting
@@ -340,16 +345,23 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   be removed server-side, so they're set apart). Unit-tested (`CacheIndexTest`). (Idea
   prompted by the read-only Rust tool `ancientchina/hafen-res`; implemented clean-room
   from the client format.)
-- **In-app 3D viewer is now done** (`model/ModelGeometry` + `gui/Model3DView`, GUI
-  **View 3D** toolbar button): a dependency-free **software renderer** (hand-written
-  z-buffered triangle rasteriser into a `BufferedImage`, two-sided Lambert head-light
-  shading, optional wireframe overlay, mouse orbit/zoom/pan) showing the model in its
-  bind/rest pose — no native libs/OpenGL/JavaFX, matching the project's pure-Java ethos.
-  `ModelGeometry` assembles a triangle soup from `vbuf2`+`mesh` (reusing the glTF-export
-  decoders), unit-tested (`ModelGeometryTest`); confirmed visually on male (humanoid)
-  and knarr (21-part ship, 12838 verts/16952 tris). **Tier 1** (untextured shaded +
-  wireframe). Possible next tiers: **textured** (perspective-correct UVs sampling the
-  `tex` image; materials already resolved by the glTF path) and **animation playback**
+- **In-app 3D viewer is now done** (`model/ModelGeometry` + `model/LocalTextures` +
+  `gui/Model3DView`, GUI **View 3D** toolbar button): a dependency-free **software
+  renderer** (hand-written z-buffered triangle rasteriser into a `BufferedImage`,
+  two-sided Lambert head-light shading, **perspective-correct texturing** with
+  alpha-mask cutout, optional wireframe overlay, mouse orbit/zoom/pan) showing the
+  model in its bind/rest pose — no native libs/OpenGL/JavaFX, matching the project's
+  pure-Java ethos. `ModelGeometry` assembles a triangle soup (positions/normals/UVs +
+  a per-triangle texture slot) from `vbuf2`+`mesh` (reusing the glTF-export decoders);
+  `LocalTextures` resolves the `matid→mat2→local tex` chain (mirroring the export).
+  Unit-tested (`ModelGeometryTest`, `LocalTexturesTest`); confirmed visually on male
+  (textured humanoid), mulberry (alpha-tested foliage) and knarr (21-part ship, local
+  parts textured, the rest shaded). **Tier 1** (shaded + wireframe) and **Tier 2 part 1**
+  (local textures) are done. **Tier 2 part 2 (TODO): variable materials** — knarr and
+  many models get their textures from a *variable material* (`varmat`) declared in
+  `code`/`codeentry`, not a local `tex`; those parts currently fall back to flat shading.
+  Resolving varmat (decode the varmat spec / external `mlink` textures, possibly fetching
+  the referenced resource) would texture them. **Tier 3 (later): animation playback**
   (skeletal/morph).
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +

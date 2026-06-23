@@ -8,6 +8,7 @@ import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.io.ByteArrayInputStream;
 
 /**
  * A tiny dependency-free software 3D renderer (Java2D + a hand-written z-buffered
@@ -29,6 +30,12 @@ final class Model3DView extends JPanel {
 
     private boolean shaded = true;
     private boolean wireframe = false;
+    private boolean textured;
+
+    // Decoded textures (ARGB pixel arrays), one per ModelGeometry texture slot.
+    private final int[][] texPix;
+    private final int[] texW;
+    private final int[] texH;
 
     private BufferedImage img;
     private int[] pix;
@@ -37,12 +44,32 @@ final class Model3DView extends JPanel {
     private int lastX, lastY;
 
     private static final Color BG = new Color(43, 43, 43);
-    private static final int[] BASE_RGB = {200, 206, 214};   // diffuse model colour
+    private static final int[] BASE_RGB = {200, 206, 214};   // diffuse model colour (untextured)
     private static final Color WIRE = new Color(0, 0, 0, 90);
 
     Model3DView(ModelGeometry geo) {
         this.geo = geo;
         this.dist = geo.radius * 3.0;
+        // Decode any local textures once (raw PNG/JPEG bytes -> ARGB pixels).
+        int n = geo.textures.size();
+        texPix = new int[n][];
+        texW = new int[n];
+        texH = new int[n];
+        for(int i = 0; i < n; i++) {
+            byte[] bytes = geo.textures.get(i);
+            if(bytes == null)
+                continue;
+            try {
+                BufferedImage bi = javax.imageio.ImageIO.read(new ByteArrayInputStream(bytes));
+                if(bi != null) {
+                    texW[i] = bi.getWidth();
+                    texH[i] = bi.getHeight();
+                    texPix[i] = bi.getRGB(0, 0, texW[i], texH[i], null, 0, texW[i]);
+                }
+            } catch(Exception ignored) {
+            }
+        }
+        textured = geo.hasTextures();
         setPreferredSize(new Dimension(640, 520));
         setBackground(BG);
 
@@ -81,6 +108,8 @@ final class Model3DView extends JPanel {
 
     void setShaded(boolean b) { shaded = b; repaint(); }
     void setWireframe(boolean b) { wireframe = b; repaint(); }
+    void setTextured(boolean b) { textured = b; repaint(); }
+    boolean hasTextures() { return geo.hasTextures(); }
 
     void resetView() {
         yaw = Math.toRadians(35);
@@ -137,10 +166,16 @@ final class Model3DView extends JPanel {
 
         float[] p = geo.positions;
         float[] nrm = geo.normals;
+        float[] guv = geo.uv;
+        int[] triTex = geo.triTex;
         double[] sx = new double[3], syc = new double[3], sz = new double[3];
         double[] inten = new double[3];
+        double[] tu = new double[3], tv = new double[3];
 
         for(int t = 0; t < p.length; t += 9) {
+            int ti = t / 9;
+            int slot = (textured && ti < triTex.length) ? triTex[ti] : -1;
+            boolean useTex = slot >= 0 && slot < texPix.length && texPix[slot] != null;
             boolean ok = true;
             for(int k = 0; k < 3; k++) {
                 int b = t + k * 3;
@@ -155,24 +190,25 @@ final class Model3DView extends JPanel {
                 if(shaded) {
                     double d = nrm[b] * L[0] + nrm[b + 1] * L[1] + nrm[b + 2] * L[2];
                     inten[k] = 0.28 + 0.72 * Math.abs(d);                 // two-sided
+                    if(useTex) {
+                        tu[k] = guv[ti * 6 + k * 2];
+                        tv[k] = guv[ti * 6 + k * 2 + 1];
+                    }
                 }
             }
             if(!ok)
                 continue;
             if(shaded)
-                fillTriangle(w, h, sx, syc, sz, inten);
+                fillTriangle(w, h, sx, syc, sz, inten, useTex ? slot : -1, tu, tv);
             if(wireframe)
                 drawTriEdges(w, h, sx, syc);
         }
-
-        if(wireframe && !shaded) {
-            // wireframe already drawn above
-        }
-        // Overlay wireframe colour blending is done per-line in drawTriEdges.
     }
 
-    /* ---- z-buffered barycentric triangle fill with Gouraud intensity ---- */
-    private void fillTriangle(int w, int h, double[] x, double[] y, double[] z, double[] in) {
+    /* ---- z-buffered barycentric fill: textured (perspective-correct) or flat,
+     *      both modulated by the Gouraud-interpolated light intensity ---- */
+    private void fillTriangle(int w, int h, double[] x, double[] y, double[] z, double[] in,
+                              int slot, double[] u, double[] v) {
         double x0 = x[0], y0 = y[0], x1 = x[1], y1 = y[1], x2 = x[2], y2 = y[2];
         double area = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
         if(Math.abs(area) < 1e-7)
@@ -182,6 +218,18 @@ final class Model3DView extends JPanel {
         int minY = (int) Math.max(0, Math.floor(Math.min(y0, Math.min(y1, y2))));
         int maxY = (int) Math.min(h - 1, Math.ceil(Math.max(y0, Math.max(y1, y2))));
         double inv = 1.0 / area;
+
+        boolean tex = slot >= 0;
+        int[] tp = tex ? texPix[slot] : null;
+        int tw = tex ? texW[slot] : 0, th = tex ? texH[slot] : 0;
+        // Perspective-correct attribute setup: interpolate u/z, v/z and 1/z linearly.
+        double iz0 = 1 / z[0], iz1 = 1 / z[1], iz2 = 1 / z[2];
+        double uoz0 = 0, uoz1 = 0, uoz2 = 0, voz0 = 0, voz1 = 0, voz2 = 0;
+        if(tex) {
+            uoz0 = u[0] * iz0; uoz1 = u[1] * iz1; uoz2 = u[2] * iz2;
+            voz0 = v[0] * iz0; voz1 = v[1] * iz1; voz2 = v[2] * iz2;
+        }
+
         for(int py = minY; py <= maxY; py++) {
             for(int px = minX; px <= maxX; px++) {
                 double cx = px + 0.5, cy = py + 0.5;
@@ -194,12 +242,32 @@ final class Model3DView extends JPanel {
                 int zi = py * w + px;
                 if(depth >= zbuf[zi])
                     continue;
-                zbuf[zi] = depth;
                 double it = l0 * in[0] + l1 * in[1] + l2 * in[2];
-                int r = clamp((int) (BASE_RGB[0] * it));
-                int gg = clamp((int) (BASE_RGB[1] * it));
-                int bb = clamp((int) (BASE_RGB[2] * it));
-                pix[zi] = (r << 16) | (gg << 8) | bb;
+                int br, bg, bb;
+                if(tex) {
+                    double izp = l0 * iz0 + l1 * iz1 + l2 * iz2;
+                    double uu = (l0 * uoz0 + l1 * uoz1 + l2 * uoz2) / izp;
+                    double vv = (l0 * voz0 + l1 * voz1 + l2 * voz2) / izp;
+                    uu -= Math.floor(uu);                 // wrap
+                    vv -= Math.floor(vv);
+                    int sxp = (int) (uu * tw); if(sxp >= tw) sxp = tw - 1;
+                    int syp = (int) (vv * th); if(syp >= th) syp = th - 1;
+                    int argb = tp[syp * tw + sxp];
+                    if(((argb >>> 24) & 0xff) < 128)      // alpha-mask cutout
+                        continue;
+                    br = (argb >> 16) & 0xff;
+                    bg = (argb >> 8) & 0xff;
+                    bb = argb & 0xff;
+                } else {
+                    br = BASE_RGB[0];
+                    bg = BASE_RGB[1];
+                    bb = BASE_RGB[2];
+                }
+                zbuf[zi] = depth;
+                int r = clamp((int) (br * it));
+                int g = clamp((int) (bg * it));
+                int b = clamp((int) (bb * it));
+                pix[zi] = (r << 16) | (g << 8) | b;
             }
         }
     }
