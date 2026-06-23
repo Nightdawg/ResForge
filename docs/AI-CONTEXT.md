@@ -306,8 +306,11 @@ References… (aggregated reference report dialog), **resource-version spinner**
   dialog remembers successful resource paths (persisted via `Preferences`, same as the
   base URL) and lists them below the input as substring-matched, click-to-use
   suggestions (double-click fetches); most-recent-first, case-insensitively deduped,
-  capped at 50. Pure-logic helper is unit-tested (`FetchHistoryTest`). Remaining GUI
-  nicety: batch re-skin a folder. (No layer search/filter — explicitly declined.)
+  capped at 50. Pure-logic helper is unit-tested (`FetchHistoryTest`).
+- GUI niceties are considered complete. **Batch re-skin a folder** is declined
+  (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
+  `replace`, and a true batch needs a per-file mapping few users would set up), as
+  is **layer search/filter**.
 
 ## 11. The other tool (context)
 CarryGun's **HafenResourceTool** (GitLab, Qt/C++): broader typed coverage +
