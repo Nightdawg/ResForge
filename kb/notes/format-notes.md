@@ -379,3 +379,24 @@ codeentry; tags 1/2/3 seen, each parses to the exact end).
 The game client (and our `fetch`) downloads `<base>/<path>.res`. Base default is
 `http://game.havenandhearth.com/res/` (the official server). Example path:
 `gfx/borka/male` -> `http://game.havenandhearth.com/res/gfx/borka/male.res`.
+
+## Local resource cache (HashDirCache)
+The client caches downloaded resources under `<localdir>/data`, where `localdir`
+is `%APPDATA%\Haven and Hearth` on Windows and `~/.haven` elsewhere (from the
+client's `Config.localdir()`). Each cache file is named `%016x.%d` — a name-hash
+(`h = h*31 + ch` over the cache-id URI then the name) plus a collision-chain index
+(`.0`, `.1`, …). Every file starts with a small header written by
+`HashDirCache.writehead`: `writeByte(1)` (version), `writeUTF(cid)` (the cache
+identity = the base URL), `writeUTF(name)` (the resource name), then the raw `.res`
+bytes. `writeUTF` is Java modified-UTF-8 with a 16-bit big-endian length, so the
+header decodes with `DataInputStream.readUTF` (the exact routine the client's
+`readhead` uses). **Resource** entries have a `name` starting with `res/` (e.g.
+`res/gfx/borka/male`, cid `…/render/`); the rest of the cache is map grids
+(`map/…`, cid `…/java/`) and other non-resource data. Stripping the `res/` prefix
+yields exactly the path our `fetch` expects. `net/CacheIndex` reads this (filename
+filter = 16 hex + `.` + digits; parallel scan; sorted/deduped) to list what the
+player already has — empirically ~82% map grids, ~18% resources (~8k distinct on a
+real ~44k-file cache). We use the cache for **names only** and always re-fetch from
+the server (latest version); we never open the cached bytes. (Decoded clean-room
+from the client's `HashDirCache.java`; the format was independently confirmed by the
+read-only Rust tool `ancientchina/hafen-res`, from which no code was taken.)

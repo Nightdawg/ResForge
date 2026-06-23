@@ -340,6 +340,7 @@ public class ResForgeFrame extends JFrame {
         JMenu fileMenu = new JMenu("File");
         fileMenu.add(item("Open", KeyEvent.VK_L, this::doOpen));
         fileMenu.add(item("Fetch from server", KeyEvent.VK_R, this::doFetch));
+        fileMenu.add(menuItem("Open from game cache", this::doOpenFromCache));
         fileMenu.add(item("Save As", KeyEvent.VK_S, this::doSaveAs));
         fileMenu.addSeparator();
         fileMenu.add(menuItem("Exit", () -> { if(confirmDiscard()) dispose(); }));
@@ -384,6 +385,7 @@ public class ResForgeFrame extends JFrame {
         tb.setFloatable(false);
         tb.add(new JButton(action("Open", this::doOpen)));
         tb.add(new JButton(action("Fetch", this::doFetch)));
+        tb.add(new JButton(action("Cache", this::doOpenFromCache)));
         tb.add(new JButton(action("Save As", this::doSaveAs)));
         tb.addSeparator();
         tb.add(new JButton(action("Export glTF", this::doExportGltf)));
@@ -589,15 +591,24 @@ public class ResForgeFrame extends JFrame {
             error("Please enter a resource path.");
             return;
         }
-        prefs.put("resBaseUrl", useBase);
+        fetchFromServer(path, useBase);
+    }
 
-        String url = resforge.net.ResourceFetcher.urlFor(useBase, path);
+    /** Fetch a resource fresh from the server on a background thread and open it,
+     *  recording the path in the fetch history on success. Shared by the Fetch
+     *  dialog and "Open from cache" (which only supplies names — the bytes always
+     *  come from the server, so you get the latest version). */
+    private void fetchFromServer(String path, String base) {
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+        prefs.put("resBaseUrl", base);
+        List<String> history = FetchHistory.parse(prefs.get("fetchHistory", ""));
+        String url = resforge.net.ResourceFetcher.urlFor(base, path);
         setStatus("Fetching " + url + " \u2026");
         Thread t = new Thread(() -> {
             byte[] data = null;
             String err = null;
             try {
-                data = resforge.net.ResourceFetcher.fetch(useBase, path);
+                data = resforge.net.ResourceFetcher.fetch(base, path);
             } catch(Exception ex) {
                 err = ex.getMessage();
             }
@@ -616,6 +627,134 @@ public class ResForgeFrame extends JFrame {
         }, "res-fetch");
         t.setDaemon(true);
         t.start();
+    }
+
+    /** Scan the local Haven cache for the resources the player already has, then
+     *  let them pick one to fetch fresh from the server. We use the cache only to
+     *  recover the resource <em>names</em>; the bytes always come from the server. */
+    private void doOpenFromCache() {
+        if(!confirmDiscard())
+            return;
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+        String stored = prefs.get("cacheDir", null);
+        Path cacheDir = (stored != null) ? Path.of(stored)
+                : resforge.net.CacheIndex.defaultCacheDir().orElse(null);
+        if(cacheDir == null || !Files.isDirectory(cacheDir)) {
+            JFileChooser fc = new JFileChooser();
+            fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            fc.setDialogTitle("Locate the Haven cache folder (\u2026/Haven and Hearth/data)");
+            if(cacheDir != null)
+                fc.setCurrentDirectory(cacheDir.toFile());
+            if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+                return;
+            cacheDir = fc.getSelectedFile().toPath();
+        }
+        final Path dir = cacheDir;
+        prefs.put("cacheDir", dir.toString());
+        setStatus("Scanning game cache " + dir + " \u2026");
+        Thread t = new Thread(() -> {
+            List<String> found = null;
+            String err = null;
+            try {
+                found = resforge.net.CacheIndex.scan(dir);
+            } catch(Exception ex) {
+                err = ex.getMessage();
+            }
+            final List<String> names = found;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                if(names == null) {
+                    error("Could not scan the cache:\n" + error);
+                    setStatus("Cache scan failed");
+                    return;
+                }
+                setStatus(names.size() + " resource(s) found in cache");
+                if(names.isEmpty()) {
+                    info("No resources found in:\n" + dir);
+                    return;
+                }
+                showCachePicker(names);
+            });
+        }, "cache-scan");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Modal picker over the cache's resource names (substring-filtered); the
+     *  chosen path is fetched fresh from the server via {@link #fetchFromServer}. */
+    private void showCachePicker(List<String> names) {
+        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+        String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
+
+        JTextField filterFld = new JTextField(30);
+        JTextField baseFld = new JTextField(base, 30);
+        javax.swing.DefaultListModel<String> listModel = new javax.swing.DefaultListModel<>();
+        for(String n : names)
+            listModel.addElement(n);
+        javax.swing.JList<String> list = new javax.swing.JList<>(listModel);
+        list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        list.setVisibleRowCount(16);
+        list.setSelectedIndex(0);
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setBorder(BorderFactory.createTitledBorder(
+                names.size() + " resources in your game cache (fetched fresh from the server)"));
+
+        Runnable refilter = () -> {
+            listModel.clear();
+            for(String n : FetchHistory.filter(names, filterFld.getText()))
+                listModel.addElement(n);
+            if(!listModel.isEmpty())
+                list.setSelectedIndex(0);
+        };
+        filterFld.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
+        });
+        list.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent ev) {
+                if(ev.getClickCount() < 2)
+                    return;
+                int idx = list.locationToIndex(ev.getPoint());
+                if(idx < 0 || idx >= listModel.size()
+                        || !list.getCellBounds(idx, idx).contains(ev.getPoint()))
+                    return;
+                list.setSelectedIndex(idx);
+                JOptionPane pane = (JOptionPane)
+                        SwingUtilities.getAncestorOfClass(JOptionPane.class, list);
+                if(pane != null)
+                    pane.setValue(JOptionPane.OK_OPTION);
+            }
+        });
+
+        JPanel form = new JPanel(new java.awt.GridBagLayout());
+        java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
+        gc.gridx = 0;
+        gc.weightx = 1;
+        gc.anchor = java.awt.GridBagConstraints.WEST;
+        gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        gc.insets = new java.awt.Insets(0, 0, 4, 0);
+        form.add(new JLabel("Filter (type any part of a path, e.g. borka):"), gc);
+        form.add(filterFld, gc);
+        gc.weighty = 1;
+        gc.fill = java.awt.GridBagConstraints.BOTH;
+        form.add(scroll, gc);
+        gc.weighty = 0;
+        gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+        form.add(new JLabel("Server base URL:"), gc);
+        form.add(baseFld, gc);
+
+        int ok = JOptionPane.showConfirmDialog(this, form, "Open from game cache",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if(ok != JOptionPane.OK_OPTION)
+            return;
+        String path = list.getSelectedValue();
+        String useBase = baseFld.getText().strip();
+        if(path == null || path.isBlank()) {
+            error("Please select a resource.");
+            return;
+        }
+        fetchFromServer(path, useBase);
     }
 
     private void doOpen() {
