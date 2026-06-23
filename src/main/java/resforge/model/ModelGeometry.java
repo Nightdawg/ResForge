@@ -29,6 +29,8 @@ public final class ModelGeometry {
     public final int[] triTex;
     /** Raw encoded image bytes (PNG/JPEG) for each distinct texture used, in slot order. */
     public final java.util.List<byte[]> textures;
+    /** Raw alpha-mask bytes per texture slot (aligned with {@link #textures}); null where none. */
+    public final java.util.List<byte[]> maskTextures;
     public final int triangleCount;
     public final int vertexCount;       // distinct source vertices that fed the soup
     public final int submeshCount;
@@ -39,13 +41,14 @@ public final class ModelGeometry {
     public final float radius;
 
     private ModelGeometry(float[] positions, float[] normals, float[] uv, int[] triTex,
-                          java.util.List<byte[]> textures, int triangleCount,
-                          int vertexCount, int submeshCount) {
+                          java.util.List<byte[]> textures, java.util.List<byte[]> maskTextures,
+                          int triangleCount, int vertexCount, int submeshCount) {
         this.positions = positions;
         this.normals = normals;
         this.uv = uv;
         this.triTex = triTex;
         this.textures = textures;
+        this.maskTextures = maskTextures;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.submeshCount = submeshCount;
@@ -101,6 +104,7 @@ public final class ModelGeometry {
 
         LocalTextures lt = LocalTextures.from(res);
         java.util.List<byte[]> textures = new java.util.ArrayList<>();
+        java.util.List<byte[]> maskTextures = new java.util.ArrayList<>();
         Map<Integer, Integer> ordToSlot = new java.util.HashMap<>();
 
         float[] pos = new float[tris * 9];
@@ -124,6 +128,7 @@ public final class ModelGeometry {
                 Integer s = ordToSlot.get(ord);
                 if(s == null) {
                     textures.add(lt.images.get(ord));
+                    maskTextures.add(lt.masks.get(ord));
                     s = textures.size() - 1;
                     ordToSlot.put(ord, s);
                 }
@@ -172,7 +177,7 @@ public final class ModelGeometry {
         int verts = 0;          // distinct source vertices (vbufs are shared across submeshes)
         for(int id : usedVbufs)
             verts += vbufs.get(id).num;
-        return new ModelGeometry(pos, nrm, uv, triTex, textures, tri, verts, meshes.size());
+        return new ModelGeometry(pos, nrm, uv, triTex, textures, maskTextures, tri, verts, meshes.size());
     }
 
     private static float[] faceNormal(float[] vp, int a, int b, int c) {

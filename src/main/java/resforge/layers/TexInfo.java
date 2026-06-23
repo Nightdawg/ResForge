@@ -38,6 +38,12 @@ public class TexInfo {
     public int imageLen = -1;      // color image byte length
     public String imageFormat;     // "png", "jpg", ... or null
 
+    public boolean maskFound;          // inline alpha-mask image located (tag 4)
+    public int maskLenFieldPos = -1;   // index of the mask's int32 length field
+    public int maskOffset = -1;        // index where the mask image bytes begin
+    public int maskLen = -1;           // mask image byte length
+    public String maskFormat;          // "png", ... or null
+
     public static TexInfo parse(byte[] data) {
         TexInfo t = new TexInfo();
         try {
@@ -49,6 +55,10 @@ public class TexInfo {
             t.szY = in.uint16();
             t.recognized = true;
 
+            // Scan the whole part stream so both the color image (tag 0) and the
+            // optional alpha mask (tag 4) are located. Once the color image is found
+            // any later parsing trouble simply stops the scan with the color result
+            // intact (the mask is optional), so this never weakens the color split.
             while(!in.eom()) {
                 int tag = in.uint8();
                 int fl = (tag & 0xc0) >> 6;
@@ -59,14 +69,22 @@ public class TexInfo {
                         int len = in.int32();
                         int imgStart = in.position();
                         if(len < 0 || (long) imgStart + len > data.length)
-                            return fail(t);
-                        if(pt == 0) {
+                            return t.found ? t : fail(t);
+                        String fmt = ImageMagic.formatAt(data, imgStart);
+                        if(pt == 0 && t.imageOffset < 0) {
                             t.lenFieldPos = lenPos;
                             t.imageOffset = imgStart;
                             t.imageLen = len;
-                            t.imageFormat = ImageMagic.formatAt(data, imgStart);
-                            t.found = (t.imageFormat != null);
-                            return t;
+                            t.imageFormat = fmt;
+                            t.found = (fmt != null);
+                            if(!t.found)
+                                return t;        // color isn't a real image -> raw passthrough
+                        } else if(pt == 4 && !t.maskFound) {
+                            t.maskLenFieldPos = lenPos;
+                            t.maskOffset = imgStart;
+                            t.maskLen = len;
+                            t.maskFormat = fmt;
+                            t.maskFound = (fmt != null);
                         }
                         in.skip(len);
                     } else if(pt == 1 || pt == 2 || pt == 3) {
@@ -74,7 +92,7 @@ public class TexInfo {
                     } else if(pt == 5) {
                         /* no payload */
                     } else {
-                        return fail(t);
+                        return t.found ? t : fail(t);
                     }
                 } else if(fl == 1) {
                     in.skip(in.uint8());
@@ -82,14 +100,14 @@ public class TexInfo {
                     in.skip(1);
                     int n = in.int32();
                     if(n < 0 || (long) in.position() + n > data.length)
-                        return fail(t);
+                        return t.found ? t : fail(t);
                     in.skip(n);
                 } else {
-                    return fail(t);
+                    return t.found ? t : fail(t);
                 }
             }
         } catch(RuntimeException e) {
-            return fail(t);
+            return t.found ? t : fail(t);
         }
         return t;
     }
