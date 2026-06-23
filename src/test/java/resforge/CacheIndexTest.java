@@ -88,6 +88,20 @@ class CacheIndexTest {
     }
 
     @Test
+    void scanSortsDynamicResourcesLast(@TempDir Path dir) throws IOException {
+        Files.write(dir.resolve("0000000000000000.0"), header(RENDER, "res/dyn/aaa"));
+        Files.write(dir.resolve("0000000000000001.0"), header(RENDER, "res/gfx/borka/male"));
+        Files.write(dir.resolve("0000000000000002.0"), header(RENDER, "res/dyn/bbb"));
+        Files.write(dir.resolve("0000000000000003.0"), header(RENDER, "res/paginae/x"));
+
+        // Stable resources first (alphabetical), then the dyn/ ones (alphabetical).
+        assertEquals(List.of("gfx/borka/male", "paginae/x", "dyn/aaa", "dyn/bbb"),
+                CacheIndex.scan(dir));
+        assertTrue(CacheIndex.isDynamic("dyn/aaa"));
+        assertFalse(CacheIndex.isDynamic("gfx/borka/male"));
+    }
+
+    @Test
     void scanOfMissingDirIsEmpty(@TempDir Path dir) throws IOException {
         assertTrue(CacheIndex.scan(dir.resolve("does-not-exist")).isEmpty());
     }

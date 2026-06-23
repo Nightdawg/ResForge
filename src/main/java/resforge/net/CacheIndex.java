@@ -49,6 +49,22 @@ public final class CacheIndex {
     /** Resource names in the cache are prefixed with this; stripped to get the path. */
     public static final String RES_PREFIX = "res/";
 
+    /** Prefix of dynamic, account-attached resources (server-generated; they may be
+     *  removed server-side and aren't reliably re-fetchable). Sorted last. */
+    public static final String DYN_PREFIX = "dyn/";
+
+    /** True if {@code path} is a dynamic, account-attached resource (under {@code dyn/}). */
+    public static boolean isDynamic(String path) {
+        return path != null && path.startsWith(DYN_PREFIX);
+    }
+
+    /** Ordering for listed resources: stable resources first (alphabetical), then
+     *  the dynamic {@code dyn/} ones (alphabetical), so the volatile entries sink
+     *  to the bottom of any list. */
+    public static final java.util.Comparator<String> ORDER =
+            java.util.Comparator.comparing(CacheIndex::isDynamic)
+                    .thenComparing(java.util.Comparator.naturalOrder());
+
     /** A decoded cache-file header: the cache identity and the resource name. */
     public static final class Header {
         public final String cid;
@@ -149,7 +165,7 @@ public final class CacheIndex {
                 .map(CacheIndex::resourcePathOf)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .collect(Collectors.toCollection(TreeSet::new));
+                .collect(Collectors.toCollection(() -> new TreeSet<>(ORDER)));
         return new ArrayList<>(paths);
     }
 
