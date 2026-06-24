@@ -57,6 +57,28 @@ luminance `< 128` ⇒ transparent), which is why foliage renders as proper leaf 
 rather than black cards. Real example: every mulberry tex is `tag0 JPEG color +
 tag1 filter(4) + tag4 PNG mask`.
 
+## tileset2 / tile / flavobj layers (terrain)
+The terrain tileset system (from `haven.Tileset`), three related layers:
+- **`tileset2`** — a sequence of parts to EOM, each a `uint8` tag: **0** = `string`
+  tiler name (e.g. `gnd`, `trn-r`, `cave`, `water`) + a `tto` arg list (the tiler's
+  parameters, e.g. base/var weights); **1** = `uint16` flavour count, `uint16` flavprob,
+  then per flavour `[string res, uint16 ver, uint8 weight]` (scattered decoration
+  resources); **2** = `int8 n` + `n` × `string` tag. `TilesetInfo` surfaces the tiler
+  name, tags and flavour refs (read-only). In the ~8.8k corpus all 199 reach EOM; tiler
+  names seen: `trn`/`trn-r`/`cave`/`water`. (Flavours mostly live in separate `flavobj`
+  layers rather than part 1.)
+- **`tile`** — a single terrain tile: `uint8 t` (kind: `'g'` ground / `'b'` border-
+  transition / `'c'` centre-transition), `uint8 id` (1..15 transition id), `uint16 w`
+  (weight), then the tile **image** (PNG/JPEG) to EOM. `TileInfo` locates the image; the
+  image is **editable** (swap → terrain re-skin) via the `image`-style replace path (runs
+  to EOM, length implicit). 64×64 in the samples.
+- **`flavobj`** — `uint8 ver`(==1), `string res`, `uint16 ver`, then a `tto` arg list
+  (the flavour factory args, e.g. spawn probability). References one resource (a sprite or
+  ambient sound). `FlavObjInfo` surfaces it; 439 in the corpus, all reach EOM.
+These three feed the aggregated `refs` report (`flavobj` + `tileset2` flavours), which had
+been missing the 439 flavour references. The `tto` arg lists are stepped over with the
+shared `TtoSkip` (full tag set), so we never need to interpret them to stay aligned.
+
 ## audio2 layer
 `uint8 ver` (1..3), `string id`, `uint16 vol` (ver 2, bvol = vol*0.001), optional
 tto metadata (ver 3), then an Ogg Vorbis stream to the end. We split into header

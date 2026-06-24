@@ -74,6 +74,17 @@ public class Unpacker {
                 return new Manifest.Entry(layer.name,
                         new ArrayList<>(Arrays.asList(prePart, imgPart, postPart)), "tex");
             }
+        } else if(layer.name.equals("tile")) {
+            resforge.layers.TileInfo ti = resforge.layers.TileInfo.parse(layer.data);
+            if(ti.found) {
+                byte[] header = Arrays.copyOfRange(layer.data, 0, ti.imageOffset);
+                byte[] image = Arrays.copyOfRange(layer.data, ti.imageOffset, layer.data.length);
+                String hdrPart = LAYERS_SUBDIR + "/" + base + ".tilehdr";
+                String imgPart = LAYERS_SUBDIR + "/" + base + "." + ti.imageFormat;
+                Files.write(outDir.resolve(hdrPart), header);
+                Files.write(outDir.resolve(imgPart), image);
+                return new Manifest.Entry(layer.name, new ArrayList<>(Arrays.asList(hdrPart, imgPart)));
+            }
         } else if(layer.name.equals("audio2")) {
             AudioInfo ai = AudioInfo.parse(layer.data);
             if(ai.audioOffset > 0 && ai.format != null && ai.audioOffset <= layer.data.length) {

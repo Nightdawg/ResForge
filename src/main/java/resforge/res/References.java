@@ -2,8 +2,10 @@ package resforge.res;
 
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.DepsInfo;
+import resforge.layers.FlavObjInfo;
 import resforge.layers.Mat2Codec;
 import resforge.layers.RLinkInfo;
+import resforge.layers.TilesetInfo;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -19,6 +21,8 @@ import java.util.Map;
  * <ul>
  *   <li>{@code deps} — the explicit dependency list ({@code name @ ver});</li>
  *   <li>{@code rlink} — link targets and any {@code res()} nested in their specs;</li>
+ *   <li>{@code tileset2} — flavor objects scattered on the terrain (resource refs);</li>
+ *   <li>{@code flavobj} — the sprite/sound resource a terrain flavor object spawns;</li>
  *   <li>{@code codeentry} — classpath dependencies of server-authored code;</li>
  *   <li>{@code mat2} — external material/texture links: string command values that
  *       look like resource paths (contain {@code '/'}), e.g. {@code mlink} and
@@ -51,7 +55,7 @@ public final class References {
     }
 
     /** Display/scan order of the sources. */
-    private static final String[] SOURCE_ORDER = {"deps", "rlink", "codeentry", "mat2"};
+    private static final String[] SOURCE_ORDER = {"deps", "rlink", "tileset2", "flavobj", "codeentry", "mat2"};
 
     private final List<Ref> refs = new ArrayList<>();
 
@@ -65,6 +69,8 @@ public final class References {
             switch(l.name) {
                 case "deps":      r.fromDeps(l);      break;
                 case "rlink":     r.fromRlink(l);     break;
+                case "tileset2":  r.fromTileset(l);   break;
+                case "flavobj":   r.fromFlavobj(l);   break;
                 case "codeentry": r.fromCodeEntry(l); break;
                 case "mat2":      r.fromMat2(l);      break;
                 default: /* not a reference-bearing layer */
@@ -84,6 +90,18 @@ public final class References {
         RLinkInfo ri = RLinkInfo.parse(l.data);
         for(RLinkInfo.Ref rr : ri.references())
             refs.add(new Ref(rr.name, rr.ver, "rlink", null));
+    }
+
+    private void fromTileset(Layer l) {
+        TilesetInfo ti = TilesetInfo.parse(l.data);
+        for(RLinkInfo.Ref rr : ti.references())
+            refs.add(new Ref(rr.name, rr.ver, "tileset2", "flavor"));
+    }
+
+    private void fromFlavobj(Layer l) {
+        FlavObjInfo fo = FlavObjInfo.parse(l.data);
+        for(RLinkInfo.Ref rr : fo.references())
+            refs.add(new Ref(rr.name, rr.ver, "flavobj", null));
     }
 
     private void fromCodeEntry(Layer l) {

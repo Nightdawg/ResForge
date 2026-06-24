@@ -1103,6 +1103,7 @@ public class ResForgeFrame extends JFrame {
         switch(GuiSupport.kind(l.name)) {
             case "icon":
             case "texture":
+            case "terrain tile":
                 buildImagePanel(content, idx, l);
                 break;
             case "text":
@@ -1134,6 +1135,8 @@ public class ResForgeFrame extends JFrame {
             case "dependencies":
             case "links":
             case "source":
+            case "tileset":
+            case "flavor":
                 buildReferencePanel(content, idx, l);
                 break;
             case "skeleton":
@@ -1665,7 +1668,8 @@ public class ResForgeFrame extends JFrame {
     private static FileNameExtensionFilter filterFor(String layerName) {
         switch(layerName) {
             case "image":
-            case "tex":    return new FileNameExtensionFilter("Images", "png", "jpg", "jpeg", "gif", "bmp");
+            case "tex":
+            case "tile":   return new FileNameExtensionFilter("Images", "png", "jpg", "jpeg", "gif", "bmp");
             case "audio2": return new FileNameExtensionFilter("Ogg Vorbis (*.ogg)", "ogg");
             case "font":   return new FileNameExtensionFilter("Fonts", "ttf", "otf");
             case "midi":   return new FileNameExtensionFilter("MIDI (*.mid)", "mid", "midi");
