@@ -12,6 +12,12 @@ import java.util.Map;
  * {@link Double} (reals), {@link Boolean}, and {@code null}.
  */
 public final class Json {
+    /** Hard cap on object/array nesting, so a pathologically deep document fails with
+     *  a clear parse error instead of a {@link StackOverflowError} that slips past the
+     *  codecs' {@code catch(RuntimeException)} guards. Real layers nest only a level or
+     *  two; this is far beyond anything legitimate. */
+    private static final int MAX_DEPTH = 256;
+
     private Json() {
     }
 
@@ -119,6 +125,7 @@ public final class Json {
     private static final class Parser {
         private final String s;
         private int i;
+        private int depth;
 
         Parser(String s) {
             this.s = s;
@@ -154,11 +161,14 @@ public final class Json {
         }
 
         Map<String, Object> object() {
+            if(++depth > MAX_DEPTH)
+                throw err("nesting too deep");
             Map<String, Object> m = new LinkedHashMap<>();
             expect('{');
             ws();
             if(peek() == '}') {
                 i++;
+                depth--;
                 return m;
             }
             while(true) {
@@ -179,15 +189,19 @@ public final class Json {
                 if(c != ',')
                     throw err("expected ',' or '}'");
             }
+            depth--;
             return m;
         }
 
         List<Object> array() {
+            if(++depth > MAX_DEPTH)
+                throw err("nesting too deep");
             List<Object> l = new ArrayList<>();
             expect('[');
             ws();
             if(peek() == ']') {
                 i++;
+                depth--;
                 return l;
             }
             while(true) {
@@ -200,6 +214,7 @@ public final class Json {
                 if(c != ',')
                     throw err("expected ',' or ']'");
             }
+            depth--;
             return l;
         }
 
