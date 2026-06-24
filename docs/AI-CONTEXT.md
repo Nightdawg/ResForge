@@ -158,7 +158,14 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `DataInputStream.readUTF`; `res/`-prefixed names are the fetchable resource paths —
   scanned in parallel, sorted/deduped — so the GUI/CLI can list what the player has and
   re-fetch it fresh. Implemented from the client format; no third-party code).
-- `gui/` — `ResForgeFrame`, `GuiSupport` (per-layer preview/text/export, reuses
+- `gui/` — `ResForgeFrame` (the window: layer table, toolbar/menus, undo/redo,
+  file/fetch/save orchestration + background threading), `LayerEditors` (builds the
+  right-hand per-layer detail/editor panel, one `build*Panel` per kind; calls back
+  through the small `EditorHost` interface so it owns no document/dialog/threading
+  state), `FetchDialog` / `CachePickerDialog` (the "Fetch from server" and "Open from
+  game cache" modal dialogs, extracted as self-contained pickers that return the chosen
+  path+base — the frame still does the actual fetch via `fetchFromServer`),
+  `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),
   `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle

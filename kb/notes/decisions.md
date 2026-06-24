@@ -140,3 +140,20 @@ can appear inside header metadata and would be picked as a false image start —
 harmless for lossless repack (it's a concat) but corrupting for a `replace`/export
 that slices `[0, offset)` as the header. If the parsed offset isn't exactly on a
 known image magic, the layer simply stays raw.
+
+## ResForgeFrame is an orchestrator; editors and dialogs are their own classes
+The Swing window (`gui/ResForgeFrame`) had grown to ~1.7k lines doing everything.
+The per-layer detail/editor panels were extracted into `gui/LayerEditors` (one
+`build*Panel` per layer kind) behind a small `gui/EditorHost` interface that exposes
+only the document/file/edit operations an editor needs — so the editors hold no
+undo/threading/dialog state. The two modal pickers became `gui/FetchDialog` and
+`gui/CachePickerDialog`: self-contained, they read the remembered base URL / fetch
+history from preferences and just **return** the chosen `{path, base}`, while the
+frame still performs the actual download via `fetchFromServer`. This is a pure
+transcription + delegation — behaviour is unchanged (GUI-smoke-confirmed) — done for
+maintainability/testability only: the frame dropped to ~1.1k lines, and the pickers/
+editors can now be reasoned about and unit-tested in isolation (as `FetchHistory`/
+`CacheIndex` already are). The split needs no build-file change — Maven and Ant glob
+`src/main/java`, so new source files are picked up automatically. Rule: keep the frame
+the orchestrator (document, undo, table, threading); push per-kind panel construction
+and self-contained dialogs out into their own classes.

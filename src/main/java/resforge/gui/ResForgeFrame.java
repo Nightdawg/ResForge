@@ -56,7 +56,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -86,6 +85,23 @@ public class ResForgeFrame extends JFrame {
     private javax.swing.Timer animTimer;
     private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
     private final JTextField pathField = new JTextField("(no file open)");
+
+    /** Builds the per-layer detail/editor panels; calls back through {@link EditorHost}. */
+    private final LayerEditors editors = new LayerEditors(new EditorHost() {
+        public ResContainer res() { return res; }
+        public void setLayerPayload(int idx, byte[] payload) { ResForgeFrame.this.setLayerPayload(idx, payload); }
+        public void applyBytes(int idx, byte[] bytes) { ResForgeFrame.this.applyBytes(idx, bytes); }
+        public void replaceFromFile(int idx, String layerName) { ResForgeFrame.this.replaceFromFile(idx, layerName); }
+        public void exportLayer(int idx) { ResForgeFrame.this.exportLayer(idx); }
+        public void replaceTexMask(int idx) { ResForgeFrame.this.replaceTexMask(idx); }
+        public void exportTexMask(int idx) { ResForgeFrame.this.exportTexMask(idx); }
+        public void setStatus(String s) { ResForgeFrame.this.setStatus(s); }
+        public void error(String msg) { ResForgeFrame.this.error(msg); }
+        public void setCurrentPlayer(AudioPlayerPanel p) { currentPlayer = p; }
+        public void setAnimTimer(javax.swing.Timer t) { animTimer = t; }
+        public void exportGltf() { doExportGltf(); }
+        public void rebuildGltf() { doRebuildGltf(); }
+    });
 
     private static final int UNDO_LIMIT = 100;
     private final Deque<Snapshot> undoStack = new ArrayDeque<>();
@@ -533,83 +549,14 @@ public class ResForgeFrame extends JFrame {
     private void doFetch() {
         if(!confirmDiscard())
             return;
-        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
-        String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
-        List<String> history = FetchHistory.parse(prefs.get("fetchHistory", ""));
-
-        JTextField pathFld = new JTextField(24);
-        JTextField baseFld = new JTextField(base, 24);
-
-        JPanel form = new JPanel(new java.awt.GridBagLayout());
-        java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
-        gc.gridx = 0;
-        gc.weightx = 1;
-        gc.anchor = java.awt.GridBagConstraints.WEST;
-        gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gc.insets = new java.awt.Insets(0, 0, 4, 0);
-        form.add(new JLabel("Resource path (e.g. gfx/borka/male):"), gc);
-        form.add(pathFld, gc);
-
-        // Offer previously-fetched paths as substring-matched, click-to-use suggestions.
-        if(!history.isEmpty()) {
-            javax.swing.DefaultListModel<String> histModel = new javax.swing.DefaultListModel<>();
-            for(String h : history)
-                histModel.addElement(h);
-            javax.swing.JList<String> histList = new javax.swing.JList<>(histModel);
-            histList.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-            histList.setVisibleRowCount(6);
-            JScrollPane histScroll = new JScrollPane(histList);
-            histScroll.setBorder(BorderFactory.createTitledBorder(
-                    "Recent fetches (click to use, double-click to fetch)"));
-
-            Runnable refilter = () -> {
-                histModel.clear();
-                for(String h : FetchHistory.filter(history, pathFld.getText()))
-                    histModel.addElement(h);
-            };
-            pathFld.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-                public void insertUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-                public void removeUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-                public void changedUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-            });
-            histList.addMouseListener(new java.awt.event.MouseAdapter() {
-                @Override public void mouseClicked(java.awt.event.MouseEvent ev) {
-                    int idx = histList.locationToIndex(ev.getPoint());
-                    if(idx < 0 || idx >= histModel.size()
-                            || !histList.getCellBounds(idx, idx).contains(ev.getPoint()))
-                        return;
-                    String sel = histModel.getElementAt(idx);
-                    pathFld.setText(sel);
-                    pathFld.requestFocusInWindow();
-                    pathFld.setCaretPosition(sel.length());
-                    if(ev.getClickCount() >= 2) {
-                        JOptionPane pane = (JOptionPane)
-                                SwingUtilities.getAncestorOfClass(JOptionPane.class, histList);
-                        if(pane != null)
-                            pane.setValue(JOptionPane.OK_OPTION);
-                    }
-                }
-            });
-            gc.weighty = 1;
-            gc.fill = java.awt.GridBagConstraints.BOTH;
-            form.add(histScroll, gc);
-            gc.weighty = 0;
-            gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        }
-
-        form.add(new JLabel("Server base URL:"), gc);
-        form.add(baseFld, gc);
-        int ok = JOptionPane.showConfirmDialog(this, form, "Fetch resource from server",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if(ok != JOptionPane.OK_OPTION)
+        FetchDialog.Selection sel = FetchDialog.show(this);
+        if(sel == null)
             return;
-        String path = pathFld.getText().strip();
-        String useBase = baseFld.getText().strip();
-        if(path.isEmpty()) {
+        if(sel.path.isEmpty()) {
             error("Please enter a resource path.");
             return;
         }
-        fetchFromServer(path, useBase);
+        fetchFromServer(sel.path, sel.base);
     }
 
     /** Fetch a resource fresh from the server on a background thread and open it,
@@ -668,156 +615,9 @@ public class ResForgeFrame extends JFrame {
             cacheDir = fc.getSelectedFile().toPath();
         }
         prefs.put("cacheDir", cacheDir.toString());
-        showCachePicker(cacheDir);
-    }
-
-    /** Modal picker over the cache's resource names (substring-filtered); the
-     *  chosen path is fetched fresh from the server via {@link #fetchFromServer}.
-     *  The dialog opens immediately showing a "scanning" message and is filled in
-     *  by a background scan (which can take a moment on a large cache), so the UI
-     *  never appears frozen while the cache is read. */
-    private void showCachePicker(Path dir) {
-        java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
-        String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
-
-        JTextField filterFld = new JTextField(30);
-        filterFld.setEnabled(false);
-        JTextField baseFld = new JTextField(base, 30);
-        javax.swing.DefaultListModel<String> listModel = new javax.swing.DefaultListModel<>();
-        listModel.addElement("Scanning game cache for resource names\u2026");
-        javax.swing.JList<String> list = new javax.swing.JList<>(listModel);
-        list.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        list.setVisibleRowCount(16);
-        // Render dynamic (dyn/) entries greyed, with a divider above the first one,
-        // so the volatile account-attached resources are visually set apart.
-        list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
-            @Override public Component getListCellRendererComponent(javax.swing.JList<?> l, Object value,
-                    int index, boolean sel, boolean focus) {
-                super.getListCellRendererComponent(l, value, index, sel, focus);
-                String s = String.valueOf(value);
-                if(resforge.net.CacheIndex.isDynamic(s)) {
-                    if(!sel)
-                        setForeground(java.awt.Color.GRAY);
-                    boolean firstDyn = index == 0 || !resforge.net.CacheIndex.isDynamic(
-                            String.valueOf(l.getModel().getElementAt(index - 1)));
-                    if(firstDyn)
-                        setBorder(BorderFactory.createCompoundBorder(
-                                BorderFactory.createMatteBorder(1, 0, 0, 0, java.awt.Color.LIGHT_GRAY),
-                                getBorder()));
-                }
-                return this;
-            }
-        });
-        JScrollPane scroll = new JScrollPane(list);
-        javax.swing.border.TitledBorder border = BorderFactory.createTitledBorder(
-                "Scanning game cache for resource names\u2026");
-        scroll.setBorder(border);
-
-        // Holds the loaded names once the background scan finishes (empty until then).
-        final List<String>[] all = new List[]{ java.util.Collections.<String>emptyList() };
-        Runnable refilter = () -> {
-            // Bulk-replace the model in a single shot: clear() + addAll() fire one
-            // ListDataEvent each, instead of one per element. Element-by-element
-            // addElement() made the filter freeze on large caches (8000+ names),
-            // because the JList re-validated/repainted on every single add.
-            listModel.clear();
-            listModel.addAll(FetchHistory.filter(all[0], filterFld.getText()));
-            if(!listModel.isEmpty())
-                list.setSelectedIndex(0);
-        };
-        filterFld.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
-            public void insertUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-            public void removeUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-            public void changedUpdate(javax.swing.event.DocumentEvent e) { refilter.run(); }
-        });
-        list.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseClicked(java.awt.event.MouseEvent ev) {
-                if(ev.getClickCount() < 2 || all[0].isEmpty())
-                    return;
-                int idx = list.locationToIndex(ev.getPoint());
-                if(idx < 0 || idx >= listModel.size()
-                        || !list.getCellBounds(idx, idx).contains(ev.getPoint()))
-                    return;
-                list.setSelectedIndex(idx);
-                JOptionPane pane = (JOptionPane)
-                        SwingUtilities.getAncestorOfClass(JOptionPane.class, list);
-                if(pane != null)
-                    pane.setValue(JOptionPane.OK_OPTION);
-            }
-        });
-
-        // Scan on a background thread and populate the (already-visible) dialog.
-        setStatus("Scanning game cache " + dir + " \u2026");
-        Thread t = new Thread(() -> {
-            List<String> found = null;
-            String err = null;
-            try {
-                found = resforge.net.CacheIndex.scan(dir);
-            } catch(Exception ex) {
-                err = ex.getMessage();
-            }
-            final List<String> names = found;
-            final String error = err;
-            SwingUtilities.invokeLater(() -> {
-                if(names == null) {
-                    border.setTitle("Cache scan failed: " + error);
-                    listModel.clear();
-                    setStatus("Cache scan failed");
-                    scroll.revalidate();
-                    scroll.repaint();
-                    return;
-                }
-                all[0] = names;
-                filterFld.setEnabled(true);
-                border.setTitle(names.isEmpty()
-                        ? "No resources found in " + dir
-                        : names.size() + " resources in your game cache (fetched fresh from the server)");
-                refilter.run();
-                scroll.revalidate();
-                scroll.repaint();
-                setStatus(names.size() + " resource(s) found in cache");
-            });
-        }, "cache-scan");
-        t.setDaemon(true);
-        t.start();
-
-        JPanel form = new JPanel(new java.awt.GridBagLayout());
-        java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
-        gc.gridx = 0;
-        gc.weightx = 1;
-        gc.anchor = java.awt.GridBagConstraints.WEST;
-        gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gc.insets = new java.awt.Insets(0, 0, 4, 0);
-        form.add(new JLabel("Filter (type any part of a path, e.g. borka):"), gc);
-        form.add(filterFld, gc);
-        gc.weighty = 1;
-        gc.fill = java.awt.GridBagConstraints.BOTH;
-        form.add(scroll, gc);
-        gc.weighty = 0;
-        gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        JLabel dynHint = new JLabel("Greyed \u201cdyn/\u201d entries are dynamic, account-attached "
-                + "resources (listed last; may not be fetchable).");
-        dynHint.setForeground(java.awt.Color.GRAY);
-        dynHint.setFont(dynHint.getFont().deriveFont(dynHint.getFont().getSize2D() - 1f));
-        form.add(dynHint, gc);
-        form.add(new JLabel("Server base URL:"), gc);
-        form.add(baseFld, gc);
-
-        int ok = JOptionPane.showConfirmDialog(this, form, "Open from game cache",
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
-        if(ok != JOptionPane.OK_OPTION)
-            return;
-        if(all[0].isEmpty()) {
-            error("The cache is still being scanned (or holds no resources). Please try again.");
-            return;
-        }
-        String path = list.getSelectedValue();
-        String useBase = baseFld.getText().strip();
-        if(path == null || !all[0].contains(path)) {
-            error("Please select a resource.");
-            return;
-        }
-        fetchFromServer(path, useBase);
+        CachePickerDialog.Selection sel = CachePickerDialog.show(this, cacheDir, this::setStatus);
+        if(sel != null)
+            fetchFromServer(sel.path, sel.base);
     }
 
     private void doOpen() {
@@ -1107,10 +907,10 @@ public class ResForgeFrame extends JFrame {
             case "icon":
             case "texture":
             case "terrain tile":
-                buildImagePanel(content, idx, l);
+                editors.buildImagePanel(content, idx, l);
                 break;
             case "text":
-                buildTextPanel(content, idx, l);
+                editors.buildTextPanel(content, idx, l);
                 break;
             case "props":
             case "keybind":
@@ -1119,112 +919,42 @@ public class ResForgeFrame extends JFrame {
             case "collision":
             case "equip point":
             case "light":
-                buildJsonPanel(content, idx, l);
+                editors.buildJsonPanel(content, idx, l);
                 break;
             case "animation":
-                buildAnimPanel(content, idx, l);
+                editors.buildAnimPanel(content, idx, l);
                 break;
             case "sound":
             case "font":
             case "music":
-                buildMediaPanel(content, idx, l);
+                editors.buildMediaPanel(content, idx, l);
                 break;
             case "3D model":
-                buildModelPanel(content, l);
+                editors.buildModelPanel(content, l);
                 break;
             case "code":
-                buildCodePanel(content, idx, l);
+                editors.buildCodePanel(content, idx, l);
                 break;
             case "dependencies":
             case "links":
             case "source":
             case "tileset":
             case "flavor":
-                buildReferencePanel(content, idx, l);
+                editors.buildReferencePanel(content, idx, l);
                 break;
             case "skeleton":
             case "skeletal anim":
             case "mesh anim":
-                buildRigPanel(content, idx, l);
+                editors.buildRigPanel(content, idx, l);
                 break;
             default:
-                buildRawPanel(content, idx, l);
+                editors.buildRawPanel(content, idx, l);
         }
 
         detail.removeAll();
         detail.add(content, BorderLayout.CENTER);
         detail.revalidate();
         detail.repaint();
-    }
-
-    private void buildImagePanel(JPanel content, int idx, Layer l) {
-        ImageView view = new ImageView();
-        java.awt.image.BufferedImage img = GuiSupport.preview(l);
-        if(img != null) {
-            view.setImage(img);
-            content.add(labeled(img.getWidth() + " \u00d7 " + img.getHeight() + " pixels"));
-        } else {
-            view.setPlaceholder("(image could not be decoded)");
-        }
-        resforge.layers.ImageHeaderCodec hdr =
-                l.name.equals("image") ? resforge.layers.ImageHeaderCodec.parse(l.data) : null;
-        if(hdr != null && hdr.editable) {
-            addImageHeaderEditor(content, idx, hdr);
-        } else if(l.name.equals("tex")) {
-            resforge.layers.TexHeaderCodec th = resforge.layers.TexHeaderCodec.parse(l.data);
-            if(th.editable)
-                addTexHeaderEditor(content, idx, th);
-            else {
-                String meta = GuiSupport.imageMeta(l);
-                if(meta != null)
-                    content.add(labeled(meta));
-            }
-        } else {
-            String meta = GuiSupport.imageMeta(l);
-            if(meta != null)
-                content.add(labeled(meta));
-        }
-        view.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(view);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
-                new JButton(action("Replace image", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export image", () -> exportLayer(idx)))));
-
-        // A tex layer may carry a separate alpha mask (part tag 4) — expose it too.
-        if(l.name.equals("tex")) {
-            resforge.layers.TexInfo ti = resforge.layers.TexInfo.parse(l.data);
-            if(ti.maskFound)
-                addTexMaskSection(content, idx, l, ti);
-        }
-    }
-
-    /** Preview + export/replace for a tex layer's alpha mask (the foliage/cutout shape). */
-    private void addTexMaskSection(JPanel content, int idx, Layer l, resforge.layers.TexInfo ti) {
-        content.add(Box.createVerticalStrut(12));
-        content.add(labeled("Alpha mask"));
-        ImageView maskView = new ImageView();
-        byte[] maskBytes = resforge.layers.TexMaskCodec.mask(l.data);
-        java.awt.image.BufferedImage mimg = null;
-        if(maskBytes != null) {
-            try {
-                mimg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(maskBytes));
-            } catch(Exception ignored) {
-            }
-        }
-        if(mimg != null) {
-            maskView.setImage(mimg);
-            content.add(labeled(mimg.getWidth() + " \u00d7 " + mimg.getHeight()
-                    + " pixels (" + ti.maskFormat + ")"));
-        } else {
-            maskView.setPlaceholder("(mask could not be decoded)");
-        }
-        maskView.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(maskView);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
-                new JButton(action("Replace mask", () -> replaceTexMask(idx))),
-                new JButton(action("Export mask", () -> exportTexMask(idx)))));
     }
 
     private void replaceTexMask(int idx) {
@@ -1264,92 +994,6 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
-    /** Editable header fields (id, offset, declared size) for a tex layer. */
-    private void addTexHeaderEditor(JPanel content, int idx, resforge.layers.TexHeaderCodec h) {
-        JSpinner idSp = intSpinner(h.id);
-        JSpinner oxSp = u16Spinner(h.offX);
-        JSpinner oySp = u16Spinner(h.offY);
-        JSpinner sxSp = u16Spinner(h.szX);
-        JSpinner sySp = u16Spinner(h.szY);
-
-        JPanel row1 = headerRow();
-        row1.add(new JLabel("id")); row1.add(idSp);
-        row1.add(new JLabel("  off.x")); row1.add(oxSp);
-        row1.add(new JLabel("  off.y")); row1.add(oySp);
-
-        JPanel row2 = headerRow();
-        row2.add(new JLabel("sz.x")); row2.add(sxSp);
-        row2.add(new JLabel("  sz.y")); row2.add(sySp);
-        row2.add(new JButton(action("Apply header", () -> {
-            try {
-                byte[] payload = h.encodeWith(
-                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(), (Integer) oySp.getValue(),
-                        (Integer) sxSp.getValue(), (Integer) sySp.getValue());
-                setLayerPayload(idx, payload);
-                setStatus("Updated tex header in layer " + idx);
-            } catch(IllegalArgumentException ex) {
-                error(ex.getMessage());
-            }
-        })));
-
-        content.add(row1);
-        content.add(row2);
-    }
-
-    /** Editable header fields (id, z, sub-z, offset, nooff) for an old-style image layer. */
-    private void addImageHeaderEditor(JPanel content, int idx, resforge.layers.ImageHeaderCodec h) {
-        JSpinner idSp = intSpinner(h.id);
-        JSpinner zSp = intSpinner(h.z);
-        JSpinner subzSp = intSpinner(h.subz);
-        JSpinner oxSp = intSpinner(h.offX);
-        JSpinner oySp = intSpinner(h.offY);
-        JCheckBox nooffBox = new JCheckBox("no offset", h.nooff);
-
-        JPanel row1 = headerRow();
-        row1.add(new JLabel("id")); row1.add(idSp);
-        row1.add(new JLabel("  z")); row1.add(zSp);
-        row1.add(new JLabel("  sub-z")); row1.add(subzSp);
-
-        JPanel row2 = headerRow();
-        row2.add(new JLabel("off.x")); row2.add(oxSp);
-        row2.add(new JLabel("  off.y")); row2.add(oySp);
-        row2.add(nooffBox);
-        row2.add(new JButton(action("Apply header", () -> {
-            try {
-                byte[] payload = h.encodeWith(
-                        (Integer) zSp.getValue(), (Integer) subzSp.getValue(),
-                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(),
-                        (Integer) oySp.getValue(), nooffBox.isSelected());
-                setLayerPayload(idx, payload);
-                setStatus("Updated image header in layer " + idx);
-            } catch(IllegalArgumentException ex) {
-                error(ex.getMessage());
-            }
-        })));
-
-        content.add(row1);
-        content.add(row2);
-    }
-
-    private static JPanel headerRow() {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
-        return row;
-    }
-
-    private static JSpinner intSpinner(int value) {
-        JSpinner s = new JSpinner(new SpinnerNumberModel(value, -32768, 32767, 1));
-        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
-        return s;
-    }
-
-    private static JSpinner u16Spinner(int value) {
-        JSpinner s = new JSpinner(new SpinnerNumberModel(Math.max(0, Math.min(65535, value)), 0, 65535, 1));
-        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
-        return s;
-    }
-
     /** The next free image id (max existing image-layer id + 1, or 0 if none). */
     private int nextImageId() {
         int max = -1;
@@ -1378,241 +1022,6 @@ public class ResForgeFrame extends JFrame {
         model.fireTableRowsUpdated(idx, idx);
         if(sel == idx)
             showSelected();
-    }
-
-    private void buildTextPanel(JPanel content, int idx, Layer l) {
-        JTextArea area = new JTextArea(GuiSupport.editableText(l));
-        area.setLineWrap(true);
-        area.setWrapStyleWord(true);
-        JScrollPane sp = new JScrollPane(area);
-        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
-        content.add(sp);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Apply text", () -> {
-            applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
-            setStatus("Updated text in layer " + idx);
-        })), new JButton(action("Export", () -> exportLayer(idx)))));
-    }
-
-    private void buildJsonPanel(JPanel content, int idx, Layer l) {
-        addJsonEditor(content, idx, l, 320);
-    }
-
-    private void addJsonEditor(JPanel content, int idx, Layer l, int height) {
-        String json = GuiSupport.editableJson(l);
-        if(json == null) {
-            content.add(labeled("This " + l.name + " layer uses types this editor can't safely"
-                    + " present as JSON; it is preserved as-is."));
-            content.add(Box.createVerticalStrut(8));
-            content.add(buttonRow(new JButton(action("Export raw", () -> exportLayer(idx)))));
-            return;
-        }
-        JTextArea area = new JTextArea(json);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        JScrollPane sp = new JScrollPane(area);
-        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, height));
-        content.add(sp);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Apply JSON", () -> {
-            applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
-            setStatus("Updated " + l.name + " in layer " + idx);
-        })), new JButton(action("Export JSON", () -> exportLayer(idx)))));
-    }
-
-    /** anim layers: a live frame preview (resolving frame image-ids to sibling image layers) + the JSON editor. */
-    private void buildAnimPanel(JPanel content, int idx, Layer l) {
-        addAnimPreview(content, l);
-        addJsonEditor(content, idx, l, 160);
-    }
-
-    private void addAnimPreview(JPanel content, Layer l) {
-        java.util.Map<String, Object> m;
-        try {
-            m = resforge.layers.AnimCodec.decode(l.data);
-        } catch(RuntimeException e) {
-            return;
-        }
-        int delay = ((Number) m.get("delay")).intValue();
-        java.util.List<?> ids = (java.util.List<?>) m.get("frames");
-        java.util.List<AnimView.Frame> frames = new java.util.ArrayList<>();
-        for(Object o : ids) {
-            AnimView.Frame fr = frameById(((Number) o).intValue());
-            if(fr != null)
-                frames.add(fr);
-        }
-        if(frames.isEmpty()) {
-            content.add(labeled("(no matching image frames in this resource to preview)"));
-            content.add(Box.createVerticalStrut(8));
-            return;
-        }
-        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
-                + " (true relative size & offset)"));
-        AnimView view = new AnimView();
-        Dimension d = new Dimension(220, 180);
-        view.setPreferredSize(d);
-        view.setMaximumSize(d);
-        view.setAlignmentX(Component.LEFT_ALIGNMENT);
-        view.setFrames(frames);
-        content.add(view);
-        content.add(Box.createVerticalStrut(8));
-        int[] fi = {0};
-        animTimer = new javax.swing.Timer(Math.max(20, delay), ev -> {
-            fi[0] = (fi[0] + 1) % frames.size();
-            view.setCurrent(fi[0]);
-        });
-        animTimer.setInitialDelay(Math.max(20, delay));
-        animTimer.start();
-    }
-
-    /** Resolves an animation frame id to its image + draw offset (first matching image layer), else null. */
-    private AnimView.Frame frameById(int id) {
-        if(res == null)
-            return null;
-        for(Layer ly : res.layers) {
-            if(!ly.name.equals("image"))
-                continue;
-            try {
-                resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
-                if(ii.recognized && ii.id == id) {
-                    java.awt.image.BufferedImage bi = GuiSupport.preview(ly);
-                    if(bi != null) {
-                        int ox = ii.nooff ? 0 : ii.offX;
-                        int oy = ii.nooff ? 0 : ii.offY;
-                        return new AnimView.Frame(bi, ox, oy);
-                    }
-                }
-            } catch(RuntimeException ignored) {
-            }
-        }
-        return null;
-    }
-
-    private void buildMediaPanel(JPanel content, int idx, Layer l) {
-        if(l.name.equals("audio2")) {
-            byte[] ogg = GuiSupport.audioBytes(l);
-            if(ogg != null) {
-                currentPlayer = new AudioPlayerPanel(ogg);
-                content.add(currentPlayer);
-                content.add(Box.createVerticalStrut(8));
-            }
-            addAudioHeaderEditor(content, idx, l);
-        }
-        String media = GuiSupport.mediaMeta(l);
-        content.add(labeled(media != null ? media : GuiSupport.summary(l)));
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
-                new JButton(action("Replace", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export", () -> exportLayer(idx)))));
-    }
-
-    /** Shows the audio clip id + volume, with an editable volume for ver-2 clips. */
-    private void addAudioHeaderEditor(JPanel content, int idx, Layer l) {
-        resforge.layers.AudioHeaderCodec h = resforge.layers.AudioHeaderCodec.parse(l.data);
-        if(!h.editable) {
-            resforge.layers.AudioInfo ai = resforge.layers.AudioInfo.parse(l.data);
-            if(ai.recognized)
-                content.add(labeled("id=\"" + ai.id + "\"   volume=" + String.format("%.3f", ai.bvol)));
-            return;
-        }
-        JTextField idField = new JTextField(h.id, 10);
-        JPanel row = headerRow();
-        row.add(new JLabel("id"));
-        row.add(idField);
-        final JSpinner volSp;
-        if(h.hasVol) {
-            volSp = new JSpinner(new SpinnerNumberModel(h.bvol(), 0.0, 65.535, 0.05));
-            ((JSpinner.DefaultEditor) volSp.getEditor()).getTextField().setColumns(6);
-            row.add(new JLabel("  volume"));
-            row.add(volSp);
-        } else {
-            volSp = null;
-        }
-        row.add(new JButton(action("Apply", () -> {
-            try {
-                byte[] payload = (volSp != null)
-                        ? h.encodeWithBvol(idField.getText(), (Double) volSp.getValue())
-                        : h.encodeWith(idField.getText(), 0);
-                setLayerPayload(idx, payload);
-                setStatus("Updated audio header in layer " + idx);
-            } catch(IllegalArgumentException ex) {
-                error(ex.getMessage());
-            }
-        })));
-        content.add(row);
-        content.add(Box.createVerticalStrut(8));
-    }
-
-    private void buildModelPanel(JPanel content, Layer l) {
-        String detail = GuiSupport.modelDetail(l);
-        if(detail != null) {
-            JTextArea area = new JTextArea(detail);
-            area.setEditable(false);
-            area.setOpaque(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-            area.setAlignmentX(Component.LEFT_ALIGNMENT);
-            content.add(area);
-        } else {
-            content.add(labeled(GuiSupport.summary(l)));
-        }
-        content.add(Box.createVerticalStrut(8));
-        content.add(labeled("3D geometry is read-only here; export to glTF to edit the whole "
-                + "model in Blender, then rebuild from the edited .glb to bring your changes back."));
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
-                new JButton(action("Export glTF (.glb)", this::doExportGltf)),
-                new JButton(action("Rebuild from glTF", this::doRebuildGltf))));
-    }
-
-    private void buildCodePanel(JPanel content, int idx, Layer l) {
-        JTextArea area = new JTextArea(GuiSupport.codeText(l));
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        JScrollPane sp = new JScrollPane(area);
-        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
-        content.add(sp);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export", () -> exportLayer(idx)))));
-    }
-
-    private void buildReferencePanel(JPanel content, int idx, Layer l) {
-        JTextArea area = new JTextArea(GuiSupport.referenceText(l));
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        area.setCaretPosition(0);
-        JScrollPane sp = new JScrollPane(area);
-        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
-        content.add(sp);
-        content.add(Box.createVerticalStrut(8));
-        content.add(labeled("Read-only: this resource references the items above; preserved exactly on save."));
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export", () -> exportLayer(idx)))));
-    }
-
-    private void buildRawPanel(JPanel content, int idx, Layer l) {
-        content.add(labeled("Raw layer, preserved exactly on save."));
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
-                new JButton(action("Replace raw", () -> replaceFromFile(idx, l.name))),
-                new JButton(action("Export raw", () -> exportLayer(idx)))));
-    }
-
-    private void buildRigPanel(JPanel content, int idx, Layer l) {
-        JTextArea area = new JTextArea(GuiSupport.rigText(l));
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        area.setCaretPosition(0);
-        JScrollPane sp = new JScrollPane(area);
-        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
-        content.add(sp);
-        content.add(Box.createVerticalStrut(8));
-        content.add(labeled("Read-only structural view; the layer is preserved exactly on save."));
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(new JButton(action("Export raw", () -> exportLayer(idx)))));
     }
 
     /* ------------------------------------------------------------ edit actions */
@@ -1681,24 +1090,6 @@ public class ResForgeFrame extends JFrame {
     }
 
     /* ------------------------------------------------------------------- utils */
-
-    private JComponent buttonRow(JButton... buttons) {
-        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        for(int i = 0; i < buttons.length; i++) {
-            if(i > 0)
-                row.add(Box.createHorizontalStrut(8));
-            row.add(buttons[i]);
-        }
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
-        return row;
-    }
-
-    private JComponent labeled(String text) {
-        JLabel lab = new JLabel(text);
-        lab.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return lab;
-    }
 
     private void showPlaceholder(String text) {
         detail.removeAll();
