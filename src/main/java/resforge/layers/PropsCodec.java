@@ -37,6 +37,11 @@ public final class PropsCodec {
     private static final int T_MAP = 32;
     private static final int T_LONG = 33;
 
+    /** Hard cap on tto list/map nesting, so a crafted payload fails with a clear
+     *  {@link Unsupported} (a {@code RuntimeException}, caught by the lossless-or-raw
+     *  guard) instead of a {@link StackOverflowError}. Real props nest a level or two. */
+    private static final int MAX_DEPTH = 256;
+
     private PropsCodec() {
     }
 
@@ -57,7 +62,7 @@ public final class PropsCodec {
             int t = in.uint8();
             if(t == T_END)
                 break;
-            flat.add(readValue(in, t));
+            flat.add(readValue(in, t, 0));
         }
         if(!in.eom())
             throw new Unsupported("trailing data after props list");
@@ -110,7 +115,7 @@ public final class PropsCodec {
         return null;
     }
 
-    private static Object readValue(MessageReader in, int t) {
+    private static Object readValue(MessageReader in, int t, int depth) {
         switch(t) {
             case T_STR:     return in.string();
             case T_INT:     return (long) in.int32();
@@ -121,33 +126,37 @@ public final class PropsCodec {
             case T_LONG:    return in.int64();
             case T_FLOAT64: return in.float64();
             case T_NIL:     return null;
-            case T_TTOL:    return readList(in);
-            case T_MAP:     return readMap(in);
+            case T_TTOL:    return readList(in, depth);
+            case T_MAP:     return readMap(in, depth);
             default:        throw new Unsupported("tto type tag " + t);
         }
     }
 
-    private static List<Object> readList(MessageReader in) {
+    private static List<Object> readList(MessageReader in, int depth) {
+        if(depth >= MAX_DEPTH)
+            throw new Unsupported("tto nesting too deep");
         List<Object> list = new ArrayList<>();
         while(!in.eom()) {
             int t = in.uint8();
             if(t == T_END)
                 break;
-            list.add(readValue(in, t));
+            list.add(readValue(in, t, depth + 1));
         }
         return list;
     }
 
-    private static Map<String, Object> readMap(MessageReader in) {
+    private static Map<String, Object> readMap(MessageReader in, int depth) {
+        if(depth >= MAX_DEPTH)
+            throw new Unsupported("tto nesting too deep");
         Map<String, Object> map = new LinkedHashMap<>();
         while(!in.eom()) {
             int t = in.uint8();
             if(t == T_END)
                 break;
-            Object key = readValue(in, t);
+            Object key = readValue(in, t, depth + 1);
             if(!(key instanceof String))
                 throw new Unsupported("non-string map key");
-            Object val = readValue(in, in.uint8());
+            Object val = readValue(in, in.uint8(), depth + 1);
             map.put((String) key, val);
         }
         return map;

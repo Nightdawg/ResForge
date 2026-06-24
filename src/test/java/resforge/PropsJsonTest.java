@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class PropsJsonTest {
@@ -95,6 +96,22 @@ class PropsJsonTest {
         w.uint8(2).string("pos");
         w.uint8(3).int32(10).int32(20);   // T_COORD
         assertNull(PropsCodec.toJsonIfLossless(w.toByteArray()));
+    }
+
+    @Test
+    void pathologicallyDeepTtoNestingIsRejectedCleanly() {
+        // A key whose value is thousands of nested tto lists (each a lone T_TTOL tag,
+        // never closed). Without the depth guard this StackOverflowErrors during decode
+        // — an Error that escapes the lossless-or-raw catch(RuntimeException). It must
+        // now fail with a clear RuntimeException, and simply stay raw.
+        MessageWriter w = new MessageWriter();
+        w.uint8(1);                 // version
+        w.uint8(2).string("k");     // key
+        for(int i = 0; i < 5000; i++)
+            w.uint8(8);             // T_TTOL: open a nested list, never closed
+        byte[] payload = w.toByteArray();
+        assertThrows(RuntimeException.class, () -> PropsCodec.decode(payload));
+        assertNull(PropsCodec.toJsonIfLossless(payload), "a too-deep props layer stays raw");
     }
 
     @Test

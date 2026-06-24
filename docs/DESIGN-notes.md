@@ -559,8 +559,10 @@ handles normals/tangents and is in-game validated — superseded it.)
   explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
   uses it (none of the current samples do).
-- Optional: expose the `tex` alpha **mask** (part `t==4`) as a second editable
-  image; today it is preserved verbatim inside `*.post.bin`.
+- **Done:** the `tex` alpha **mask** (part `t==4`) is now exposed as a second
+  editable image via `TexMaskCodec` (recomputing its int32 length, format-checked,
+  lossless-or-raw) — the GUI gives it its own preview/replace/export and the 3D
+  viewer uses it for cutout. (It was previously preserved verbatim inside `*.post.bin`.)
 - A small GUI or a `--watch` mode for rapid skin iteration.
 
 ---
