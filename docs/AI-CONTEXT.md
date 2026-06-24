@@ -152,7 +152,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   triangle-mode + index range, `setAttr` length) so a malformed `.glb` fails cleanly
   rather than corrupting a layer.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
-- `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, JDK HttpClient), `CacheIndex`
+- `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, one shared lazily-created JDK
+  HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads),
+  `CacheIndex`
   (reads the local Haven `HashDirCache` at `%APPDATA%\Haven and Hearth\data`: each
   `%016x.%d` file's header is `byte(1)`+`writeUTF(cid)`+`writeUTF(name)`, decoded with
   `DataInputStream.readUTF`; `res/`-prefixed names are the fetchable resource paths —

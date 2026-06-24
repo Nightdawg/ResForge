@@ -19,6 +19,19 @@ public final class ResourceFetcher {
     private ResourceFetcher() {
     }
 
+    /** Lazily-created, shared {@link HttpClient}. {@code HttpClient} is immutable and
+     *  thread-safe, so one instance serves all fetches (reusing pooled connections and
+     *  a single selector thread instead of spawning a fresh client — and its threads —
+     *  per call). The holder idiom keeps it lazy, so the pure {@link #urlFor}/
+     *  {@link #baseName} helpers don't start any threads. The client lives for the JVM
+     *  lifetime; its threads are daemon, so it never blocks shutdown. */
+    private static final class Holder {
+        static final HttpClient CLIENT = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+    }
+
     /** Builds the full {@code .res} URL for a resource path under a base URL. */
     public static String urlFor(String base, String path) {
         if(base == null || base.isBlank())
@@ -37,16 +50,12 @@ public final class ResourceFetcher {
     /** Downloads {@code <base>/<path>.res} and returns its bytes. */
     public static byte[] fetch(String base, String path) throws IOException, InterruptedException {
         String url = urlFor(base, path);
-        HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(15))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
                 .header("User-Agent", "ResForge")
                 .GET()
                 .build();
-        HttpResponse<byte[]> resp = client.send(req, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> resp = Holder.CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
         int code = resp.statusCode();
         if(code == 404)
             throw new IOException("Resource not found (404): " + url);
