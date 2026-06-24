@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'resforge'
-version = '0.1.0'
+version = '1.0.0'
 
 // Use build-gradle/ (not the default build/) so it's clearly Gradle's output
 // and sits alongside the Ant build's build-ant/ without clashing.

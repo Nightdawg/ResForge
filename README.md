@@ -12,8 +12,8 @@ The editor is the main way to use ResForge. Double-click the jar, or run it with
 no arguments, to open it:
 
 ```sh
-java -jar build-gradle/libs/resforge-0.1.0.jar          # opens the editor
-java -jar build-gradle/libs/resforge-0.1.0.jar gui horse.res   # opens a file
+java -jar build-gradle/libs/resforge-1.0.0.jar          # opens the editor
+java -jar build-gradle/libs/resforge-1.0.0.jar gui horse.res   # opens a file
 ```
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
@@ -160,21 +160,21 @@ output directory so they never clash.
 
 ```sh
 ./gradlew build      # compile + run the tests
-./gradlew jar        # -> build-gradle/libs/resforge-0.1.0.jar
+./gradlew jar        # -> build-gradle/libs/resforge-1.0.0.jar
 ```
 
 **Maven** (auto-downloads dependencies + plugins from Maven Central):
 
 ```sh
 mvn package          # compile + run the tests + build the jar
-                     # -> build-maven/resforge-0.1.0.jar
+                     # -> build-maven/resforge-1.0.0.jar
 ```
 
 **Ant** (for those who prefer it; no internet needed — JUnit jars are vendored in `lib/`):
 
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
-ant jar              # -> build-ant/libs/resforge-0.1.0.jar
+ant jar              # -> build-ant/libs/resforge-1.0.0.jar
 ```
 
 The Ant build has no internet dependency — the JUnit 5 jars live in `lib/`. Gradle
@@ -193,8 +193,8 @@ paths with spaces):
 
 ```sh
 ./gradlew jar
-# the jar is at build-gradle/libs/resforge-0.1.0.jar
-alias resforge='java -jar build-gradle/libs/resforge-0.1.0.jar'
+# the jar is at build-gradle/libs/resforge-1.0.0.jar
+alias resforge='java -jar build-gradle/libs/resforge-1.0.0.jar'
 ```
 
 ```sh
@@ -263,7 +263,7 @@ package mirrors `haven.Message` primitives for decoding payloads.
 
 ## Status / scope
 
-v0.1 guarantees lossless unpack/repack for **all** layers and friendly editing
+v1.0 guarantees lossless unpack/repack for **all** layers and friendly editing
 for 2D images (`image`), 3D model textures (`tex`), sounds (`audio2`), fonts
 (`font`), typed properties (`props`), action/keybind metadata (`action`) and
 materials (`mat2`) as JSON, sprite animations (`anim`: speed + frame sequence) as
@@ -293,6 +293,31 @@ direction) are editable as JSON. The skeletal/morph **animation
 keyframes** themselves (`skan` timing; adding/removing `manim` frames) are the main
 thing the round-trip doesn't yet edit; deeper typed editing can be layered on
 incrementally using the same parts model.
+
+### Known limitations (1.0)
+
+These are deliberately out of scope for 1.0 — nothing here risks corrupting a file
+(everything not editable stays lossless raw/read-only):
+
+- **Animation-keyframe editing.** Skeletal animation timing (`skan`) and
+  adding/removing mesh-morph frames (`manim`) are decoded **read-only**. Mesh
+  geometry, materials, skinning, the skeleton rest pose and morph *shapes* all
+  round-trip through glTF; only the keyframes themselves can't be retimed yet.
+- **`code`/`codeentry` are read-only.** Class names and the entrypoint/classpath
+  manifest are shown and the embedded `.class` can be exported, but client code
+  isn't editable in-tool.
+- **glTF rebuild is not byte-lossless.** Reshaping/adding/removing geometry
+  regenerates the `vbuf2`/`mesh` (re-quantised into the original formats), so
+  always verify rebuilt models in-game. A plain export→rebuild with no edits is
+  validated as a no-op on the sample models.
+- **3D viewer — variable-material parts.** Parts whose texture comes from a
+  `varmat` (declared in `code`, not a local `tex`) render shaded rather than
+  textured in the built-in **View 3D**; the glTF export/round-trip is unaffected.
+- **A few layers stay raw by design.** When a typed layer can't be proven to
+  re-encode byte-for-byte it is kept as raw bytes (lossless) rather than offered
+  as an editor — e.g. a handful of unusual `mat2`/`props` instances and some
+  `rlink` link variants. This is the "lossless-or-raw" guarantee working as
+  intended, not a failure.
 
 ## How this was built ("vibe coded")
 
