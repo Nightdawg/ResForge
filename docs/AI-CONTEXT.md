@@ -149,8 +149,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   Transform") into positions (and normals via the inverse-transpose) instead of
   dropping them; **renormalizes** skin weights after dropping joints that don't map;
   and **validates** its glТF input (GLB/JSON/BIN chunk bounds, accessor in-range,
-  triangle-mode + index range, `setAttr` length) so a malformed `.glb` fails cleanly
-  rather than corrupting a layer.
+  triangle-mode + index range, `setAttr` length, and **non-finite vertex values** —
+  a NaN/Inf coordinate is rejected because it would otherwise poison a quantised
+  attribute's shared max factor and decode every vertex back to NaN) so a malformed
+  `.glb` fails cleanly rather than corrupting a layer.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, one shared lazily-created JDK
   HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads),

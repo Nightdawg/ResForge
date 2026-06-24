@@ -146,6 +146,7 @@ public class Vbuf2Codec {
         if(vals.length != num * eln)
             throw new IllegalStateException("attribute '" + base + "' expects " + (num * eln)
                     + " floats (" + num + " vertices x " + eln + "), got " + vals.length);
+        requireFinite(base, vals);
         if(a.bare()) {
             MessageWriter w = new MessageWriter();
             for(float v : vals)
@@ -181,6 +182,7 @@ public class Vbuf2Codec {
     public void setPositions(float[] vals) {        Attr a = position();
         if(a == null)
             throw new IllegalStateException("no position attribute");
+        requireFinite("pos", vals);
         if(a.bare()) {
             MessageWriter w = new MessageWriter();
             for(float v : vals)
@@ -364,6 +366,18 @@ public class Vbuf2Codec {
             default:
                 throw new IllegalArgumentException("position format not supported for editing: " + fmt);
         }
+    }
+
+    /** Rejects NaN/Infinity before re-quantising. A single non-finite value would
+     *  otherwise poison the per-attribute max factor ({@code Math.max(x, NaN)} is NaN),
+     *  so the whole attribute is written as a NaN scale with zeroed components — every
+     *  vertex decodes back to NaN, silently destroying the mesh with no error. Real
+     *  geometry is always finite, so this only ever catches malformed/corrupt input. */
+    private static void requireFinite(String attr, float[] vals) {
+        for(int i = 0; i < vals.length; i++)
+            if(!Float.isFinite(vals[i]))
+                throw new IllegalArgumentException("cannot encode non-finite value (" + vals[i]
+                        + ") in vertex attribute '" + attr + "' (NaN/Infinity)");
     }
 
     private static void writeFmt(MessageWriter w, String fmt, float[] vals) {
