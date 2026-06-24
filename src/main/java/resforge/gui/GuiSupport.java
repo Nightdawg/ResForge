@@ -8,6 +8,7 @@ import resforge.layers.BoneOffInfo;
 import resforge.layers.CodeEntryInfo;
 import resforge.layers.CodeInfo;
 import resforge.layers.DepsInfo;
+import resforge.layers.FlavObjInfo;
 import resforge.layers.FontInfo;
 import resforge.layers.ImageInfo;
 import resforge.layers.LightCodec;
@@ -23,6 +24,8 @@ import resforge.layers.SkanInfo;
 import resforge.layers.SkelInfo;
 import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
+import resforge.layers.TileInfo;
+import resforge.layers.TilesetInfo;
 import resforge.layers.Vbuf2Info;
 import resforge.res.Layer;
 
@@ -60,6 +63,9 @@ public final class GuiSupport {
             case "codeentry": return "code";
             case "deps":    return "dependencies";
             case "rlink":   return "links";
+            case "tileset2": return "tileset";
+            case "tile":    return "terrain tile";
+            case "flavobj": return "flavor";
             case "src":     return "source";
             case "light":   return "light";
             case "skel":    return "skeleton";
@@ -116,6 +122,24 @@ public final class GuiSupport {
                 case "mesh": {
                     MeshInfo mi = MeshInfo.parse(l.data);
                     return mi.recognized ? mi.numTris + " triangles" : "mesh";
+                }
+                case "tile": {
+                    TileInfo ti = TileInfo.parse(l.data);
+                    if(!ti.recognized)
+                        return "terrain tile";
+                    return ti.kindName() + " id=" + ti.id
+                            + (ti.imageFormat != null ? " " + ti.imageFormat : "");
+                }
+                case "tileset2": {
+                    TilesetInfo ti = TilesetInfo.parse(l.data);
+                    if(!ti.recognized)
+                        return "tileset";
+                    return "tiler \"" + (ti.tilerName != null ? ti.tilerName : "?") + "\""
+                            + (ti.flavors.isEmpty() ? "" : ", " + ti.flavors.size() + " flavor");
+                }
+                case "flavobj": {
+                    FlavObjInfo fo = FlavObjInfo.parse(l.data);
+                    return fo.recognized ? fo.res : "flavor object";
                 }
                 case "mat2": {
                     java.util.Map<String, Object> m = Mat2Codec.decode(l.data);
@@ -229,6 +253,10 @@ public final class GuiSupport {
             TexInfo ti = TexInfo.parse(l.data);
             if(ti.found)
                 return Arrays.copyOfRange(l.data, ti.imageOffset, ti.imageOffset + ti.imageLen);
+        } else if(l.name.equals("tile")) {
+            TileInfo ti = TileInfo.parse(l.data);
+            if(ti.found)
+                return Arrays.copyOfRange(l.data, ti.imageOffset, l.data.length);
         }
         return null;
     }
@@ -350,6 +378,28 @@ public final class GuiSupport {
             if(!si.recognized)
                 return "(unrecognized src layer)";
             return "// " + si.fileName + "  (embedded source, read-only)\n\n" + si.text();
+        }
+        if(l.name.equals("tileset2")) {
+            TilesetInfo ti = TilesetInfo.parse(l.data);
+            if(!ti.recognized)
+                return "(unrecognized tileset2 layer)";
+            StringBuilder sb = new StringBuilder("Tileset (read-only).\n");
+            sb.append("\n  tiler: ").append(ti.tilerName != null ? ti.tilerName : "(default)").append('\n');
+            if(!ti.tags.isEmpty())
+                sb.append("  tags: ").append(String.join(", ", ti.tags)).append('\n');
+            if(!ti.flavors.isEmpty()) {
+                sb.append("  flavor objects (prob ").append(ti.flavprob).append("):\n");
+                for(TilesetInfo.Flavor fv : ti.flavors)
+                    sb.append("      ").append(fv.res).append(" @ v").append(fv.ver)
+                      .append("   weight ").append(fv.weight).append('\n');
+            }
+            return sb.toString();
+        }
+        if(l.name.equals("flavobj")) {
+            FlavObjInfo fo = FlavObjInfo.parse(l.data);
+            if(!fo.recognized)
+                return "(unrecognized flavobj layer)";
+            return "Flavor object (read-only).\n\n  spawns: " + fo.res + " @ v" + fo.resVer + "\n";
         }
         return null;
     }
@@ -480,6 +530,12 @@ public final class GuiSupport {
             return "id=" + ti.id + "   " + ti.szX + "\u00d7" + ti.szY
                     + "   offset=(" + ti.offX + ", " + ti.offY + ")";
         }
+        if(l.name.equals("tile")) {
+            TileInfo ti = TileInfo.parse(l.data);
+            if(!ti.recognized)
+                return null;
+            return ti.kindName() + "   id=" + ti.id + "   weight=" + ti.weight;
+        }
         return null;
     }
 
@@ -557,6 +613,14 @@ public final class GuiSupport {
                 if(img != null) {
                     String e = TexInfo.parse(l.data).imageFormat;
                     return new Export(img, e, e.toUpperCase() + " texture");
+                }
+                break;
+            }
+            case "tile": {
+                byte[] img = embeddedImage(l);
+                if(img != null) {
+                    String e = TileInfo.parse(l.data).imageFormat;
+                    return new Export(img, e, e.toUpperCase() + " terrain tile");
                 }
                 break;
             }

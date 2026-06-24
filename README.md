@@ -89,6 +89,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `boneoff`         | `*.json`                     | edit equip-point placement (translate/rotate ops) as JSON |
 | `light`           | `*.json`                     | edit a light source (colours, attenuation, direction) as JSON |
 | `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
+| `tile`            | `*.tilehdr` + `*.png`        | swap a terrain tile image |
 | `midi`            | `*.mid`                      | swap the MIDI music      |
 | `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |

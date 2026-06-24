@@ -39,7 +39,7 @@ public final class RLinkInfo {
         public final String name;
         public final int ver;       // -1 if unknown
 
-        Ref(String name, int ver) {
+        public Ref(String name, int ver) {
             this.name = name;
             this.ver = ver;
         }

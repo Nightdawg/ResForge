@@ -25,6 +25,17 @@ public final class TtoSkip {
         skipTagged(in, in.uint8());
     }
 
+    /** Skips a {@code tto} value list ({@code Message.list}) read until a
+     *  {@code T_END} (0) tag or end of message. */
+    public static void skipList(MessageReader in) {
+        while(!in.eom()) {
+            int t = in.uint8();
+            if(t == T_END)
+                break;
+            skipTagged(in, t);
+        }
+    }
+
     private static void skipTagged(MessageReader in, int t) {
         switch(t) {
             case T_INT:      in.skip(4); break;
@@ -61,15 +72,6 @@ public final class TtoSkip {
             case T_RESID:    in.skip(2); break;
             default:
                 throw new IllegalStateException("unknown tto type tag: " + t);
-        }
-    }
-
-    private static void skipList(MessageReader in) {
-        while(!in.eom()) {
-            int t = in.uint8();
-            if(t == T_END)
-                break;
-            skipTagged(in, t);
         }
     }
 }

@@ -14,6 +14,7 @@ import resforge.layers.NegCodec;
 import resforge.layers.ObstCodec;
 import resforge.layers.PropsCodec;
 import resforge.layers.TexInfo;
+import resforge.layers.TileInfo;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -103,6 +104,13 @@ public class Replacer {
                 out.writeBytes(nf);
                 out.writeBytes(post);
                 return out.toByteArray();
+            }
+            case "tile": {
+                TileInfo ti = TileInfo.parse(layer.data);
+                if(!ti.found)
+                    throw new ReplaceException("could not locate the existing tile image to replace");
+                requireImage(nf, "tile");
+                return concat(slice(layer.data, 0, ti.imageOffset), nf);
             }
             case "audio2": {
                 AudioInfo ai = AudioInfo.parse(layer.data);

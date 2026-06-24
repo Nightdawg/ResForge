@@ -113,7 +113,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
   `DepsInfo`, `RLinkInfo`, `SrcInfo`, `LightInfo`, `SkelInfo`, `SkanInfo`,
-  `BoneOffInfo`, `MeshAnimInfo` (read-only); typed JSON codecs `PropsCodec`,
+  `BoneOffInfo`, `MeshAnimInfo`, `TileInfo` (terrain-tile header + image),
+  `TilesetInfo`/`FlavObjInfo` (tileset tiler/tags/flavors + flavor-object refs) (read-only);
+  typed JSON codecs `PropsCodec`,
   `ActionCodec`, `Mat2Codec`,
   `AnimCodec`,   `NegCodec`, `ObstCodec`, `BoneOffCodec`, `LightCodec` (tto/record ↔ JSON, lossless-or-raw); header-field
   codecs `ImageHeaderCodec` (id/z/subz/offset/nooff + build new image layers),
@@ -191,7 +193,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
 | `skel`/`skan` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events) |
 | `manim` | **read-only**: mesh/morph animation — id, length, play order, per-frame vertex-morph format + counts |
-| everything else (`tileset2`,`clamb`,`foodev`,`rdesc`,…) | **raw passthrough** (lossless) |
+| `tile` | edit: swap the terrain tile image (PNG/JPEG; runs to EOM like `image`); shows kind (ground/border/centre-transition), id, weight |
+| `tileset2`/`flavobj` | **read-only**: tileset tiler name + tags + flavor objects (`tileset2`); the sprite/sound a flavor spawns (`flavobj`) — both feed the `refs` report |
+| everything else (`clamb`,`foodev`,`overlay`,`slink`,`plparts`,`rdesc`,…) | **raw passthrough** (lossless) |
 
 ## 7. Key format facts (see DESIGN-notes §2–8 for detail)
 - Container: `"Haven Resource 1"`(16) + `uint16` ver + repeated [NUL-string name,
@@ -308,9 +312,16 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   missing the large majority of link references.)
   The **aggregated cross-layer reference report is also done** (`res/References`,
   CLI `refs`, GUI **References…** toolbar dialog): collects every external resource
-  from `deps` + `rlink` (every link type) + `codeentry` classpath + `mat2` links (string
-  command values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
+  from `deps` + `rlink` (every link type) + `tileset2`/`flavobj` (terrain flavor objects)
+  + `codeentry` classpath + `mat2` links (string command
+  values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
   (`anim` frames are local image-ids, so they contribute nothing.)
+- **Terrain tileset layers are now surfaced** (`TileInfo`/`TilesetInfo`/`FlavObjInfo`):
+  a `tile` layer's embedded image is **editable** (swap a ground/transition tile — terrain
+  re-skinning — via the `image`-style replace path in `Replacer`/GUI), and `tileset2`
+  (tiler name + tags + flavor list) and `flavobj` (the sprite/sound a flavor spawns) get a
+  **read-only view** and feed `refs` (a real-corpus census showed 439 `flavobj` references
+  that were previously missing). All three decode to EOM on 100% of the ~8.8k-file corpus.
 - **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
   (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`) and `manim`
   (`MeshAnimInfo`, mesh/morph animation), ported from the client's
