@@ -361,6 +361,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   "scanning…" state and is populated by the background scan (so the UI never looks
   frozen), reuses `FetchHistory.filter` for live substring filtering, and sorts/greys
   the `dyn/` account-attached resources last (`CacheIndex.ORDER`/`isDynamic`; they may
+  be removed server-side, so they're set apart). The filter rebuilds the `JList` with a
+  bulk `DefaultListModel.clear()`+`addAll()` (one `ListDataEvent` each) rather than a
+  per-name `addElement()` loop — the latter fired one event per item and froze the
+  search box on large caches (~8k names); the bulk swap keeps keystrokes instant.
   be removed server-side, so they're set apart). Unit-tested (`CacheIndexTest`). (Idea
   prompted by the read-only Rust tool `ancientchina/hafen-res`; implemented clean-room
   from the client format.)

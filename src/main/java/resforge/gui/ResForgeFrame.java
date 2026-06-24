@@ -716,9 +716,12 @@ public class ResForgeFrame extends JFrame {
         // Holds the loaded names once the background scan finishes (empty until then).
         final List<String>[] all = new List[]{ java.util.Collections.<String>emptyList() };
         Runnable refilter = () -> {
+            // Bulk-replace the model in a single shot: clear() + addAll() fire one
+            // ListDataEvent each, instead of one per element. Element-by-element
+            // addElement() made the filter freeze on large caches (8000+ names),
+            // because the JList re-validated/repainted on every single add.
             listModel.clear();
-            for(String n : FetchHistory.filter(all[0], filterFld.getText()))
-                listModel.addElement(n);
+            listModel.addAll(FetchHistory.filter(all[0], filterFld.getText()));
             if(!listModel.isEmpty())
                 list.setSelectedIndex(0);
         };
