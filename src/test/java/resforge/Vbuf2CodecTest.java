@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class Vbuf2CodecTest {
     /** vbuf2 ver=0 with pos2(sn2) + tex2(un2) + a bone block. */
@@ -74,5 +76,37 @@ class Vbuf2CodecTest {
         Vbuf2Codec re = Vbuf2Codec.parse(c.encode());
         assertEquals(c.num, re.num);
         assertArrayEquals(texBefore, re.attrs.get(1).data);
+    }
+
+    @Test
+    void nonFinitePositionIsRejectedNotSilentlyCorrupting() {
+        // A single NaN/Inf coordinate used to poison the shared max factor of a
+        // quantised attribute (Math.max(x, NaN) == NaN), turning EVERY vertex into
+        // NaN on the next decode — a silent, whole-mesh corruption with no error.
+        // Now it must fail loudly instead.
+        Vbuf2Codec c = Vbuf2Codec.parse(richVbuf());   // pos2 is sn2 (quantised)
+        float[] p = c.decodePositions();
+
+        p[2] = Float.NaN;
+        IllegalArgumentException nan = assertThrows(IllegalArgumentException.class, () -> c.setPositions(p));
+        assertTrue(nan.getMessage().contains("non-finite"), nan.getMessage());
+
+        p[2] = Float.POSITIVE_INFINITY;
+        assertThrows(IllegalArgumentException.class, () -> c.setPositions(p));
+
+        // setAttr (used by the glTF rebuild for pos/nrm/tex/…) is guarded the same way.
+        float[] q = c.decodePositions();
+        q[0] = Float.NEGATIVE_INFINITY;
+        assertThrows(IllegalArgumentException.class, () -> c.setAttr("pos", q));
+    }
+
+    @Test
+    void nonFiniteIsRejectedEvenForExactF4Positions() {
+        // f4 is byte-lossless, so a NaN would "round-trip" — but a NaN position is
+        // never valid geometry, so the encoder rejects it rather than writing it.
+        Vbuf2Codec c = Vbuf2Codec.parse(posF4(2, new float[]{1, 2, 3, 4, 5, 6}));
+        float[] p = c.decodePositions();
+        p[4] = Float.NaN;
+        assertThrows(IllegalArgumentException.class, () -> c.setPositions(p));
     }
 }
