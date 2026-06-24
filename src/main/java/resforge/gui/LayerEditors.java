@@ -1,0 +1,463 @@
+package resforge.gui;
+
+import resforge.res.Layer;
+
+import javax.swing.AbstractAction;
+import javax.swing.Box;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSpinner;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.event.ActionEvent;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Builds the right-hand detail/editor panel for a selected layer. One
+ * {@code build*Panel} method per layer kind populates a content panel and wires
+ * its buttons back to the {@link EditorHost} (the frame), which owns the
+ * document, undo/redo, dialogs and file I/O. This keeps all the per-layer Swing
+ * construction out of {@link ResForgeFrame}.
+ */
+final class LayerEditors {
+    private final EditorHost host;
+
+    LayerEditors(EditorHost host) {
+        this.host = host;
+    }
+
+    void buildImagePanel(JPanel content, int idx, Layer l) {
+        ImageView view = new ImageView();
+        java.awt.image.BufferedImage img = GuiSupport.preview(l);
+        if(img != null) {
+            view.setImage(img);
+            content.add(labeled(img.getWidth() + " \u00d7 " + img.getHeight() + " pixels"));
+        } else {
+            view.setPlaceholder("(image could not be decoded)");
+        }
+        resforge.layers.ImageHeaderCodec hdr =
+                l.name.equals("image") ? resforge.layers.ImageHeaderCodec.parse(l.data) : null;
+        if(hdr != null && hdr.editable) {
+            addImageHeaderEditor(content, idx, hdr);
+        } else if(l.name.equals("tex")) {
+            resforge.layers.TexHeaderCodec th = resforge.layers.TexHeaderCodec.parse(l.data);
+            if(th.editable)
+                addTexHeaderEditor(content, idx, th);
+            else {
+                String meta = GuiSupport.imageMeta(l);
+                if(meta != null)
+                    content.add(labeled(meta));
+            }
+        } else {
+            String meta = GuiSupport.imageMeta(l);
+            if(meta != null)
+                content.add(labeled(meta));
+        }
+        view.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(view);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(act("Replace image", () -> host.replaceFromFile(idx, l.name))),
+                new JButton(act("Export image", () -> host.exportLayer(idx)))));
+
+        // A tex layer may carry a separate alpha mask (part tag 4) — expose it too.
+        if(l.name.equals("tex")) {
+            resforge.layers.TexInfo ti = resforge.layers.TexInfo.parse(l.data);
+            if(ti.maskFound)
+                addTexMaskSection(content, idx, l, ti);
+        }
+    }
+
+    /** Preview + export/replace for a tex layer's alpha mask (the foliage/cutout shape). */
+    private void addTexMaskSection(JPanel content, int idx, Layer l, resforge.layers.TexInfo ti) {
+        content.add(Box.createVerticalStrut(12));
+        content.add(labeled("Alpha mask"));
+        ImageView maskView = new ImageView();
+        byte[] maskBytes = resforge.layers.TexMaskCodec.mask(l.data);
+        java.awt.image.BufferedImage mimg = null;
+        if(maskBytes != null) {
+            try {
+                mimg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(maskBytes));
+            } catch(Exception ignored) {
+            }
+        }
+        if(mimg != null) {
+            maskView.setImage(mimg);
+            content.add(labeled(mimg.getWidth() + " \u00d7 " + mimg.getHeight()
+                    + " pixels (" + ti.maskFormat + ")"));
+        } else {
+            maskView.setPlaceholder("(mask could not be decoded)");
+        }
+        maskView.setAlignmentX(Component.LEFT_ALIGNMENT);
+        content.add(maskView);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(act("Replace mask", () -> host.replaceTexMask(idx))),
+                new JButton(act("Export mask", () -> host.exportTexMask(idx)))));
+    }
+
+    /** Editable header fields (id, offset, declared size) for a tex layer. */
+    private void addTexHeaderEditor(JPanel content, int idx, resforge.layers.TexHeaderCodec h) {
+        JSpinner idSp = intSpinner(h.id);
+        JSpinner oxSp = u16Spinner(h.offX);
+        JSpinner oySp = u16Spinner(h.offY);
+        JSpinner sxSp = u16Spinner(h.szX);
+        JSpinner sySp = u16Spinner(h.szY);
+
+        JPanel row1 = headerRow();
+        row1.add(new JLabel("id")); row1.add(idSp);
+        row1.add(new JLabel("  off.x")); row1.add(oxSp);
+        row1.add(new JLabel("  off.y")); row1.add(oySp);
+
+        JPanel row2 = headerRow();
+        row2.add(new JLabel("sz.x")); row2.add(sxSp);
+        row2.add(new JLabel("  sz.y")); row2.add(sySp);
+        row2.add(new JButton(act("Apply header", () -> {
+            try {
+                byte[] payload = h.encodeWith(
+                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(), (Integer) oySp.getValue(),
+                        (Integer) sxSp.getValue(), (Integer) sySp.getValue());
+                host.setLayerPayload(idx, payload);
+                host.setStatus("Updated tex header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                host.error(ex.getMessage());
+            }
+        })));
+
+        content.add(row1);
+        content.add(row2);
+    }
+
+    /** Editable header fields (id, z, sub-z, offset, nooff) for an old-style image layer. */
+    private void addImageHeaderEditor(JPanel content, int idx, resforge.layers.ImageHeaderCodec h) {
+        JSpinner idSp = intSpinner(h.id);
+        JSpinner zSp = intSpinner(h.z);
+        JSpinner subzSp = intSpinner(h.subz);
+        JSpinner oxSp = intSpinner(h.offX);
+        JSpinner oySp = intSpinner(h.offY);
+        JCheckBox nooffBox = new JCheckBox("no offset", h.nooff);
+
+        JPanel row1 = headerRow();
+        row1.add(new JLabel("id")); row1.add(idSp);
+        row1.add(new JLabel("  z")); row1.add(zSp);
+        row1.add(new JLabel("  sub-z")); row1.add(subzSp);
+
+        JPanel row2 = headerRow();
+        row2.add(new JLabel("off.x")); row2.add(oxSp);
+        row2.add(new JLabel("  off.y")); row2.add(oySp);
+        row2.add(nooffBox);
+        row2.add(new JButton(act("Apply header", () -> {
+            try {
+                byte[] payload = h.encodeWith(
+                        (Integer) zSp.getValue(), (Integer) subzSp.getValue(),
+                        (Integer) idSp.getValue(), (Integer) oxSp.getValue(),
+                        (Integer) oySp.getValue(), nooffBox.isSelected());
+                host.setLayerPayload(idx, payload);
+                host.setStatus("Updated image header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                host.error(ex.getMessage());
+            }
+        })));
+
+        content.add(row1);
+        content.add(row2);
+    }
+
+    private static JPanel headerRow() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        return row;
+    }
+
+    private static JSpinner intSpinner(int value) {
+        JSpinner s = new JSpinner(new SpinnerNumberModel(value, -32768, 32767, 1));
+        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
+        return s;
+    }
+
+    private static JSpinner u16Spinner(int value) {
+        JSpinner s = new JSpinner(new SpinnerNumberModel(Math.max(0, Math.min(65535, value)), 0, 65535, 1));
+        ((JSpinner.DefaultEditor) s.getEditor()).getTextField().setColumns(5);
+        return s;
+    }
+
+    void buildTextPanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.editableText(l));
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(act("Apply text", () -> {
+            host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
+            host.setStatus("Updated text in layer " + idx);
+        })), new JButton(act("Export", () -> host.exportLayer(idx)))));
+    }
+
+    void buildJsonPanel(JPanel content, int idx, Layer l) {
+        addJsonEditor(content, idx, l, 320);
+    }
+
+    private void addJsonEditor(JPanel content, int idx, Layer l, int height) {
+        String json = GuiSupport.editableJson(l);
+        if(json == null) {
+            content.add(labeled("This " + l.name + " layer uses types this editor can't safely"
+                    + " present as JSON; it is preserved as-is."));
+            content.add(Box.createVerticalStrut(8));
+            content.add(buttonRow(new JButton(act("Export raw", () -> host.exportLayer(idx)))));
+            return;
+        }
+        JTextArea area = new JTextArea(json);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, height));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(act("Apply JSON", () -> {
+            host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
+            host.setStatus("Updated " + l.name + " in layer " + idx);
+        })), new JButton(act("Export JSON", () -> host.exportLayer(idx)))));
+    }
+
+    /** anim layers: a live frame preview (resolving frame image-ids to sibling image layers) + the JSON editor. */
+    void buildAnimPanel(JPanel content, int idx, Layer l) {
+        addAnimPreview(content, l);
+        addJsonEditor(content, idx, l, 160);
+    }
+
+    private void addAnimPreview(JPanel content, Layer l) {
+        java.util.Map<String, Object> m;
+        try {
+            m = resforge.layers.AnimCodec.decode(l.data);
+        } catch(RuntimeException e) {
+            return;
+        }
+        int delay = ((Number) m.get("delay")).intValue();
+        java.util.List<?> ids = (java.util.List<?>) m.get("frames");
+        java.util.List<AnimView.Frame> frames = new java.util.ArrayList<>();
+        for(Object o : ids) {
+            AnimView.Frame fr = frameById(((Number) o).intValue());
+            if(fr != null)
+                frames.add(fr);
+        }
+        if(frames.isEmpty()) {
+            content.add(labeled("(no matching image frames in this resource to preview)"));
+            content.add(Box.createVerticalStrut(8));
+            return;
+        }
+        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
+                + " (true relative size & offset)"));
+        AnimView view = new AnimView();
+        Dimension d = new Dimension(220, 180);
+        view.setPreferredSize(d);
+        view.setMaximumSize(d);
+        view.setAlignmentX(Component.LEFT_ALIGNMENT);
+        view.setFrames(frames);
+        content.add(view);
+        content.add(Box.createVerticalStrut(8));
+        int[] fi = {0};
+        javax.swing.Timer timer = new javax.swing.Timer(Math.max(20, delay), ev -> {
+            fi[0] = (fi[0] + 1) % frames.size();
+            view.setCurrent(fi[0]);
+        });
+        timer.setInitialDelay(Math.max(20, delay));
+        timer.start();
+        host.setAnimTimer(timer);
+    }
+
+    /** Resolves an animation frame id to its image + draw offset (first matching image layer), else null. */
+    private AnimView.Frame frameById(int id) {
+        if(host.res() == null)
+            return null;
+        for(Layer ly : host.res().layers) {
+            if(!ly.name.equals("image"))
+                continue;
+            try {
+                resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
+                if(ii.recognized && ii.id == id) {
+                    java.awt.image.BufferedImage bi = GuiSupport.preview(ly);
+                    if(bi != null) {
+                        int ox = ii.nooff ? 0 : ii.offX;
+                        int oy = ii.nooff ? 0 : ii.offY;
+                        return new AnimView.Frame(bi, ox, oy);
+                    }
+                }
+            } catch(RuntimeException ignored) {
+            }
+        }
+        return null;
+    }
+
+    void buildMediaPanel(JPanel content, int idx, Layer l) {
+        if(l.name.equals("audio2")) {
+            byte[] ogg = GuiSupport.audioBytes(l);
+            if(ogg != null) {
+                AudioPlayerPanel player = new AudioPlayerPanel(ogg);
+                host.setCurrentPlayer(player);
+                content.add(player);
+                content.add(Box.createVerticalStrut(8));
+            }
+            addAudioHeaderEditor(content, idx, l);
+        }
+        String media = GuiSupport.mediaMeta(l);
+        content.add(labeled(media != null ? media : GuiSupport.summary(l)));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(act("Replace", () -> host.replaceFromFile(idx, l.name))),
+                new JButton(act("Export", () -> host.exportLayer(idx)))));
+    }
+
+    /** Shows the audio clip id + volume, with an editable volume for ver-2 clips. */
+    private void addAudioHeaderEditor(JPanel content, int idx, Layer l) {
+        resforge.layers.AudioHeaderCodec h = resforge.layers.AudioHeaderCodec.parse(l.data);
+        if(!h.editable) {
+            resforge.layers.AudioInfo ai = resforge.layers.AudioInfo.parse(l.data);
+            if(ai.recognized)
+                content.add(labeled("id=\"" + ai.id + "\"   volume=" + String.format("%.3f", ai.bvol)));
+            return;
+        }
+        JTextField idField = new JTextField(h.id, 10);
+        JPanel row = headerRow();
+        row.add(new JLabel("id"));
+        row.add(idField);
+        final JSpinner volSp;
+        if(h.hasVol) {
+            volSp = new JSpinner(new SpinnerNumberModel(h.bvol(), 0.0, 65.535, 0.05));
+            ((JSpinner.DefaultEditor) volSp.getEditor()).getTextField().setColumns(6);
+            row.add(new JLabel("  volume"));
+            row.add(volSp);
+        } else {
+            volSp = null;
+        }
+        row.add(new JButton(act("Apply", () -> {
+            try {
+                byte[] payload = (volSp != null)
+                        ? h.encodeWithBvol(idField.getText(), (Double) volSp.getValue())
+                        : h.encodeWith(idField.getText(), 0);
+                host.setLayerPayload(idx, payload);
+                host.setStatus("Updated audio header in layer " + idx);
+            } catch(IllegalArgumentException ex) {
+                host.error(ex.getMessage());
+            }
+        })));
+        content.add(row);
+        content.add(Box.createVerticalStrut(8));
+    }
+
+    void buildModelPanel(JPanel content, Layer l) {
+        String detail = GuiSupport.modelDetail(l);
+        if(detail != null) {
+            JTextArea area = new JTextArea(detail);
+            area.setEditable(false);
+            area.setOpaque(false);
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setAlignmentX(Component.LEFT_ALIGNMENT);
+            content.add(area);
+        } else {
+            content.add(labeled(GuiSupport.summary(l)));
+        }
+        content.add(Box.createVerticalStrut(8));
+        content.add(labeled("3D geometry is read-only here; export to glTF to edit the whole "
+                + "model in Blender, then rebuild from the edited .glb to bring your changes back."));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(act("Export glTF (.glb)", host::exportGltf)),
+                new JButton(act("Rebuild from glTF", host::rebuildGltf))));
+    }
+
+    void buildCodePanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.codeText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(act("Export", () -> host.exportLayer(idx)))));
+    }
+
+    void buildReferencePanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.referenceText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setCaretPosition(0);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(labeled("Read-only: this resource references the items above; preserved exactly on save."));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(act("Export", () -> host.exportLayer(idx)))));
+    }
+
+    void buildRawPanel(JPanel content, int idx, Layer l) {
+        content.add(labeled("Raw layer, preserved exactly on save."));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(
+                new JButton(act("Replace raw", () -> host.replaceFromFile(idx, l.name))),
+                new JButton(act("Export raw", () -> host.exportLayer(idx)))));
+    }
+
+    void buildRigPanel(JPanel content, int idx, Layer l) {
+        JTextArea area = new JTextArea(GuiSupport.rigText(l));
+        area.setEditable(false);
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setCaretPosition(0);
+        JScrollPane sp = new JScrollPane(area);
+        sp.setAlignmentX(Component.LEFT_ALIGNMENT);
+        sp.setPreferredSize(new Dimension(420, 320));
+        content.add(sp);
+        content.add(Box.createVerticalStrut(8));
+        content.add(labeled("Read-only structural view; the layer is preserved exactly on save."));
+        content.add(Box.createVerticalStrut(8));
+        content.add(buttonRow(new JButton(act("Export raw", () -> host.exportLayer(idx)))));
+    }
+
+    /* ------------------------------------------------------------------- utils */
+
+    /** Wraps a {@link Runnable} as a Swing action, surfacing any error via the host. */
+    private AbstractAction act(String text, Runnable r) {
+        return new AbstractAction(text) {
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    r.run();
+                } catch(Exception ex) {
+                    host.error(ex.getMessage());
+                }
+            }
+        };
+    }
+
+    private JComponent buttonRow(JButton... buttons) {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        for(int i = 0; i < buttons.length; i++) {
+            if(i > 0)
+                row.add(Box.createHorizontalStrut(8));
+            row.add(buttons[i]);
+        }
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        return row;
+    }
+
+    private JComponent labeled(String text) {
+        JLabel lab = new JLabel(text);
+        lab.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return lab;
+    }
+}
