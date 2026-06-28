@@ -145,7 +145,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `Fetcher` and following its own `matid→mat2→tex` chain; per-path cache, depth cap +
   cycle guard; offline/no-fetcher resolves nothing. `ModelGeometry.from(res, fetcher)`
   appends the resolved images to the palette so the viewer's "Resolve external textures"
-  toggle can texture those parts; runtime varmat / `Dyntex` stay shaded),
+  toggle can texture those parts; `hasExternalStatic(res)` is an offline (no-fetch) check
+  the viewer uses to show that toggle only when a model has such materials; runtime
+  varmat / `Dyntex` stay shaded),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,

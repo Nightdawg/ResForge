@@ -729,13 +729,17 @@ public class ResForgeFrame extends JFrame {
         setStatus("Building 3D model \u2026");
         Thread t = new Thread(() -> {
             ModelGeometry g = null;
+            boolean hasExt = false;
             String err = null;
             try {
-                g = ModelGeometry.from(ResContainer.parse(snapshot));
+                ResContainer parsed = ResContainer.parse(snapshot);
+                g = ModelGeometry.from(parsed);
+                hasExt = ExternalTextures.hasExternalStatic(parsed);
             } catch(Exception e) {
                 err = e.getMessage();
             }
             final ModelGeometry geo = g;
+            final boolean hasExternal = hasExt;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 setStatus("Ready");
@@ -744,14 +748,14 @@ public class ResForgeFrame extends JFrame {
                             : "This resource has no 3D geometry (vbuf2/mesh) to view.");
                     return;
                 }
-                show3DDialog(title, snapshot, geo);
+                show3DDialog(title, snapshot, geo, hasExternal);
             });
         }, "model-3d");
         t.setDaemon(true);
         t.start();
     }
 
-    private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain) {
+    private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain, boolean hasExternal) {
         JDialog dlg = new JDialog(this, "3D view \u2014 " + title, false);
         dlg.setLayout(new BorderLayout());
 
@@ -761,9 +765,12 @@ public class ResForgeFrame extends JFrame {
         hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         dlg.add(hint, BorderLayout.SOUTH);
 
-        // Off by default: resolving external static materials fetches other .res files
-        // from the server, so the otherwise-offline viewer only goes online on request.
-        JCheckBox resolveExt = new JCheckBox("Resolve external textures (network)", false);
+        // Only offered when the model actually has external static materials to resolve
+        // (detected offline); off by default, since resolving fetches other .res files,
+        // so the otherwise-offline viewer only goes online on request.
+        JCheckBox resolveExt = hasExternal
+                ? new JCheckBox("Resolve external textures (network)", false)
+                : null;
 
         final ModelGeometry[] resolvedCache = {null};
         final Component[] installed = {null, null};   // current NORTH, CENTER
@@ -783,52 +790,53 @@ public class ResForgeFrame extends JFrame {
             dlg.repaint();
         };
 
-        resolveExt.addActionListener(e -> {
-            if(!resolveExt.isSelected()) {
-                install.accept(geoPlain);
-                return;
-            }
-            if(resolvedCache[0] != null) {
-                install.accept(resolvedCache[0]);
-                return;
-            }
-            resolveExt.setEnabled(false);
-            setStatus("Resolving external textures \u2026");
-            java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
-            String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
-            Thread t = new Thread(() -> {
-                ModelGeometry g = null;
-                try {
-                    ExternalTextures.Fetcher fetcher = path -> {
-                        try {
-                            return ResContainer.parse(resforge.net.ResourceFetcher.fetch(base, path));
-                        } catch(Exception ex) {
-                            return null;
-                        }
-                    };
-                    g = ModelGeometry.from(ResContainer.parse(snapshot), fetcher);
-                } catch(Exception ex) {
-                    /* leave g null */
+        if(resolveExt != null)
+            resolveExt.addActionListener(e -> {
+                if(!resolveExt.isSelected()) {
+                    install.accept(geoPlain);
+                    return;
                 }
-                final ModelGeometry geo = g;
-                SwingUtilities.invokeLater(() -> {
-                    resolveExt.setEnabled(true);
-                    if(geo == null) {
-                        resolveExt.setSelected(false);
-                        setStatus("Ready");
-                        info("Could not resolve external textures.");
-                        return;
+                if(resolvedCache[0] != null) {
+                    install.accept(resolvedCache[0]);
+                    return;
+                }
+                resolveExt.setEnabled(false);
+                setStatus("Resolving external textures \u2026");
+                java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+                String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
+                Thread t = new Thread(() -> {
+                    ModelGeometry g = null;
+                    try {
+                        ExternalTextures.Fetcher fetcher = path -> {
+                            try {
+                                return ResContainer.parse(resforge.net.ResourceFetcher.fetch(base, path));
+                            } catch(Exception ex) {
+                                return null;
+                            }
+                        };
+                        g = ModelGeometry.from(ResContainer.parse(snapshot), fetcher);
+                    } catch(Exception ex) {
+                        /* leave g null */
                     }
-                    resolvedCache[0] = geo;
-                    install.accept(geo);
-                    setStatus(geo.externalTextures.isEmpty()
-                            ? "No external textures resolved (offline or none present)"
-                            : "Ready");
-                });
-            }, "model-3d-resolve");
-            t.setDaemon(true);
-            t.start();
-        });
+                    final ModelGeometry geo = g;
+                    SwingUtilities.invokeLater(() -> {
+                        resolveExt.setEnabled(true);
+                        if(geo == null) {
+                            resolveExt.setSelected(false);
+                            setStatus("Ready");
+                            info("Could not resolve external textures.");
+                            return;
+                        }
+                        resolvedCache[0] = geo;
+                        install.accept(geo);
+                        setStatus(geo.externalTextures.isEmpty()
+                                ? "No external textures resolved (offline or none present)"
+                                : "Ready");
+                    });
+                }, "model-3d-resolve");
+                t.setDaemon(true);
+                t.start();
+            });
 
         install.accept(geoPlain);
         dlg.pack();
@@ -839,7 +847,7 @@ public class ResForgeFrame extends JFrame {
     /** Builds the NORTH control panel (toggles + per-material texture pickers) for a
      *  3D-view geometry, wired to {@code view}. Rebuilt whenever the geometry is swapped
      *  (e.g. when external textures are resolved), reusing the persistent {@code resolveExt}
-     *  toggle. */
+     *  toggle when present ({@code null} when the model has no external static materials). */
     private JPanel build3DControls(ModelGeometry geo, Model3DView view, JCheckBox resolveExt) {
         JCheckBox shaded = new JCheckBox("Shaded", true);
         JCheckBox wire = new JCheckBox("Wireframe", false);
@@ -852,7 +860,8 @@ public class ResForgeFrame extends JFrame {
         controls.add(tex);
         controls.add(wire);
         controls.add(new JButton(action("Reset view", view::resetView)));
-        controls.add(resolveExt);
+        if(resolveExt != null)
+            controls.add(resolveExt);
         controls.add(new JLabel("   " + geo.vertexCount + " verts \u00b7 "
                 + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"
                 + (geo.hasTextures() ? "" : " \u00b7 no local textures")));

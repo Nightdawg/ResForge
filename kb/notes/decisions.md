@@ -98,8 +98,11 @@ base is an `mlink`/external `tex` string naming **one fixed resource** is resolv
 fetching that resource and following *its* own `matid→mat2→tex` chain
 (`model/ExternalTextures`: injectable fetcher → per-path cache + depth cap + cycle guard),
 surfaced behind a **"Resolve external textures (network)"** toggle in the View-3D window
-(off by default — the viewer is otherwise offline and instant). Resolved parts texture but
-still get no picker (`localBase` false; they index the appended *external* palette).
+(off by default — the viewer is otherwise offline and instant — and shown only when the
+model actually has such materials, via the offline `ExternalTextures.hasExternalStatic`
+check, so plain local models aren't cluttered with a useless toggle). Resolved parts
+texture but still get no picker (`localBase` false; they index the appended *external*
+palette).
 Validated end-to-end on mulberry (bark via `mulberry-tex`, berries via `items/mulberry`).
 **Still not done:** (b) genuine **variable materials** (runtime-chosen wood-types whose
 final image isn't in the `.res`) and **Dyntex** `spr` additions stay shaded; and

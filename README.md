@@ -38,7 +38,8 @@ whose base texture isn't a local `tex` — it comes from another resource via `m
 external `tex` string (an *external static material*), a runtime *variable material*, or a
 `Dyntex` sprite addition — gets no picker and shows shaded; an optional **Resolve external
 textures (network)** toggle fetches the linked resource to texture the *external static*
-parts (e.g. a tree's bark), while runtime varmat/`Dyntex` parts stay shaded); and a full **3D model round-trip** — export to a Blender-ready binary
+parts (e.g. a tree's bark) — shown only for models that have such parts — while runtime
+varmat/`Dyntex` parts stay shaded); and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
 file); **Rebuild from glTF** to bring edits back — regenerate geometry so you can
@@ -317,9 +318,10 @@ These are deliberately out of scope for 1.0 — nothing here risks corrupting a 
   always verify rebuilt models in-game. A plain export→rebuild with no edits is
   validated as a no-op on the sample models.
 - **3D viewer — non-local-textured parts.** Parts whose base texture isn't one of the
-  resource's own `tex` layers render shaded by default. The **Resolve external textures
-  (network)** toggle fetches the linked resource to texture *external static* parts (an
-  `mlink`/external `tex` string → one fixed resource, e.g. a tree's bark). Runtime
+  resource's own `tex` layers render shaded by default. For models that have *external
+  static* parts (an `mlink`/external `tex` string → one fixed resource, e.g. a tree's
+  bark), a **Resolve external textures (network)** toggle fetches the linked resource to
+  texture them. Runtime
   *variable materials* and `Dyntex` sprite additions stay shaded (their image isn't in the
   file); a part with a local `otex` overlay over an external base (knarr's hull/sail) shows
   its overlay only (compositing base+overlay is a follow-on). The glTF export/round-trip is
