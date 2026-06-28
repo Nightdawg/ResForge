@@ -6,6 +6,8 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-06-28
+
 ### Added
 
 - **`props` layers now expose far more `tto` value types as editable JSON.** The
@@ -147,5 +149,6 @@ is read-only; `code`/`codeentry` are read-only; the glTF rebuild is not byte-los
 (verify in-game); the 3D viewer shows `varmat`-textured parts shaded; and a few unusual
 typed instances stay raw by design (lossless-or-raw).
 
-[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Nightdawg/ResForge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nightdawg/ResForge/releases/tag/v1.0.0

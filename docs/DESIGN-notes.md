@@ -304,7 +304,7 @@ resforge/
 
 # Or use the jar
 ./gradlew jar
-java -jar build-gradle/libs/resforge-1.0.0.jar info horse.res
+java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 ```
 
 ---

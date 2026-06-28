@@ -12,8 +12,8 @@ The editor is the main way to use ResForge. Double-click the jar, or run it with
 no arguments, to open it:
 
 ```sh
-java -jar build-gradle/libs/resforge-1.0.0.jar          # opens the editor
-java -jar build-gradle/libs/resforge-1.0.0.jar gui horse.res   # opens a file
+java -jar build-gradle/libs/resforge-1.1.0.jar          # opens the editor
+java -jar build-gradle/libs/resforge-1.1.0.jar gui horse.res   # opens a file
 ```
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
@@ -172,21 +172,21 @@ output directory so they never clash.
 
 ```sh
 ./gradlew build      # compile + run the tests
-./gradlew jar        # -> build-gradle/libs/resforge-1.0.0.jar
+./gradlew jar        # -> build-gradle/libs/resforge-1.1.0.jar
 ```
 
 **Maven** (auto-downloads dependencies + plugins from Maven Central):
 
 ```sh
 mvn package          # compile + run the tests + build the jar
-                     # -> build-maven/resforge-1.0.0.jar
+                     # -> build-maven/resforge-1.1.0.jar
 ```
 
 **Ant** (for those who prefer it; no internet needed — JUnit jars are vendored in `lib/`):
 
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
-ant jar              # -> build-ant/libs/resforge-1.0.0.jar
+ant jar              # -> build-ant/libs/resforge-1.1.0.jar
 ```
 
 The Ant build has no internet dependency — the JUnit 5 jars live in `lib/`. Gradle
@@ -205,8 +205,8 @@ paths with spaces):
 
 ```sh
 ./gradlew jar
-# the jar is at build-gradle/libs/resforge-1.0.0.jar
-alias resforge='java -jar build-gradle/libs/resforge-1.0.0.jar'
+# the jar is at build-gradle/libs/resforge-1.1.0.jar
+alias resforge='java -jar build-gradle/libs/resforge-1.1.0.jar'
 ```
 
 ```sh
