@@ -14,9 +14,10 @@ All notable changes to ResForge are documented here. The format is based on
   resource** (e.g. a tree's bark, which lives in a separate `…-tex` resource). It fetches
   that resource and follows its own `matid→mat2→tex` chain (`model/ExternalTextures`:
   injectable fetcher, per-path cache, depth cap + cycle guard). Off by default, since the
-  viewer is otherwise fully offline; resolved parts are textured but not added to the
-  per-material picker (the linked palette isn't theirs to swap). Runtime *variable
-  materials* (wood-type swaps) and `Dyntex` `spr` sprite additions are out of scope and
+  viewer is otherwise fully offline, and **shown only when the model actually has external
+  static materials** (detected offline via `ExternalTextures.hasExternalStatic`, no fetch);
+  resolved parts are textured but not added to the per-material picker (the linked palette
+  isn't theirs to swap). Runtime *variable materials* (wood-type swaps) and `Dyntex` `spr` sprite additions are out of scope and
   stay shaded — their final image isn't stored in the model `.res`. Validated end-to-end on
   the mulberry tree (bark + berries texture once resolved).
 - **Per-material texture picker in the 3D viewer.** The **View 3D** window now shows a

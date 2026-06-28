@@ -1,12 +1,14 @@
 package resforge.model;
 
 import resforge.layers.Mat2Codec;
+import resforge.layers.MeshInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
 
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -91,6 +93,94 @@ public final class ExternalTextures {
             }
         }
         return out;
+    }
+
+    /**
+     * Whether this resource has at least one mesh-used material whose base is an
+     * <em>unresolved external static</em> material (an {@code mlink}/external {@code tex}
+     * string &rarr; another resource), i.e. the "Resolve external textures" action could
+     * actually add textures. <strong>Local-only</strong> — it walks the resource's own
+     * {@code mesh}/{@code mat2} layers (following local {@code mlink} chains) and fetches
+     * nothing, so the viewer can cheaply decide whether to offer the (network) toggle.
+     * Materials already textured locally, and shaded parts whose base is a runtime
+     * {@code varmat}/{@code Dyntex} (no {@code mlink}/{@code tex} link), don't count.
+     */
+    public static boolean hasExternalStatic(ResContainer res) {
+        if(res == null)
+            return false;
+        try {
+            LocalTextures lt = LocalTextures.from(res);
+            Map<Integer, Map<String, Object>> mats = decodeMats(res);
+            Set<Integer> meshMatids = new LinkedHashSet<>();
+            for(Layer l : res.layers) {
+                if(!l.name.equals("mesh"))
+                    continue;
+                MeshInfo mi = MeshInfo.parse(l.data);
+                if(mi.recognized)
+                    meshMatids.add(mi.matid);
+            }
+            for(int matid : meshMatids) {
+                if(lt.texForMatid(matid) != null)
+                    continue;   // already textured locally
+                if(reachesExternalLink(mats, matid, new HashSet<>(), 0))
+                    return true;
+            }
+        } catch(RuntimeException ignored) {
+        }
+        return false;
+    }
+
+    private static Map<Integer, Map<String, Object>> decodeMats(ResContainer res) {
+        Map<Integer, Map<String, Object>> m = new LinkedHashMap<>();
+        for(Layer l : res.layers) {
+            if(!l.name.equals("mat2"))
+                continue;
+            try {
+                Map<String, Object> dec = Mat2Codec.decode(l.data);
+                Object id = dec.get("id");
+                if(id instanceof Number)
+                    m.putIfAbsent(((Number) id).intValue(), dec);
+            } catch(RuntimeException ignored) {
+            }
+        }
+        return m;
+    }
+
+    /** True if {@code matid}'s base (following local {@code mlink} chains) reaches an
+     *  external {@code mlink}/{@code tex} string — i.e. links into another resource. */
+    private static boolean reachesExternalLink(Map<Integer, Map<String, Object>> mats, int matid,
+                                               Set<Integer> seen, int depth) {
+        if(depth > MAX_DEPTH || !seen.add(matid))
+            return false;
+        Map<String, Object> mat = mats.get(matid);
+        if(mat == null)
+            return false;
+        Object entriesObj = mat.get("entries");
+        if(!(entriesObj instanceof List))
+            return false;
+        for(Object eo : (List<?>) entriesObj) {
+            if(!(eo instanceof Map))
+                continue;
+            Map<?, ?> e = (Map<?, ?>) eo;
+            String k = String.valueOf(e.get("key"));
+            Object valsObj = e.get("values");
+            if(!(valsObj instanceof List))
+                continue;
+            List<?> vals = (List<?>) valsObj;
+            if(vals.isEmpty())
+                continue;
+            Object v0 = vals.get(0);
+            if(k.equals("mlink")) {
+                if(v0 instanceof String)
+                    return true;
+                Integer local = asInt(v0);
+                if(local != null && reachesExternalLink(mats, local, seen, depth + 1))
+                    return true;
+            } else if(k.equals("tex") && v0 instanceof String) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Resolved resolveImage(ResContainer res, int matid, int depth, Set<String> visited) {

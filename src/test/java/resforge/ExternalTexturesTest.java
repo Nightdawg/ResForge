@@ -164,6 +164,35 @@ class ExternalTexturesTest {
     }
 
     @Test
+    void detectsWhetherAModelHasExternalStaticMaterials() {
+        // A model whose mesh-used material links externally → has external static.
+        ResContainer external = new ResContainer(7);
+        external.layers.add(new Layer("vbuf2", vbufTex()));
+        external.layers.add(new Layer("mesh", meshMat(5)));
+        external.layers.add(new Layer("mat2", mat2MlinkExternal(5, "other-tex", 1, 2)));
+        assertTrue(ExternalTextures.hasExternalStatic(external));
+
+        // A model whose mesh-used material is textured locally → nothing to resolve.
+        ResContainer local = new ResContainer(7);
+        local.layers.add(new Layer("vbuf2", vbufTex()));
+        local.layers.add(new Layer("mesh", meshMat(5)));
+        local.layers.add(new Layer("tex", tex(2, A)));
+        local.layers.add(new Layer("mat2", mat2LocalTex(5, 2)));
+        assertFalse(ExternalTextures.hasExternalStatic(local));
+
+        // An external link that no mesh references → nothing to resolve (not mesh-used).
+        ResContainer unused = new ResContainer(7);
+        unused.layers.add(new Layer("vbuf2", vbufTex()));
+        unused.layers.add(new Layer("mesh", meshMat(5)));
+        unused.layers.add(new Layer("tex", tex(2, A)));
+        unused.layers.add(new Layer("mat2", mat2LocalTex(5, 2)));               // mesh uses local
+        unused.layers.add(new Layer("mat2", mat2MlinkExternal(8, "other-tex", 1, 2))); // unused
+        assertFalse(ExternalTextures.hasExternalStatic(unused));
+
+        assertFalse(ExternalTextures.hasExternalStatic(null));
+    }
+
+    @Test
     void modelGeometryTexturesExternalMaterialOnlyWhenAFetcherIsGiven() {
         Map<String, ResContainer> serve = servers();
         ResContainer model = new ResContainer(7);
