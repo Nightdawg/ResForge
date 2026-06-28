@@ -140,8 +140,12 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `tex`/`otex` command's index is the **tex layer's id** — `flayer(TexR.class, id)` —
   not its position; `isLocalBaseTex(matid)` distinguishes a local base `tex` from a
   non-local one (external-static `mlink`/external string, runtime varmat, or `otex`-overlay
-  only); those non-local textures are left unresolved — resolving external-static by
-  fetching the linked resource is Tier 2 part 2),
+  only)), `ExternalTextures` (resolve an *external static* base — an `mlink`/external
+  `tex` string → one fixed resource — by fetching that resource via an injectable
+  `Fetcher` and following its own `matid→mat2→tex` chain; per-path cache, depth cap +
+  cycle guard; offline/no-fetcher resolves nothing. `ModelGeometry.from(res, fetcher)`
+  appends the resolved images to the palette so the viewer's "Resolve external textures"
+  toggle can texture those parts; runtime varmat / `Dyntex` stay shaded),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
@@ -409,15 +413,20 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   Unit-tested (`ModelGeometryTest`, `LocalTexturesTest`); confirmed visually on male
   (textured humanoid), mulberry (alpha-tested foliage) and knarr (21-part ship, local
   parts textured, the rest shaded). **Tier 1** (shaded + wireframe) and **Tier 2 part 1**
-  (local textures) are done. **Tier 2 part 2 (TODO): external static materials** — many
-  parts get their base texture from an `mlink`/external `tex` string naming **one fixed
-  resource** (e.g. mulberry's bark, knarr's hull/sail), not a local `tex`; those currently
-  fall back to flat shading. **Fetching the referenced resource** and following *its* own
-  `matid→mat2→tex` chain would texture them — the deterministic, in-scope case. Genuine
-  **variable materials (varmat)** — runtime-chosen wood-types etc. whose final image isn't
-  in the `.res` — are a separate, later concern; and **Dyntex** (`spr`→`dynspr.Dyntex`)
-  sprite *additions* aren't a base texture at all (ignored). **Tier 3 (later): animation playback**
-  (skeletal/morph).
+  (local textures) are done. **Tier 2 part 2 — external static materials is now done.**
+  A part whose base texture is an `mlink`/external `tex` string naming **one fixed
+  resource** (e.g. mulberry's bark via `mlink gfx/terobjs/trees/mulberry-tex`, its berries
+  via an external `tex` string) is resolved by **fetching** that resource and following
+  *its* own `matid→mat2→tex` chain — `model/ExternalTextures` (injectable fetcher, per-path
+  cache, depth cap + cycle guard), exposed behind a **"Resolve external textures
+  (network)"** toggle in the View-3D window (off by default, since the viewer is otherwise
+  offline). Resolved parts texture but get no picker (`localBase` false; they index an
+  appended external palette). Validated end-to-end on mulberry. Still shaded: genuine
+  **variable materials (varmat)** — runtime-chosen wood-types whose final image isn't in
+  the `.res` — and **Dyntex** (`spr`→`dynspr.Dyntex`) sprite *additions* (not a base
+  texture). A part with a local `otex` overlay over an external `mlink` base (knarr's
+  hull/sail) already shows its overlay; compositing base+overlay is a follow-on.
+  **Tier 3 (later): animation playback** (skeletal/morph).
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
   `replace`, and a true batch needs a per-file mapping few users would set up), as

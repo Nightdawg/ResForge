@@ -8,6 +8,17 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **Resolve external static textures in the 3D viewer.** A **Resolve external textures
+  (network)** toggle in the **View 3D** window textures parts whose base comes from an
+  *external static material* — an `mlink`/external `tex` string naming **one fixed
+  resource** (e.g. a tree's bark, which lives in a separate `…-tex` resource). It fetches
+  that resource and follows its own `matid→mat2→tex` chain (`model/ExternalTextures`:
+  injectable fetcher, per-path cache, depth cap + cycle guard). Off by default, since the
+  viewer is otherwise fully offline; resolved parts are textured but not added to the
+  per-material picker (the linked palette isn't theirs to swap). Runtime *variable
+  materials* (wood-type swaps) and `Dyntex` `spr` sprite additions are out of scope and
+  stay shaded — their final image isn't stored in the model `.res`. Validated end-to-end on
+  the mulberry tree (bark + berries texture once resolved).
 - **Per-material texture picker in the 3D viewer.** The **View 3D** window now shows a
   dropdown for each *locally-textured* material (split across two balanced rows when a
   model has several), listing the resource's own `tex` layers (by id), so you can choose

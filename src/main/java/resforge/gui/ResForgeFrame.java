@@ -1,5 +1,6 @@
 package resforge.gui;
 
+import resforge.model.ExternalTextures;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
 import resforge.model.ModelGeometry;
@@ -743,17 +744,103 @@ public class ResForgeFrame extends JFrame {
                             : "This resource has no 3D geometry (vbuf2/mesh) to view.");
                     return;
                 }
-                show3DDialog(title, geo);
+                show3DDialog(title, snapshot, geo);
             });
         }, "model-3d");
         t.setDaemon(true);
         t.start();
     }
 
-    private void show3DDialog(String title, ModelGeometry geo) {
+    private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain) {
         JDialog dlg = new JDialog(this, "3D view \u2014 " + title, false);
-        Model3DView view = new Model3DView(geo);
+        dlg.setLayout(new BorderLayout());
 
+        JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
+                + " \u2014 shown in bind pose (no skinning/animation)");
+        hint.setForeground(java.awt.Color.GRAY);
+        hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        dlg.add(hint, BorderLayout.SOUTH);
+
+        // Off by default: resolving external static materials fetches other .res files
+        // from the server, so the otherwise-offline viewer only goes online on request.
+        JCheckBox resolveExt = new JCheckBox("Resolve external textures (network)", false);
+
+        final ModelGeometry[] resolvedCache = {null};
+        final Component[] installed = {null, null};   // current NORTH, CENTER
+
+        java.util.function.Consumer<ModelGeometry> install = geo -> {
+            if(installed[0] != null)
+                dlg.remove(installed[0]);
+            if(installed[1] != null)
+                dlg.remove(installed[1]);
+            Model3DView view = new Model3DView(geo);
+            JPanel north = build3DControls(geo, view, resolveExt);
+            dlg.add(north, BorderLayout.NORTH);
+            dlg.add(view, BorderLayout.CENTER);
+            installed[0] = north;
+            installed[1] = view;
+            dlg.revalidate();
+            dlg.repaint();
+        };
+
+        resolveExt.addActionListener(e -> {
+            if(!resolveExt.isSelected()) {
+                install.accept(geoPlain);
+                return;
+            }
+            if(resolvedCache[0] != null) {
+                install.accept(resolvedCache[0]);
+                return;
+            }
+            resolveExt.setEnabled(false);
+            setStatus("Resolving external textures \u2026");
+            java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+            String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
+            Thread t = new Thread(() -> {
+                ModelGeometry g = null;
+                try {
+                    ExternalTextures.Fetcher fetcher = path -> {
+                        try {
+                            return ResContainer.parse(resforge.net.ResourceFetcher.fetch(base, path));
+                        } catch(Exception ex) {
+                            return null;
+                        }
+                    };
+                    g = ModelGeometry.from(ResContainer.parse(snapshot), fetcher);
+                } catch(Exception ex) {
+                    /* leave g null */
+                }
+                final ModelGeometry geo = g;
+                SwingUtilities.invokeLater(() -> {
+                    resolveExt.setEnabled(true);
+                    if(geo == null) {
+                        resolveExt.setSelected(false);
+                        setStatus("Ready");
+                        info("Could not resolve external textures.");
+                        return;
+                    }
+                    resolvedCache[0] = geo;
+                    install.accept(geo);
+                    setStatus(geo.externalTextures.isEmpty()
+                            ? "No external textures resolved (offline or none present)"
+                            : "Ready");
+                });
+            }, "model-3d-resolve");
+            t.setDaemon(true);
+            t.start();
+        });
+
+        install.accept(geoPlain);
+        dlg.pack();
+        dlg.setLocationRelativeTo(this);
+        dlg.setVisible(true);
+    }
+
+    /** Builds the NORTH control panel (toggles + per-material texture pickers) for a
+     *  3D-view geometry, wired to {@code view}. Rebuilt whenever the geometry is swapped
+     *  (e.g. when external textures are resolved), reusing the persistent {@code resolveExt}
+     *  toggle. */
+    private JPanel build3DControls(ModelGeometry geo, Model3DView view, JCheckBox resolveExt) {
         JCheckBox shaded = new JCheckBox("Shaded", true);
         JCheckBox wire = new JCheckBox("Wireframe", false);
         JCheckBox tex = new JCheckBox("Textured", geo.hasTextures());
@@ -765,6 +852,7 @@ public class ResForgeFrame extends JFrame {
         controls.add(tex);
         controls.add(wire);
         controls.add(new JButton(action("Reset view", view::resetView)));
+        controls.add(resolveExt);
         controls.add(new JLabel("   " + geo.vertexCount + " verts \u00b7 "
                 + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"
                 + (geo.hasTextures() ? "" : " \u00b7 no local textures")));
@@ -780,11 +868,6 @@ public class ResForgeFrame extends JFrame {
                 c.setEnabled(tex.isSelected());
         });
 
-        JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
-                + " \u2014 shown in bind pose (no skinning/animation)");
-        hint.setForeground(java.awt.Color.GRAY);
-        hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-
         JPanel north = new JPanel();
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         controls.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -793,14 +876,7 @@ public class ResForgeFrame extends JFrame {
             r.setAlignmentX(Component.LEFT_ALIGNMENT);
             north.add(r);
         }
-
-        dlg.setLayout(new BorderLayout());
-        dlg.add(north, BorderLayout.NORTH);
-        dlg.add(view, BorderLayout.CENTER);
-        dlg.add(hint, BorderLayout.SOUTH);
-        dlg.pack();
-        dlg.setLocationRelativeTo(this);
-        dlg.setVisible(true);
+        return north;
     }
 
     /** Build the per-material texture-picker rows for the 3D dialog. One combo per
