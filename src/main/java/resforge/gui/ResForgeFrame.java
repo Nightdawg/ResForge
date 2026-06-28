@@ -805,9 +805,10 @@ public class ResForgeFrame extends JFrame {
 
     /** Build the per-material texture-picker rows for the 3D dialog. One combo per
      *  <em>locally-textured</em> material (listing the resource's local {@code tex}
-     *  layers by id, defaulting to the authored one); materials whose base is
-     *  variable/external (varmat/{@code mlink}/external string, or an {@code otex}
-     *  overlay only) get no combo — the local palette isn't theirs to swap. The combos
+     *  layers by id, defaulting to the authored one); materials whose base is non-local
+     *  (an external-static {@code mlink}/external string, a runtime varmat, a {@code Dyntex}
+     *  {@code spr} addition, or an {@code otex} overlay only) get no combo — the local
+     *  palette isn't theirs to swap. The combos
      *  are split over two balanced rows so a model with many materials doesn't make one
      *  very wide row. Returns the rows (empty when there's no real choice — fewer than
      *  two local textures, or no locally-textured material) and collects every combo
@@ -823,8 +824,8 @@ public class ResForgeFrame extends JFrame {
         if(!geo.hasTextures() || palette.size() <= 1)
             return rows;
 
-        // Only materials with a local base texture are swappable; variable/external
-        // ones (mlink/varmat/otex-only) are skipped.
+        // Only materials with a local base texture are swappable; non-local ones
+        // (external-static mlink/external string, runtime varmat, Dyntex spr, otex-only) are skipped.
         java.util.List<Integer> swappable = new java.util.ArrayList<>();
         for(int mi = 0; mi < geo.materials.size(); mi++)
             if(geo.materials.get(mi).localBase)

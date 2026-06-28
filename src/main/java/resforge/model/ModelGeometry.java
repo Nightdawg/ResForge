@@ -51,9 +51,10 @@ public final class ModelGeometry {
     /** A textured material: its {@code matid} and the local-texture palette ordinal
      *  it was authored to use (the viewer's default selection). {@code localBase} is
      *  true when its base colour comes from a local {@code tex} (so the local palette
-     *  is genuinely its to swap); false for a variable/external base (varmat-,
-     *  {@code mlink}- or external-string-supplied, or a local {@code otex} overlay
-     *  only) — rendered as an approximation but not offered a picker. */
+     *  is genuinely its to swap); false for any non-local base — an external-static
+     *  material ({@code mlink}/external string &rarr; another resource), a runtime varmat,
+     *  a {@code Dyntex} {@code spr} addition, or a local {@code otex} overlay only —
+     *  rendered as an approximation but not offered a picker. */
     public static final class Material {
         public final int matid;
         public final int defaultTex;

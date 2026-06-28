@@ -163,20 +163,39 @@ fetched, so parts that get their texture from another resource render shaded in
 View 3D (e.g. the mulberry **trunk**, via `mlink gfx/terobjs/trees/mulberry-tex`).
 (knarr: 6 local tex but most parts use external mlinks.)
 
-A material's texture source can be classified from its `mat2` commands alone:
-**local base** = a `tex` command with a numeric value resolving into this resource's own
-`tex` layers; **variable/external** = an `mlink` (links another material — local
-`{u8:id}` or external `"respath"`), an external `tex`/`otex` string, a `code`/`codeentry`
-**varmat** factory (e.g. knarr's `spr → haven.res.lib.dynspr.Dyntex`, the dynamic-texture
-factory), or a material carrying only a local `otex` *overlay* (`otex` is an overlay, not
-a base — `haven.resutil.OverTex`). The client looks textures up by id via
-`flayer(TexR.class, id)` for `tex`/`otex`/`pal`/`bump`, and `mlink` via `layer(Res.class,
-id)` / a respath. `LocalTextures.isLocalBaseTex(matid)` / `ModelGeometry.Material.localBase`
-implement the local-base test; the View-3D picker uses it (only local-base materials are
-swappable — knarr shows 1 picker not 10, mulberry 1). What we **can't** statically derive
-is the *final image* of a runtime-variable material (chosen by server/gob state, not stored
-in the model `.res`); a static external `mlink`/`@res` could be resolved by fetching that
-other resource (deferred — see decisions.md "3D viewer per-material texture picker").
+A material's texture source falls into one of four kinds, classifiable from its
+`mat2` commands alone. **Keep these distinct** — they were previously lumped as
+"variable/external", which conflated three unrelated mechanisms:
+
+1. **Local texture** — a `tex` command whose value is a numeric id resolving into
+   this resource's own `tex` layers (the client's `flayer(TexR.class, id)` lookup).
+   Fully resolved today (3D viewer + glTF export).
+2. **External static material** — an `mlink`, or an external `tex`/`otex` *string*,
+   naming exactly **one** other resource (e.g. mulberry's bark via
+   `mlink gfx/terobjs/trees/mulberry-tex`). The texture is **fixed and deterministic**:
+   it can be resolved by **fetching that resource** and following *its* own
+   `matid→mat2→tex` chain. (An `mlink` may instead carry a local `{u8:id}` — a link to
+   another *local* material — which stays in-resource.) This is the **Tier 2 part 2**
+   target. Confirmed on mulberry: every non-leaf material is either this kind or kind 1;
+   `mulberry-tex` is a self-contained 2-`tex` resource that references nothing further,
+   so the bark always looks the same.
+3. **Variable material (varmat)** — a material whose texture is chosen at **runtime**
+   (e.g. a built object's wood-type plank/block textures, picked from what it was made
+   of). The final image is **not stored in the model `.res`**, so it can't be statically
+   derived. Genuinely deferred, and **separate from kind 2**.
+4. **Dyntex** (`spr` → `haven.res.lib.dynspr.Dyntex`) — **not** a variable material:
+   it's a dynamic-sprite *addition* declared via `code`/`spr`, layered on rather than a
+   base-texture source. **Out of scope** for texture resolution; noted only.
+
+A local `otex` is an **overlay**, not a base (`haven.resutil.OverTex`), so a material
+carrying only a local `otex` over a non-local base is not itself locally based. The
+client looks textures up by id via `flayer(TexR.class, id)` for `tex`/`otex`/`pal`/`bump`,
+and `mlink` via `layer(Res.class, id)` / a respath.
+`LocalTextures.isLocalBaseTex(matid)` / `ModelGeometry.Material.localBase` implement the
+**local-base** test (kind 1 only); the View-3D picker uses it, so only local-base
+materials are swappable (knarr shows 1 picker not 10, mulberry 1). Resolving kind 2 by
+**fetching** the referenced resource is the planned Tier 2 part 2 work; kinds 3 and 4 are
+left shaded/ignored (see decisions.md "3D viewer per-material texture picker").
 
 ## glTF (.glb) model export
 Modern alternative to OBJ for the 3D model, and the basis for the eventual edit

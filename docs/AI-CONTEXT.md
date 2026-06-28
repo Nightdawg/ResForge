@@ -134,13 +134,14 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `ModelGeometry` (assemble a triangle soup — positions+normals+**UVs**, Haven Z-up,
   with a per-triangle **material index** + the full local-texture **palette** and each
   textured material's default texture + a `localBase` flag (local `tex` base vs
-  variable/external) — from `vbuf2`+`mesh` for the in-app 3D viewer;
+  non-local: external-static/varmat/`otex`-overlay) — from `vbuf2`+`mesh` for the in-app 3D viewer;
   reuses the same decoders as the glTF export), `LocalTextures` (resolve the
   `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; the
   `tex`/`otex` command's index is the **tex layer's id** — `flayer(TexR.class, id)` —
   not its position; `isLocalBaseTex(matid)` distinguishes a local base `tex` from a
-  variable/external one (`mlink`/external string/`otex`-overlay-only); external
-  `mlink`/variable-material textures are left unresolved),
+  non-local one (external-static `mlink`/external string, runtime varmat, or `otex`-overlay
+  only); those non-local textures are left unresolved — resolving external-static by
+  fetching the linked resource is Tier 2 part 2),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
   `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
@@ -186,7 +187,7 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   + `model/LocalTextures`. Carries the full local-texture **palette** + a per-material
   default + a `localBase` flag; `setMaterialTexture(matIndex, paletteOrd)` re-points a
   material, and the dialog shows one combo only per **locally-textured** material
-  (variable/external bases — varmat/`mlink`/`otex`-only — get none) — split over **two
+  (non-local bases — external-static `mlink`/varmat/`otex`-only — get none) — split over **two
   balanced rows** (testable `ResForgeFrame.buildTexturePickerRows`) so many-material
   models stay compact; so a model's alternate `tex` layers, e.g. mulberry's seasonal
   leaves, can be selected live, while knarr shows one picker not ten).
@@ -408,11 +409,14 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   Unit-tested (`ModelGeometryTest`, `LocalTexturesTest`); confirmed visually on male
   (textured humanoid), mulberry (alpha-tested foliage) and knarr (21-part ship, local
   parts textured, the rest shaded). **Tier 1** (shaded + wireframe) and **Tier 2 part 1**
-  (local textures) are done. **Tier 2 part 2 (TODO): variable materials** — knarr and
-  many models get their textures from a *variable material* (`varmat`) declared in
-  `code`/`codeentry`, not a local `tex`; those parts currently fall back to flat shading.
-  Resolving varmat (decode the varmat spec / external `mlink` textures, possibly fetching
-  the referenced resource) would texture them. **Tier 3 (later): animation playback**
+  (local textures) are done. **Tier 2 part 2 (TODO): external static materials** — many
+  parts get their base texture from an `mlink`/external `tex` string naming **one fixed
+  resource** (e.g. mulberry's bark, knarr's hull/sail), not a local `tex`; those currently
+  fall back to flat shading. **Fetching the referenced resource** and following *its* own
+  `matid→mat2→tex` chain would texture them — the deterministic, in-scope case. Genuine
+  **variable materials (varmat)** — runtime-chosen wood-types etc. whose final image isn't
+  in the `.res` — are a separate, later concern; and **Dyntex** (`spr`→`dynspr.Dyntex`)
+  sprite *additions* aren't a base texture at all (ignored). **Tier 3 (later): animation playback**
   (skeletal/morph).
 - GUI niceties are considered complete. **Batch re-skin a folder** is declined
   (won't do — folder-wide modding is already scriptable via the CLI `catalog` +

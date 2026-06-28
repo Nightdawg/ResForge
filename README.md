@@ -34,8 +34,9 @@ renderer that shows the model **textured** and shaded, with an optional wirefram
 and mouse orbit/zoom/pan, in its bind pose; a **per-material texture picker** lets
 you choose which of the resource's own `tex` layers each locally-textured part is
 drawn with — e.g. flip a tree's leaves between its seasonal variants live; a material
-whose base texture is variable/external (a `varmat` declared in `code`, or another
-resource via `mlink`) gets no picker and shows shaded, since the local textures aren't
+whose base texture isn't a local `tex` — it comes from another resource via `mlink`/an
+external `tex` string (an *external static material*), a runtime *variable material*, or a
+`Dyntex` sprite addition — gets no picker and shows shaded, since the local textures aren't
 its to swap); and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
@@ -314,9 +315,11 @@ These are deliberately out of scope for 1.0 — nothing here risks corrupting a 
   regenerates the `vbuf2`/`mesh` (re-quantised into the original formats), so
   always verify rebuilt models in-game. A plain export→rebuild with no edits is
   validated as a no-op on the sample models.
-- **3D viewer — variable-material parts.** Parts whose texture comes from a
-  `varmat` (declared in `code`, not a local `tex`) render shaded rather than
-  textured in the built-in **View 3D**; the glTF export/round-trip is unaffected.
+- **3D viewer — non-local-textured parts.** Parts whose base texture isn't one of the
+  resource's own `tex` layers — an *external static material* (`mlink`/external `tex`
+  string → another resource), a runtime *variable material*, or a `Dyntex` sprite
+  addition — render shaded rather than textured in the built-in **View 3D**; the glTF
+  export/round-trip is unaffected.
 - **A few layers stay raw by design.** When a typed layer can't be proven to
   re-encode byte-for-byte it is kept as raw bytes (lossless) rather than offered
   as an editor — e.g. a handful of unusual `mat2`/`props` instances and some

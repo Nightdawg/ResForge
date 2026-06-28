@@ -52,10 +52,14 @@ head-light with optional wireframe and orbit/zoom/pan. **Texturing** (Tier 2 par
 samples the model's *local* textures with perspective-correct UVs (alpha-mask cutout
 honoured), resolving the `matid→mat2→local tex` chain via `model/LocalTextures` —
 the same chain the glTF export uses. Models shown in bind/rest pose (no
-skinning/animation). **Variable materials (`varmat`)** — where a part's texture comes
-from a `code`/`codeentry`-declared variable material or an external `mlink` rather
-than a local `tex` (e.g. knarr's sail/hull) — are *not* resolved yet; those parts fall
-back to flat shading. Resolving varmat is **Tier 2 part 2** (deferred). Animation
+skinning/animation). **Non-local-textured parts** — where a part's base texture isn't one
+of this resource's own `tex` layers — are *not* resolved yet and fall back to flat shading.
+They split into three unrelated things (don't conflate them): **external static materials**
+(an `mlink`/external `tex` string naming **one fixed resource**, e.g. knarr's sail/hull or
+mulberry's bark) — resolvable by **fetching** that resource, which is **Tier 2 part 2**;
+genuine **variable materials (varmat)** — runtime-chosen (e.g. wood-type planks/blocks),
+not stored in the `.res`, so deferred separately; and **Dyntex** (`spr`→`dynspr.Dyntex`)
+sprite *additions*, which aren't a base material at all and are simply ignored. Animation
 playback is a later tier.
 
 ## 3D viewer per-material texture picker
@@ -77,27 +81,29 @@ stretch the window into one very wide row. Each picked texture brings its own al
 mask, so foliage cutouts stay correct across variants.
 
 Only materials whose **base colour** is a genuine local `tex` get a picker. A material
-whose base is **variable/external** — a `varmat` declared in `code`/`codeentry` (e.g.
-knarr's `lib/dynspr.Dyntex`), an `mlink` to another resource, an external `tex` string,
-or a material that carries only a local `otex` *overlay* over a non-local base — gets no
-picker: the local palette isn't its to swap. `LocalTextures.isLocalBaseTex(matid)` makes
+whose base is **not a local `tex`** — an **external static material** (an `mlink`/external
+`tex` string naming another resource), a genuine **variable material** (runtime-chosen, not
+in the `.res`), a **Dyntex** `spr` sprite addition, or a material carrying only a local
+`otex` *overlay* over a non-local base — gets no picker: the local palette isn't its to swap. `LocalTextures.isLocalBaseTex(matid)` makes
 this call (a local `tex` command with a numeric id resolving into this resource's own
 `tex` layers; `otex` is explicitly an overlay and doesn't count as a base), surfaced as
 `ModelGeometry.Material.localBase`. Effect: knarr drops from ten pickers (one per
 otex-overlaid hull/sail part, all `mlink`-based) to **one** (matid 8, its lone local
-`tex`); mulberry stays at one (its leaf material). The variable/external parts still
+`tex`); mulberry stays at one (its leaf material). The non-local-base parts still
 *render* (the viewer textures them with whatever local texture resolves, or shades
 them) — they just can't be re-pointed.
 
-**Future improvement (not done):** to actually pick/preview a variable or external
-texture we'd need to (a) detect the `varmat` from `code`/`codeentry` and enumerate its
-options, and/or (b) resolve `mlink`/external `tex` strings by **fetching** the referenced
-resource (the deferred Tier-2-part-2 "resolve varmat" work) — then those materials could
-get a (different) picker too. For now they're intentionally pickerless.
+**Future improvement (not done):** to texture/preview a non-local-base material we'd
+(a) **resolve external static materials** by fetching the referenced `mlink`/external `tex`
+resource and following *its* own `matid→mat2→tex` chain — the **Tier 2 part 2** work, and
+the tractable, deterministic case (e.g. mulberry's bark, knarr's hull/sail bases); and only
+much later (b) attempt genuine **variable materials** (runtime-chosen wood-types etc.),
+whose final image isn't in the `.res` at all. **Dyntex** `spr` additions aren't a base
+texture and stay ignored. For now all non-local-base parts are intentionally pickerless.
 
 Verified by a render-diff unit test (`gui/Model3DViewTest`, which
 renders off-screen and checks the swap changes the pixels), layout/filter tests
-(`gui/TexturePickerLayoutTest` — two-row split + caption + variable/external materials
+(`gui/TexturePickerLayoutTest` — two-row split + caption + non-local-base materials
 get no picker) and classification tests (`LocalTexturesTest.isLocalBaseTex`,
 `ModelGeometryTest`), and visually on the real mulberry (green / spring / autumn / bare
 leaves, trunk unchanged).
