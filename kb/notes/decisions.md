@@ -58,6 +58,25 @@ than a local `tex` (e.g. knarr's sail/hull) — are *not* resolved yet; those pa
 back to flat shading. Resolving varmat is **Tier 2 part 2** (deferred). Animation
 playback is a later tier.
 
+## 3D viewer per-material texture picker
+The View 3D window lets you pick which local `tex` a textured material is drawn with,
+one dropdown per textured material. Motivation: Haven seasonal foliage (e.g. mulberry)
+ships several `tex` layers — leaf variants for the seasons — but the base model only
+wires one to its leaf mesh; the rest are unused locally and the game swaps them at
+runtime. So `model/ModelGeometry` now carries the **whole local-texture palette** (every
+`tex` layer's image, not just the used ones, with their ids in `localTexIds`), a
+`materials` list (each a `{matid, defaultTex}` = the palette ordinal it was authored
+with), and a per-triangle `triMat` (material index, or -1). `gui/Model3DView` holds a
+`matOrd[]` (palette ordinal per material, initialised from the defaults) and exposes
+`setMaterialTexture(matIndex, ord)`; `gui/ResForgeFrame.show3DDialog` builds one combo
+per material listing the non-null palette entries by tex id (shown only when there's a
+real choice — more than one local texture). Each picked texture brings its own alpha
+mask, so foliage cutouts stay correct across variants. Only locally-textured materials
+get a picker; parts textured from another resource (mlink/`@res`, e.g. the mulberry
+trunk) stay shaded. Verified by a render-diff unit test (`gui/Model3DViewTest`, which
+renders off-screen and checks the swap changes the pixels) and visually on the real
+mulberry (green / spring / autumn / bare leaves, trunk unchanged).
+
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords
 are `org.jcraft:jorbis:0.0.17` (LGPL, ~97KB) — note `org.jcraft`, not

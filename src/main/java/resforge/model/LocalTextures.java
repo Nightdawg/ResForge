@@ -32,6 +32,9 @@ public final class LocalTextures {
     /** Raw alpha-mask bytes (tag 4) per local {@code tex} layer, aligned with
      *  {@link #images}; {@code null} where a texture has no mask. */
     public final List<byte[]> masks = new ArrayList<>();
+    /** The {@code tex} layer id for each entry, aligned with {@link #images}
+     *  ({@code -1} where the header didn't parse). */
+    public final List<Integer> texIds = new ArrayList<>();
     private final Map<Integer, Integer> matidToTex = new LinkedHashMap<>();
 
     private LocalTextures() {}
@@ -47,6 +50,7 @@ public final class LocalTextures {
                 TexInfo ti = TexInfo.parse(l.data);
                 if(ti.recognized)
                     texIdToOrd.putIfAbsent(ti.id, lt.images.size());
+                lt.texIds.add(ti.recognized ? ti.id : -1);
                 lt.images.add(ti.found
                         ? Arrays.copyOfRange(l.data, ti.imageOffset, ti.imageOffset + ti.imageLen)
                         : null);
@@ -54,6 +58,7 @@ public final class LocalTextures {
                         ? Arrays.copyOfRange(l.data, ti.maskOffset, ti.maskOffset + ti.maskLen)
                         : null);
             } catch(RuntimeException e) {
+                lt.texIds.add(-1);
                 lt.images.add(null);
                 lt.masks.add(null);
             }

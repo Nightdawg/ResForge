@@ -6,6 +6,15 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Per-material texture picker in the 3D viewer.** The **View 3D** window now shows a
+  dropdown for each textured material, listing the resource's own `tex` layers (by id),
+  so you can choose which texture a part is drawn with — e.g. flip a tree's leaves
+  between their seasonal variants live (mulberry carries four). The full local-texture
+  palette is offered, including variants no mesh uses by default; parts textured from
+  another resource still render shaded.
+
 ### Fixed
 
 - **Local 3D texture lookup resolved by id, not position.** A material's
