@@ -32,7 +32,7 @@ final class Model3DView extends JPanel {
     private boolean wireframe = false;
     private boolean textured;
 
-    // Decoded textures (ARGB pixel arrays), one per ModelGeometry palette entry.
+    // Decoded textures (ARGB pixel arrays), one per combined-palette entry (local then external).
     private final int[][] texPix;
     private final int[] texW;
     private final int[] texH;
@@ -56,21 +56,27 @@ final class Model3DView extends JPanel {
     Model3DView(ModelGeometry geo) {
         this.geo = geo;
         this.dist = geo.radius * 3.0;
-        // Decode the whole local-texture palette (and alpha masks) once, so any
-        // entry can be swapped onto a material without re-decoding.
+        // Decode the whole combined texture palette (local entries followed by any
+        // resolved external-static textures) and their alpha masks once, so any entry
+        // can be swapped onto a material without re-decoding. A material's slot
+        // (Material.defaultTex) indexes into this combined array.
         int n = geo.localTextures.size();
-        texPix = new int[n][];
-        texW = new int[n];
-        texH = new int[n];
-        maskPix = new int[n][];
-        maskW = new int[n];
-        maskH = new int[n];
-        for(int i = 0; i < n; i++) {
+        int x = geo.externalTextures.size();
+        int total = n + x;
+        texPix = new int[total][];
+        texW = new int[total];
+        texH = new int[total];
+        maskPix = new int[total][];
+        maskW = new int[total];
+        maskH = new int[total];
+        for(int i = 0; i < total; i++) {
+            byte[] image = (i < n) ? geo.localTextures.get(i) : geo.externalTextures.get(i - n);
+            byte[] mask = (i < n) ? geo.localMasks.get(i) : geo.externalMasks.get(i - n);
             int[] dim = new int[2];
-            texPix[i] = decode(geo.localTextures.get(i), dim);
+            texPix[i] = decode(image, dim);
             texW[i] = dim[0];
             texH[i] = dim[1];
-            maskPix[i] = decode(geo.localMasks.get(i), dim);
+            maskPix[i] = decode(mask, dim);
             maskW[i] = dim[0];
             maskH[i] = dim[1];
         }

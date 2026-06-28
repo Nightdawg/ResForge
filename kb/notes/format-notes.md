@@ -175,8 +175,9 @@ A material's texture source falls into one of four kinds, classifiable from its
    `mlink gfx/terobjs/trees/mulberry-tex`). The texture is **fixed and deterministic**:
    it can be resolved by **fetching that resource** and following *its* own
    `matid→mat2→tex` chain. (An `mlink` may instead carry a local `{u8:id}` — a link to
-   another *local* material — which stays in-resource.) This is the **Tier 2 part 2**
-   target. Confirmed on mulberry: every non-leaf material is either this kind or kind 1;
+   another *local* material — which stays in-resource.) This is **resolved** by the
+   View-3D **"Resolve external textures (network)"** toggle (`model/ExternalTextures`).
+   Confirmed on mulberry: every non-leaf material is either this kind or kind 1;
    `mulberry-tex` is a self-contained 2-`tex` resource that references nothing further,
    so the bark always looks the same.
 3. **Variable material (varmat)** — a material whose texture is chosen at **runtime**
@@ -194,8 +195,9 @@ and `mlink` via `layer(Res.class, id)` / a respath.
 `LocalTextures.isLocalBaseTex(matid)` / `ModelGeometry.Material.localBase` implement the
 **local-base** test (kind 1 only); the View-3D picker uses it, so only local-base
 materials are swappable (knarr shows 1 picker not 10, mulberry 1). Resolving kind 2 by
-**fetching** the referenced resource is the planned Tier 2 part 2 work; kinds 3 and 4 are
-left shaded/ignored (see decisions.md "3D viewer per-material texture picker").
+**fetching** the referenced resource is **implemented** (`model/ExternalTextures`, behind
+the View-3D toggle); kinds 3 and 4 are left shaded/ignored (see decisions.md "3D viewer
+per-material texture picker").
 
 ## glTF (.glb) model export
 Modern alternative to OBJ for the 3D model, and the basis for the eventual edit

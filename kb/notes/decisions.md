@@ -93,13 +93,18 @@ otex-overlaid hull/sail part, all `mlink`-based) to **one** (matid 8, its lone l
 *render* (the viewer textures them with whatever local texture resolves, or shades
 them) — they just can't be re-pointed.
 
-**Future improvement (not done):** to texture/preview a non-local-base material we'd
-(a) **resolve external static materials** by fetching the referenced `mlink`/external `tex`
-resource and following *its* own `matid→mat2→tex` chain — the **Tier 2 part 2** work, and
-the tractable, deterministic case (e.g. mulberry's bark, knarr's hull/sail bases); and only
-much later (b) attempt genuine **variable materials** (runtime-chosen wood-types etc.),
-whose final image isn't in the `.res` at all. **Dyntex** `spr` additions aren't a base
-texture and stay ignored. For now all non-local-base parts are intentionally pickerless.
+**Status:** **(a) external static materials is now done.** A non-local-base part whose
+base is an `mlink`/external `tex` string naming **one fixed resource** is resolved by
+fetching that resource and following *its* own `matid→mat2→tex` chain
+(`model/ExternalTextures`: injectable fetcher → per-path cache + depth cap + cycle guard),
+surfaced behind a **"Resolve external textures (network)"** toggle in the View-3D window
+(off by default — the viewer is otherwise offline and instant). Resolved parts texture but
+still get no picker (`localBase` false; they index the appended *external* palette).
+Validated end-to-end on mulberry (bark via `mulberry-tex`, berries via `items/mulberry`).
+**Still not done:** (b) genuine **variable materials** (runtime-chosen wood-types whose
+final image isn't in the `.res`) and **Dyntex** `spr` additions stay shaded; and
+compositing a local `otex` overlay over an external `mlink` base (knarr's hull/sail) —
+those parts currently render only their overlay, not base+overlay.
 
 Verified by a render-diff unit test (`gui/Model3DViewTest`, which
 renders off-screen and checks the swap changes the pixels), layout/filter tests

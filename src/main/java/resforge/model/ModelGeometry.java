@@ -39,6 +39,13 @@ public final class ModelGeometry {
     public final java.util.List<byte[]> localMasks;
     /** The {@code tex} layer id per palette entry (aligned with {@link #localTextures}). */
     public final java.util.List<Integer> localTexIds;
+    /** Resolved <em>external static</em> textures (encoded image bytes), appended after the
+     *  local palette: a material with an external base has {@code defaultTex} =
+     *  {@code localTextures.size() + i} into this combined palette. Empty unless external
+     *  resolution was requested (see {@link #from(ResContainer, ExternalTextures.Fetcher)}). */
+    public final java.util.List<byte[]> externalTextures;
+    /** Alpha-mask bytes per external texture (aligned with {@link #externalTextures}); null where none. */
+    public final java.util.List<byte[]> externalMasks;
     public final int triangleCount;
     public final int vertexCount;       // distinct source vertices that fed the soup
     public final int submeshCount;
@@ -48,12 +55,14 @@ public final class ModelGeometry {
     public final float[] center = new float[3];
     public final float radius;
 
-    /** A textured material: its {@code matid} and the local-texture palette ordinal
-     *  it was authored to use (the viewer's default selection). {@code localBase} is
-     *  true when its base colour comes from a local {@code tex} (so the local palette
-     *  is genuinely its to swap); false for any non-local base — an external-static
-     *  material ({@code mlink}/external string &rarr; another resource), a runtime varmat,
-     *  a {@code Dyntex} {@code spr} addition, or a local {@code otex} overlay only —
+    /** A textured material: its {@code matid} and the palette ordinal it is drawn with
+     *  by default — an index into the <em>combined</em> palette ({@link #localTextures}
+     *  followed by any resolved {@link #externalTextures}); for a local-base material this
+     *  is just its local ordinal. {@code localBase} is true when its base colour comes from
+     *  a local {@code tex} (so the local palette is genuinely its to swap); false for any
+     *  non-local base — an external-static material ({@code mlink}/external string &rarr;
+     *  another resource, resolved into the external palette), a runtime varmat, a
+     *  {@code Dyntex} {@code spr} addition, or a local {@code otex} overlay only —
      *  rendered as an approximation but not offered a picker. */
     public static final class Material {
         public final int matid;
@@ -69,6 +78,7 @@ public final class ModelGeometry {
     private ModelGeometry(float[] positions, float[] normals, float[] uv, int[] triMat,
                           java.util.List<Material> materials, java.util.List<byte[]> localTextures,
                           java.util.List<byte[]> localMasks, java.util.List<Integer> localTexIds,
+                          java.util.List<byte[]> externalTextures, java.util.List<byte[]> externalMasks,
                           int triangleCount, int vertexCount, int submeshCount) {
         this.positions = positions;
         this.normals = normals;
@@ -78,6 +88,8 @@ public final class ModelGeometry {
         this.localTextures = localTextures;
         this.localMasks = localMasks;
         this.localTexIds = localTexIds;
+        this.externalTextures = externalTextures;
+        this.externalMasks = externalMasks;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.submeshCount = submeshCount;
@@ -108,8 +120,19 @@ public final class ModelGeometry {
         return !materials.isEmpty();
     }
 
-    /** Build the geometry for a resource, or {@code null} if it has no geometry. */
+    /** Build the geometry for a resource (local textures only), or {@code null} if it
+     *  has no geometry. Equivalent to {@link #from(ResContainer, ExternalTextures.Fetcher)}
+     *  with no fetcher (so external static materials stay unresolved/shaded). */
     public static ModelGeometry from(ResContainer res) {
+        return from(res, null);
+    }
+
+    /** Build the geometry for a resource, or {@code null} if it has no geometry. When a
+     *  {@code fetcher} is supplied, materials whose base is an <em>external static</em>
+     *  material ({@code mlink}/external {@code tex} string &rarr; another resource) are
+     *  resolved by fetching that resource (see {@link ExternalTextures}) and textured from
+     *  the appended external palette; a {@code null} fetcher leaves them shaded. */
+    public static ModelGeometry from(ResContainer res, ExternalTextures.Fetcher fetcher) {
         Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
         for(Layer l : res.layers)
             if(l.name.equals("vbuf2")) {
@@ -132,10 +155,16 @@ public final class ModelGeometry {
             return null;
 
         LocalTextures lt = LocalTextures.from(res);
+        Map<Integer, ExternalTextures.Resolved> ext = ExternalTextures.resolve(res, fetcher);
         // Distinct textured materials in first-seen mesh order; each remembers the
         // palette ordinal of its authored texture. triMat maps a triangle to one.
         java.util.List<Material> materials = new java.util.ArrayList<>();
         Map<Integer, Integer> matidToMat = new java.util.HashMap<>();
+        // Resolved external textures, appended after the local palette.
+        java.util.List<byte[]> externalTextures = new java.util.ArrayList<>();
+        java.util.List<byte[]> externalMasks = new java.util.ArrayList<>();
+        Map<Integer, Integer> matidToExtOrd = new java.util.HashMap<>();
+        int localCount = lt.images.size();
 
         float[] pos = new float[tris * 9];
         float[] nrm = new float[tris * 9];
@@ -162,6 +191,24 @@ public final class ModelGeometry {
                     matidToMat.put(m.matid, mi);
                 }
                 matIndex = mi;
+            } else if(vt != null) {
+                ExternalTextures.Resolved r = ext.get(m.matid);
+                if(r != null && r.image != null) {
+                    Integer eo = matidToExtOrd.get(m.matid);
+                    if(eo == null) {
+                        eo = externalTextures.size();
+                        externalTextures.add(r.image);
+                        externalMasks.add(r.mask);
+                        matidToExtOrd.put(m.matid, eo);
+                    }
+                    Integer mi = matidToMat.get(m.matid);
+                    if(mi == null) {
+                        mi = materials.size();
+                        materials.add(new Material(m.matid, localCount + eo, false));
+                        matidToMat.put(m.matid, mi);
+                    }
+                    matIndex = mi;
+                }
             }
 
             short[] idx = m.indices;
@@ -207,7 +254,8 @@ public final class ModelGeometry {
         for(int id : usedVbufs)
             verts += vbufs.get(id).num;
         return new ModelGeometry(pos, nrm, uv, triMat, materials,
-                lt.images, lt.masks, lt.texIds, tri, verts, meshes.size());
+                lt.images, lt.masks, lt.texIds, externalTextures, externalMasks,
+                tri, verts, meshes.size());
     }
 
     private static float[] faceNormal(float[] vp, int a, int b, int c) {
