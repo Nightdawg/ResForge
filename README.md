@@ -87,7 +87,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `image`           | `*.imghdr` + `*.png`         | swap the PNG texture     |
 | `tex`             | `*.pre.bin` + image + `*.post.bin` | swap a 3D model's texture (JPEG/PNG) |
 | `audio2`          | `*.audhdr` + `*.ogg`         | swap a sound (Ogg Vorbis) |
-| `props`           | `*.json`                     | edit typed properties as JSON |
+| `props`           | `*.json`                     | edit typed properties as JSON (tagged `tto` values) |
 | `action`          | `*.json`                     | edit button/keybind metadata as JSON |
 | `mat2`            | `*.json`                     | edit material commands as JSON |
 | `anim`            | `*.json`                     | edit sprite animation (speed + frames) as JSON |
@@ -118,7 +118,12 @@ leaf shapes rather than black cards.
 exposed as editable `*.json`, but **only when the round-trip is provably
 lossless** — the tool decodes, re-serializes to JSON, re-encodes, and checks it
 reproduces the original bytes before offering JSON; otherwise the layer stays a
-raw `.bin`. So editing props can never silently corrupt a resource.
+raw `.bin`. So editing props can never silently corrupt a resource. Each value
+carries an explicit type tag (the same tagged-value form as `mat2`): a string is
+a plain JSON string, everything else is a single-key object naming its exact
+`tto` type (`{"u8":50}`, `{"f32":0.5}`, `{"color":[204,204,204,255]}`,
+`{"coord":[x,y]}`, `{"bytes":"<base64>"}`, `{"list":[…]}`, `{"map":{…}}`), so
+coord/color/byte-blob/float32/resource-spec props are editable too.
 
 `audio2` layers hold sound effects/music as Ogg Vorbis. The audio runs to the
 end of the payload (like `image`), so it is split into a verbatim `*.audhdr`

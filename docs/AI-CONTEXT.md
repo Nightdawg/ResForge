@@ -210,7 +210,7 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | `audio2` | edit: swap Ogg; **edit clip id + volume** (ver-2 header); GUI plays it |
 | `font` | edit: swap TTF/OTF (sfnt). 2-byte header + font tail |
 | `midi` | edit: swap `.mid` (whole payload) |
-| `props` | edit as JSON (tto list, lossless-or-raw) |
+| `props` | edit as JSON (tagged `tto` values: str/int/float/color/coord/bytes/…, lossless-or-raw) |
 | `action` | edit as JSON (deterministic AButton record) |
 | `mat2` | edit as JSON (id + per-command tto value lists; tagged-value form, lossless-or-raw) |
 | `anim` | edit as JSON (sprite animation: id + delay + frame image-ids; deterministic) |
@@ -322,7 +322,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `mkres-fragment.py` for the mesh choices — no dev code needed.
 - Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
   using the new `float16` codec under lossless-or-raw). The same `float16` codec can
-  broaden `props`/`mat2` to expose float16-bearing values that still stay raw.
+  broaden `mat2` to expose float16-bearing values that still stay raw. (**`props` is
+  now broadened** — see below — to the full tagged-value `tto` set incl. coord/color/
+  bytes/float32/fcoord; only float8/float16/norm numbers still keep it raw.)
 - Typed editor for **`boneoff` is now done** (equip-point opcode program → JSON via
   `BoneOffCodec`, lossless-or-raw): translate/rotate/eqpoint/bonealign/scale ops, with
   a new exact `MessageWriter.cpfloat` encoder (inverse of `Utils.floatd`). The quantised

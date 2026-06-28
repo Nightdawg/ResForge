@@ -162,13 +162,32 @@ against the type ambiguities of `tto` (e.g. the same integer can be encoded as
 3. **only** writes the `.json` part (codec `props`) if the re-encoded bytes
    equal the original; otherwise it falls back to a raw `.bin`.
 
-Re-encoding mirrors `Message.addtto`'s canonical rules (smallest integer type,
-`float64` for reals, `T_END`-terminated nested lists/maps, no terminator on the
-top-level list). Consequently a props layer is offered as JSON only when that is
-guaranteed reversible, and editing it can never corrupt a resource. Only
-JSON-native `tto` types are handled (string, integer, float64, nested list/map,
-nil); coords, colors, byte blobs, `float32`, norm numbers, resource specs, etc.
-keep the layer raw. (Real example — `knarr.res`: `{ "place": ["surface", "map"] }`.)
+Each value carries an **explicit type tag** so the exact `tto` encoding is
+recorded — the same tagged-value form `Mat2Codec` uses. A string is a plain JSON
+string; every other value is a single-key object naming its exact type, e.g.
+`{"u8":50}`, `{"f32":0.5}`, `{"color":[204,204,204,255]}`, `{"coord":[x,y]}`,
+`{"bytes":"<base64>"}`, `{"list":[…]}`, `{"map":{…}}`. Nested lists/maps are
+`T_END`-terminated, with no terminator on the top-level list, and the byte-blob
+length prefix mirrors `addtto`'s (single `uint8`, or `0x80` + `int32`).
+
+**Design decision — tag everything (don't leave integers bare).** An earlier
+form kept integers/lists/maps as bare JSON; this codec tags them instead. Reasons:
+(a) a bare `tto`-map is a JSON object, indistinguishable from a single-key tagged
+object, so tagging makes a JSON object *unambiguously* a tag and lets strictly more
+layers round-trip; (b) it removes reliance on the JSON number parser to tell an
+`int` from a whole-valued `f32`/`f64` (`{"int":2}` vs `{"f32":2.0}` vs `{"f64":2.0}`
+are explicit); (c) it records the exact wire width rather than re-deriving the
+smallest-integer rule; (d) it keeps `props` symmetric with `mat2` — one tag
+vocabulary, one mental model. The cost (a verbose common case, and re-unpacking
+props `.resdir`s made by older builds) is accepted.
+
+Supported types: string, nil, the integer widths (u8/u16/i8/i16/int/long),
+float32/float64, color, fcolor, coord, fcoord32/fcoord64, byte blobs (base64),
+uid, resid, resource specs, and nested list/map. The remaining `tto` types
+(float8/float16 and the snorm/unorm/mnorm numbers) are not modelled and keep the
+layer raw, since their round-trip isn't provably byte-exact. (Real examples —
+`knarr.res`: `{ "place": {"list":["surface","map"]} }`; `belltower.res`:
+`{ "use-point": {"fcoord64":[0.0,-0.59]} }`, which used to stay raw.)
 
 The `action` layer (button/keybind metadata, `haven.Resource.AButton`) is a
 fixed-shape record — `string parent; uint16 parentVer; string name; string
@@ -554,9 +573,10 @@ handles normals/tangents and is in-game validated — superseded it.)
   `SkanInfo`/`MeshAnimInfo` — every sample layer type is now decoded.)
   The rig decoders + the `cpfloat`/norm io primitives are the groundwork for the
   skeleton/animation **write** path.
-- Broaden the `props` codec to more `tto` types (coord/color/bytes/float32, the
-  last now possible via the new `float16`/`MessageWriter.float16` codec) using an
-  explicit tagged JSON form (like `Mat2Codec`), to expose props that stay raw.
+- **Done:** the `props` codec now models more `tto` types (coord/color/bytes/
+  float32/fcoord/uid/resid/resspec) using an explicit tagged JSON form like
+  `Mat2Codec`, exposing props that used to stay raw (e.g. `belltower`'s `fcoord64`
+  `use-point`). Only float8/float16 and the snorm/unorm/mnorm numbers still stay raw.
 - Validate the new-style typed (`tto`) `image` header against a real sample that
   uses it (none of the current samples do).
 - **Done:** the `tex` alpha **mask** (part `t==4`) is now exposed as a second
