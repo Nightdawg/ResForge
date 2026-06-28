@@ -32,14 +32,16 @@ final class Model3DView extends JPanel {
     private boolean wireframe = false;
     private boolean textured;
 
-    // Decoded textures (ARGB pixel arrays), one per ModelGeometry texture slot.
+    // Decoded textures (ARGB pixel arrays), one per ModelGeometry palette entry.
     private final int[][] texPix;
     private final int[] texW;
     private final int[] texH;
-    // Decoded alpha masks (tag 4), aligned with the texture slots; null where none.
+    // Decoded alpha masks (tag 4), aligned with the palette entries; null where none.
     private final int[][] maskPix;
     private final int[] maskW;
     private final int[] maskH;
+    // Per textured material: the palette ordinal currently shown (user-selectable).
+    private final int[] matOrd;
 
     private BufferedImage img;
     private int[] pix;
@@ -54,8 +56,9 @@ final class Model3DView extends JPanel {
     Model3DView(ModelGeometry geo) {
         this.geo = geo;
         this.dist = geo.radius * 3.0;
-        // Decode any local textures (and their alpha masks) once.
-        int n = geo.textures.size();
+        // Decode the whole local-texture palette (and alpha masks) once, so any
+        // entry can be swapped onto a material without re-decoding.
+        int n = geo.localTextures.size();
         texPix = new int[n][];
         texW = new int[n];
         texH = new int[n];
@@ -64,13 +67,16 @@ final class Model3DView extends JPanel {
         maskH = new int[n];
         for(int i = 0; i < n; i++) {
             int[] dim = new int[2];
-            texPix[i] = decode(geo.textures.get(i), dim);
+            texPix[i] = decode(geo.localTextures.get(i), dim);
             texW[i] = dim[0];
             texH[i] = dim[1];
-            maskPix[i] = decode(geo.maskTextures.get(i), dim);
+            maskPix[i] = decode(geo.localMasks.get(i), dim);
             maskW[i] = dim[0];
             maskH[i] = dim[1];
         }
+        matOrd = new int[geo.materials.size()];
+        for(int i = 0; i < matOrd.length; i++)
+            matOrd[i] = geo.materials.get(i).defaultTex;
         textured = geo.hasTextures();
         setPreferredSize(new Dimension(640, 520));
         setBackground(BG);
@@ -112,6 +118,15 @@ final class Model3DView extends JPanel {
     void setWireframe(boolean b) { wireframe = b; repaint(); }
     void setTextured(boolean b) { textured = b; repaint(); }
     boolean hasTextures() { return geo.hasTextures(); }
+
+    /** Choose which palette texture material {@code matIndex} (into
+     *  {@link ModelGeometry#materials}) is rendered with. */
+    void setMaterialTexture(int matIndex, int paletteOrd) {
+        if(matIndex >= 0 && matIndex < matOrd.length) {
+            matOrd[matIndex] = paletteOrd;
+            repaint();
+        }
+    }
 
     void resetView() {
         yaw = Math.toRadians(35);
@@ -169,14 +184,15 @@ final class Model3DView extends JPanel {
         float[] p = geo.positions;
         float[] nrm = geo.normals;
         float[] guv = geo.uv;
-        int[] triTex = geo.triTex;
+        int[] triMat = geo.triMat;
         double[] sx = new double[3], syc = new double[3], sz = new double[3];
         double[] inten = new double[3];
         double[] tu = new double[3], tv = new double[3];
 
         for(int t = 0; t < p.length; t += 9) {
             int ti = t / 9;
-            int slot = (textured && ti < triTex.length) ? triTex[ti] : -1;
+            int mat = (textured && ti < triMat.length) ? triMat[ti] : -1;
+            int slot = (mat >= 0) ? matOrd[mat] : -1;
             boolean useTex = slot >= 0 && slot < texPix.length && texPix[slot] != null;
             boolean ok = true;
             for(int k = 0; k < 3; k++) {

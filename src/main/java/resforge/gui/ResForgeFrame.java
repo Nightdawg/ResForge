@@ -12,15 +12,18 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.DefaultListCellRenderer;
 import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -763,7 +766,6 @@ public class ResForgeFrame extends JFrame {
         tex.setEnabled(geo.hasTextures());
         shaded.addActionListener(e -> view.setShaded(shaded.isSelected()));
         wire.addActionListener(e -> view.setWireframe(wire.isSelected()));
-        tex.addActionListener(e -> view.setTextured(tex.isSelected()));
         JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
         controls.add(shaded);
         controls.add(tex);
@@ -773,13 +775,63 @@ public class ResForgeFrame extends JFrame {
                 + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"
                 + (geo.hasTextures() ? "" : " \u00b7 no local textures")));
 
+        // Per-material texture pickers: choose which local tex each textured
+        // material is drawn with (e.g. mulberry's seasonal leaf variants). Only
+        // shown when there's an actual choice (more than one local texture).
+        java.util.List<Integer> palette = new java.util.ArrayList<>();
+        for(int o = 0; o < geo.localTextures.size(); o++)
+            if(geo.localTextures.get(o) != null)
+                palette.add(o);
+        java.util.List<JComboBox<Integer>> texCombos = new java.util.ArrayList<>();
+        JPanel texControls = null;
+        if(geo.hasTextures() && palette.size() > 1) {
+            texControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+            texControls.add(new JLabel("Texture:"));
+            boolean many = geo.materials.size() > 1;
+            for(int mi = 0; mi < geo.materials.size(); mi++) {
+                ModelGeometry.Material mat = geo.materials.get(mi);
+                JComboBox<Integer> combo = new JComboBox<>(palette.toArray(new Integer[0]));
+                combo.setRenderer(new DefaultListCellRenderer() {
+                    @Override public java.awt.Component getListCellRendererComponent(
+                            JList<?> list, Object value, int index, boolean sel, boolean focus) {
+                        super.getListCellRendererComponent(list, value, index, sel, focus);
+                        int ord = (Integer) value;
+                        setText("tex id " + geo.localTexIds.get(ord)
+                                + (ord == mat.defaultTex ? " (default)" : ""));
+                        return this;
+                    }
+                });
+                combo.setSelectedItem(mat.defaultTex);
+                final int fmi = mi;
+                combo.addActionListener(e -> view.setMaterialTexture(fmi, (Integer) combo.getSelectedItem()));
+                if(many)
+                    texControls.add(new JLabel("mat " + mat.matid + ":"));
+                texControls.add(combo);
+                texCombos.add(combo);
+            }
+        }
+        tex.addActionListener(e -> {
+            view.setTextured(tex.isSelected());
+            for(JComboBox<Integer> c : texCombos)
+                c.setEnabled(tex.isSelected());
+        });
+
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
                 + " \u2014 shown in bind pose (no skinning/animation)");
         hint.setForeground(java.awt.Color.GRAY);
         hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
 
+        JPanel north = new JPanel();
+        north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
+        controls.setAlignmentX(Component.LEFT_ALIGNMENT);
+        north.add(controls);
+        if(texControls != null) {
+            texControls.setAlignmentX(Component.LEFT_ALIGNMENT);
+            north.add(texControls);
+        }
+
         dlg.setLayout(new BorderLayout());
-        dlg.add(controls, BorderLayout.NORTH);
+        dlg.add(north, BorderLayout.NORTH);
         dlg.add(view, BorderLayout.CENTER);
         dlg.add(hint, BorderLayout.SOUTH);
         dlg.pack();

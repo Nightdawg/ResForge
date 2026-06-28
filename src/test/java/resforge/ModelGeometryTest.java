@@ -7,6 +7,7 @@ import resforge.res.ResContainer;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -34,6 +35,51 @@ class ModelGeometryTest {
         w.int16(0);                 // matid
         w.int16(0);                 // vbufid
         w.uint16(i0).uint16(i1).uint16(i2);
+        return w.toByteArray();
+    }
+
+    /** A 1-triangle mesh (verts 0,1,2) referencing the given matid + vbuf 0. */
+    private static byte[] meshMat(int matid) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(16);
+        w.uint16(1);
+        w.int16(matid);
+        w.int16(0);
+        w.uint16(0).uint16(1).uint16(2);
+        return w.toByteArray();
+    }
+
+    /** vbuf2 ver=0 with pos2(f4) + nrm2(f4) + tex2(f4), 3 vertices (so texturing applies). */
+    private static byte[] vbufTex() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0);
+        w.uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})
+            w.float32(v);
+        w.string("nrm2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 1, 0, 0, 1, 0, 0, 1})
+            w.float32(v);
+        w.string("tex2").uint8(1).string("f4");
+        for(int i = 0; i < 6; i++)
+            w.float32(0.5f);
+        return w.toByteArray();
+    }
+
+    /** A tex layer wrapping a tiny valid PNG signature so TexInfo locates it. */
+    private static byte[] tex(int id, byte marker) {
+        byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, marker, 2};
+        MessageWriter w = new MessageWriter();
+        w.int16(id).uint16(0).uint16(0).uint16(64).uint16(64);
+        w.uint8(0).int32(png.length).bytes(png);
+        return w.toByteArray();
+    }
+
+    /** A mat2 whose local `tex` command points at the given tex layer id. */
+    private static byte[] mat2Local(int id, int texId) {
+        MessageWriter w = new MessageWriter();
+        w.uint16(id);
+        w.string("tex").uint8(4).uint8(texId).uint8(0);
         return w.toByteArray();
     }
 
@@ -90,5 +136,46 @@ class ModelGeometryTest {
         assertEquals(0f, g.normals[0], 1e-6);
         assertEquals(0f, g.normals[1], 1e-6);
         assertEquals(1f, Math.abs(g.normals[2]), 1e-6);
+    }
+
+    @Test
+    void exposesPaletteMaterialsAndPerMaterialDefault() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xAA)));   // ordinal 0, id 1
+        res.layers.add(new Layer("tex", tex(3, (byte) 0xBB)));   // ordinal 1, id 3 (an alternate)
+        res.layers.add(new Layer("mat2", mat2Local(9, 1)));      // matid 9 -> tex id 1 (ordinal 0)
+        res.layers.add(new Layer("vbuf2", vbufTex()));
+        res.layers.add(new Layer("mesh", meshMat(9)));
+
+        ModelGeometry g = ModelGeometry.from(res);
+        assertTrue(g != null);
+        assertTrue(g.hasTextures());
+        // The palette carries every local tex layer (incl. the unused alternate), with ids.
+        assertEquals(2, g.localTextures.size());
+        assertEquals(java.util.List.of(1, 3), g.localTexIds);
+        // One textured material (matid 9), authored to the first texture (id 1, ordinal 0).
+        assertEquals(1, g.materials.size());
+        assertEquals(9, g.materials.get(0).matid);
+        assertEquals(0, g.materials.get(0).defaultTex);
+        // Every triangle maps to material index 0.
+        for(int m : g.triMat)
+            assertEquals(0, m);
+    }
+
+    @Test
+    void untexturedModelHasEmptyMaterialsButStillExposesThePalette() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(5, (byte) 0xCC)));
+        // geometry without tex coords + no matching mat2 -> no textured material
+        res.layers.add(new Layer("vbuf2", vbuf(new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})));
+        res.layers.add(new Layer("mesh", mesh(0, 1, 2)));
+
+        ModelGeometry g = ModelGeometry.from(res);
+        assertTrue(g != null);
+        assertFalse(g.hasTextures());
+        assertTrue(g.materials.isEmpty());
+        assertEquals(1, g.localTextures.size());   // palette still lists the resource's tex layer
+        for(int m : g.triMat)
+            assertEquals(-1, m);
     }
 }

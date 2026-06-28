@@ -25,12 +25,20 @@ public final class ModelGeometry {
     public final float[] normals;
     /** 6 floats per triangle (3 vertices × uv) — texture coordinates (may be 0 where absent). */
     public final float[] uv;
-    /** Per triangle: index into {@link #textures}, or -1 if the triangle is untextured. */
-    public final int[] triTex;
-    /** Raw encoded image bytes (PNG/JPEG) for each distinct texture used, in slot order. */
-    public final java.util.List<byte[]> textures;
-    /** Raw alpha-mask bytes per texture slot (aligned with {@link #textures}); null where none. */
-    public final java.util.List<byte[]> maskTextures;
+    /** Per triangle: index into {@link #materials}, or -1 if the triangle is untextured. */
+    public final int[] triMat;
+    /** The textured materials used by the model (in first-seen order); each names the
+     *  local-texture palette ordinal it was authored with. The viewer lets the user
+     *  re-point each to any palette entry (e.g. mulberry's seasonal leaf variants). */
+    public final java.util.List<Material> materials;
+    /** The full local-texture palette (every {@code tex} layer's encoded image, in
+     *  order; {@code null} where a layer had no usable image). Includes textures not
+     *  referenced by any material, so the viewer can offer them as alternatives. */
+    public final java.util.List<byte[]> localTextures;
+    /** Alpha-mask bytes per palette entry (aligned with {@link #localTextures}); null where none. */
+    public final java.util.List<byte[]> localMasks;
+    /** The {@code tex} layer id per palette entry (aligned with {@link #localTextures}). */
+    public final java.util.List<Integer> localTexIds;
     public final int triangleCount;
     public final int vertexCount;       // distinct source vertices that fed the soup
     public final int submeshCount;
@@ -40,15 +48,29 @@ public final class ModelGeometry {
     public final float[] center = new float[3];
     public final float radius;
 
-    private ModelGeometry(float[] positions, float[] normals, float[] uv, int[] triTex,
-                          java.util.List<byte[]> textures, java.util.List<byte[]> maskTextures,
+    /** A textured material: its {@code matid} and the local-texture palette ordinal
+     *  it was authored to use (the viewer's default selection). */
+    public static final class Material {
+        public final int matid;
+        public final int defaultTex;
+        Material(int matid, int defaultTex) {
+            this.matid = matid;
+            this.defaultTex = defaultTex;
+        }
+    }
+
+    private ModelGeometry(float[] positions, float[] normals, float[] uv, int[] triMat,
+                          java.util.List<Material> materials, java.util.List<byte[]> localTextures,
+                          java.util.List<byte[]> localMasks, java.util.List<Integer> localTexIds,
                           int triangleCount, int vertexCount, int submeshCount) {
         this.positions = positions;
         this.normals = normals;
         this.uv = uv;
-        this.triTex = triTex;
-        this.textures = textures;
-        this.maskTextures = maskTextures;
+        this.triMat = triMat;
+        this.materials = materials;
+        this.localTextures = localTextures;
+        this.localMasks = localMasks;
+        this.localTexIds = localTexIds;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.submeshCount = submeshCount;
@@ -74,9 +96,9 @@ public final class ModelGeometry {
         this.radius = (r > 0) ? r : 1f;
     }
 
-    /** True if at least one triangle has a resolvable local texture. */
+    /** True if at least one material has a resolvable local texture. */
     public boolean hasTextures() {
-        return !textures.isEmpty();
+        return !materials.isEmpty();
     }
 
     /** Build the geometry for a resource, or {@code null} if it has no geometry. */
@@ -103,14 +125,15 @@ public final class ModelGeometry {
             return null;
 
         LocalTextures lt = LocalTextures.from(res);
-        java.util.List<byte[]> textures = new java.util.ArrayList<>();
-        java.util.List<byte[]> maskTextures = new java.util.ArrayList<>();
-        Map<Integer, Integer> ordToSlot = new java.util.HashMap<>();
+        // Distinct textured materials in first-seen mesh order; each remembers the
+        // palette ordinal of its authored texture. triMat maps a triangle to one.
+        java.util.List<Material> materials = new java.util.ArrayList<>();
+        Map<Integer, Integer> matidToMat = new java.util.HashMap<>();
 
         float[] pos = new float[tris * 9];
         float[] nrm = new float[tris * 9];
         float[] uv = new float[tris * 6];
-        int[] triTex = new int[tris];
+        int[] triMat = new int[tris];
         int o = 0;          // pos/nrm cursor (9 per triangle)
         int uo = 0;         // uv cursor (6 per triangle)
         int tri = 0;        // emitted-triangle counter
@@ -122,17 +145,16 @@ public final class ModelGeometry {
             float[] vt = d.get("tex");
             usedVbufs.add(m.vbufid);
 
-            int slot = -1;
+            int matIndex = -1;
             Integer ord = (vt != null) ? lt.ordForMatid(m.matid) : null;
-            if(ord != null) {
-                Integer s = ordToSlot.get(ord);
-                if(s == null) {
-                    textures.add(lt.images.get(ord));
-                    maskTextures.add(lt.masks.get(ord));
-                    s = textures.size() - 1;
-                    ordToSlot.put(ord, s);
+            if(ord != null && lt.images.get(ord) != null) {
+                Integer mi = matidToMat.get(m.matid);
+                if(mi == null) {
+                    mi = materials.size();
+                    materials.add(new Material(m.matid, ord));
+                    matidToMat.put(m.matid, mi);
                 }
-                slot = s;
+                matIndex = mi;
             }
 
             short[] idx = m.indices;
@@ -163,7 +185,7 @@ public final class ModelGeometry {
                     o += 3;
                     uo += 2;
                 }
-                triTex[tri++] = slot;
+                triMat[tri++] = matIndex;
             }
         }
         if(o == 0)
@@ -172,12 +194,13 @@ public final class ModelGeometry {
             pos = java.util.Arrays.copyOf(pos, o);
             nrm = java.util.Arrays.copyOf(nrm, o);
             uv = java.util.Arrays.copyOf(uv, uo);
-            triTex = java.util.Arrays.copyOf(triTex, tri);
+            triMat = java.util.Arrays.copyOf(triMat, tri);
         }
         int verts = 0;          // distinct source vertices (vbufs are shared across submeshes)
         for(int id : usedVbufs)
             verts += vbufs.get(id).num;
-        return new ModelGeometry(pos, nrm, uv, triTex, textures, maskTextures, tri, verts, meshes.size());
+        return new ModelGeometry(pos, nrm, uv, triMat, materials,
+                lt.images, lt.masks, lt.texIds, tri, verts, meshes.size());
     }
 
     private static float[] faceNormal(float[] vp, int a, int b, int c) {

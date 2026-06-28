@@ -80,7 +80,9 @@ tooltip/pagina **text**, props/action/**mat2**/**anim**/**neg**/**obst**/**boneo
 export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 `src` exports as `.java`), **rig view** for `skel`/`skan`/`manim`
 (read-only structural display), font/midi replace+export, raw replace+export, a
-built-in **3D viewer** (whole-model, software-rendered — see below), 3D →
+built-in **3D viewer** (whole-model, software-rendered — see below; with a
+**per-material texture picker** to swap each part's local `tex`, e.g. seasonal
+leaves), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
@@ -130,7 +132,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   byte pair in a header can't be mistaken for the image and corrupt a replace/export.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
   `ModelGeometry` (assemble a triangle soup — positions+normals+**UVs**, Haven Z-up,
-  with a per-triangle texture slot — from `vbuf2`+`mesh` for the in-app 3D viewer;
+  with a per-triangle **material index** + the full local-texture **palette** and each
+  textured material's default texture — from `vbuf2`+`mesh` for the in-app 3D viewer;
   reuses the same decoders as the glTF export), `LocalTextures` (resolve the
   `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; the
   `tex`/`otex` command's index is the **tex layer's id** — `flayer(TexR.class, id)` —
@@ -178,7 +181,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   rasteriser into a `BufferedImage`, two-sided Lambert head-light shading,
   **perspective-correct texture mapping** (local textures, alpha-mask cutout) + optional
   wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`
-  + `model/LocalTextures`).
+  + `model/LocalTextures`. Carries the full local-texture **palette** + a per-material
+  default; `setMaterialTexture(matIndex, paletteOrd)` re-points a material, and the dialog
+  shows one combo per textured material — so a model's alternate `tex` layers, e.g.
+  mulberry's seasonal leaves, can be selected live).
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT; the Ogg player joins the previous play thread before restarting
