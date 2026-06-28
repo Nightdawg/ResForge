@@ -132,7 +132,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `ModelGeometry` (assemble a triangle soup — positions+normals+**UVs**, Haven Z-up,
   with a per-triangle texture slot — from `vbuf2`+`mesh` for the in-app 3D viewer;
   reuses the same decoders as the glTF export), `LocalTextures` (resolve the
-  `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; external
+  `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; the
+  `tex`/`otex` command's index is the **tex layer's id** — `flayer(TexR.class, id)` —
+  not its position; external
   `mlink`/variable-material textures are left unresolved),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),

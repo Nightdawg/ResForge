@@ -4,6 +4,20 @@ All notable changes to ResForge are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and the project aims to follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Local 3D texture lookup resolved by id, not position.** A material's
+  `tex`/`otex` command selects its texture by the `tex` layer's **id** (the game's
+  `flayer(TexR.class, id)` lookup), but the **View 3D** viewer and the **glTF export**
+  were treating that value as a positional index into the resource's `tex` layers.
+  Models whose `tex` ids aren't `0,1,2,…` in order rendered/exported with the wrong
+  texture — e.g. the mulberry tree (`tex` ids `1,3,4,5`, four seasonal leaf variants)
+  showed its leaves with the wrong foliage variant. Both paths now map the id to the
+  matching `tex` layer. (Parts whose texture lives in *another* resource — e.g. the
+  mulberry trunk via `mlink` — remain shaded, as documented.)
+
 ## [1.0.0] — 2026-06-24
 
 First stable release. ResForge decompiles, edits, and recompiles Haven & Hearth
@@ -86,4 +100,5 @@ is read-only; `code`/`codeentry` are read-only; the glTF rebuild is not byte-los
 (verify in-game); the 3D viewer shows `varmat`-textured parts shaded; and a few unusual
 typed instances stay raw by design (lossless-or-raw).
 
+[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/Nightdawg/ResForge/releases/tag/v1.0.0
