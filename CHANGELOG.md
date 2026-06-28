@@ -8,6 +8,17 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **`props` layers now expose far more `tto` value types as editable JSON.** The
+  `props` codec adopts the same explicit tagged-value JSON form as `mat2`: a string
+  stays a plain JSON string, and every other value is a single-key object naming its
+  exact `tto` type — `{"u8":50}`, `{"f32":0.5}`, `{"color":[204,204,204,255]}`,
+  `{"coord":[x,y]}`, `{"bytes":"<base64>"}`, `{"list":[…]}`, `{"map":{…}}`. It now
+  models coord, color, fcolor, fcoord32/fcoord64, byte blobs (base64), float32, uid,
+  resid and resource specs in addition to the JSON-native types, so props that used to
+  fall back to raw are now editable (validated on `belltower`'s `use-point` `fcoord64`).
+  The lossless-or-raw guard is unchanged, and a handful of types still kept raw on
+  purpose (float8/float16 and the snorm/unorm/mnorm numbers, whose round-trip isn't
+  provably byte-exact).
 - **Resolve external static textures in the 3D viewer.** A **Resolve external textures
   (network)** toggle in the **View 3D** window textures parts whose base comes from an
   *external static material* — an `mlink`/external `tex` string naming **one fixed
@@ -32,6 +43,11 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Changed
 
+- **The `props` `.json` shape is now explicitly tagged.** Values that previously
+  appeared bare (an integer `50`, a list `[…]`, a nested map) are now single-key
+  tagged objects (`{"u8":50}`, `{"list":[…]}`, `{"map":{…}}`), so the exact `tto`
+  width/type is recorded and a JSON object is unambiguously a tag (matching `mat2`).
+  Re-unpack any props `.resdir` that was unpacked with an older build before repacking.
 - **The "Fetch from server" dialog now focuses the Resource path field on open.**
   Opening the dialog (toolbar **Fetch from Server**, **File ▸ Fetch from server**, or
   **Ctrl+R**) puts the keyboard cursor straight in the *Resource path* box, so you can

@@ -6,6 +6,7 @@ import resforge.io.MessageWriter;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,23 +20,46 @@ import java.util.Map;
  * exactly. Otherwise the caller falls back to a raw passthrough, so a props
  * layer can never be corrupted.
  *
- * Only JSON-native tto types are handled (string, integer, float64, nested
- * list/map, nil); any layer using other types (coord, color, bytes, float32,
- * norm numbers, resource specs, …) simply stays raw.
+ * <p>Each value is rendered with an explicit type tag so the exact {@code tto}
+ * encoding is preserved — the same tagged-value form {@link Mat2Codec} uses. A
+ * string stays a plain JSON string; every other value is a single-entry object
+ * naming its exact {@code tto} type, e.g. {@code {"u8":50}}, {@code {"f32":0.5}},
+ * {@code {"color":[204,204,204,255]}}, {@code {"coord":[x,y]}},
+ * {@code {"bytes":"<base64>"}}, {@code {"list":[…]}} or {@code {"map":{…}}}.
+ * Tagging everything (rather than leaving integers/lists/maps bare) makes a JSON
+ * object unambiguously a tag, records the exact wire width instead of re-deriving
+ * it, and keeps this codec symmetric with {@link Mat2Codec}.
+ *
+ * <p>Supported value types: string, nil, the integer widths (u8/u16/i8/i16/int/
+ * long), float32/float64, color, fcolor, coord, fcoord32/fcoord64, byte blobs
+ * (base64), uid, resid, resource specs, and nested list/map. The remaining
+ * {@code tto} types (float8/float16 and the snorm/unorm/mnorm numbers) are not
+ * modelled and simply keep the layer raw, since their round-trip is not provably
+ * byte-exact.
  */
 public final class PropsCodec {
     private static final int T_END = 0;
     private static final int T_INT = 1;
     private static final int T_STR = 2;
+    private static final int T_COORD = 3;
     private static final int T_UINT8 = 4;
     private static final int T_UINT16 = 5;
+    private static final int T_COLOR = 6;
+    private static final int T_FCOLOR = 7;
     private static final int T_TTOL = 8;
     private static final int T_INT8 = 9;
     private static final int T_INT16 = 10;
     private static final int T_NIL = 12;
+    private static final int T_UID = 13;
+    private static final int T_BYTES = 14;
+    private static final int T_FLOAT32 = 15;
     private static final int T_FLOAT64 = 16;
+    private static final int T_FCOORD32 = 18;
+    private static final int T_FCOORD64 = 19;
     private static final int T_MAP = 32;
     private static final int T_LONG = 33;
+    private static final int T_RESSPEC = 34;
+    private static final int T_RESID = 35;
 
     /** Hard cap on tto list/map nesting, so a crafted payload fails with a clear
      *  {@link Unsupported} (a {@code RuntimeException}, caught by the lossless-or-raw
@@ -117,18 +141,28 @@ public final class PropsCodec {
 
     private static Object readValue(MessageReader in, int t, int depth) {
         switch(t) {
-            case T_STR:     return in.string();
-            case T_INT:     return (long) in.int32();
-            case T_UINT8:   return (long) in.uint8();
-            case T_UINT16:  return (long) in.uint16();
-            case T_INT8:    return (long) in.int8();
-            case T_INT16:   return (long) in.int16();
-            case T_LONG:    return in.int64();
-            case T_FLOAT64: return in.float64();
-            case T_NIL:     return null;
-            case T_TTOL:    return readList(in, depth);
-            case T_MAP:     return readMap(in, depth);
-            default:        throw new Unsupported("tto type tag " + t);
+            case T_STR:      return in.string();
+            case T_NIL:      return null;
+            case T_UINT8:    return tag("u8", (long) in.uint8());
+            case T_UINT16:   return tag("u16", (long) in.uint16());
+            case T_INT8:     return tag("i8", (long) in.int8());
+            case T_INT16:    return tag("i16", (long) in.int16());
+            case T_INT:      return tag("int", (long) in.int32());
+            case T_LONG:     return tag("long", in.int64());
+            case T_FLOAT32:  return tag("f32", (double) in.float32());
+            case T_FLOAT64:  return tag("f64", in.float64());
+            case T_COLOR:    return tag("color", uint8List(in, 4));
+            case T_FCOLOR:   return tag("fcolor", float32List(in, 4));
+            case T_COORD:    return tag("coord", int32List(in, 2));
+            case T_FCOORD32: return tag("fcoord32", float32List(in, 2));
+            case T_FCOORD64: return tag("fcoord64", float64List(in, 2));
+            case T_BYTES:    return tag("bytes", Base64.getEncoder().encodeToString(readBytes(in)));
+            case T_UID:      return tag("uid", in.int64());
+            case T_RESID:    return tag("resid", (long) in.uint16());
+            case T_RESSPEC:  return tag("resspec", resSpec(in));
+            case T_TTOL:     return tag("list", readList(in, depth));
+            case T_MAP:      return tag("map", readMap(in, depth));
+            default:         throw new Unsupported("tto type tag " + t);
         }
     }
 
@@ -162,46 +196,163 @@ public final class PropsCodec {
         return map;
     }
 
+    private static List<Object> uint8List(MessageReader in, int n) {
+        List<Object> l = new ArrayList<>(n);
+        for(int i = 0; i < n; i++)
+            l.add((long) in.uint8());
+        return l;
+    }
+
+    private static List<Object> int32List(MessageReader in, int n) {
+        List<Object> l = new ArrayList<>(n);
+        for(int i = 0; i < n; i++)
+            l.add((long) in.int32());
+        return l;
+    }
+
+    private static List<Object> float32List(MessageReader in, int n) {
+        List<Object> l = new ArrayList<>(n);
+        for(int i = 0; i < n; i++)
+            l.add((double) in.float32());
+        return l;
+    }
+
+    private static List<Object> float64List(MessageReader in, int n) {
+        List<Object> l = new ArrayList<>(n);
+        for(int i = 0; i < n; i++)
+            l.add(in.float64());
+        return l;
+    }
+
+    /** Reads a {@code T_BYTES} blob: a {@code uint8} length, or — when its high bit is
+     *  set — a {@code 0x80} flag byte followed by an {@code int32} length. */
+    private static byte[] readBytes(MessageReader in) {
+        int len = in.uint8();
+        if((len & 128) != 0)
+            len = in.int32();
+        return in.bytes(len);
+    }
+
+    private static List<Object> resSpec(MessageReader in) {
+        List<Object> spec = new ArrayList<>(2);
+        spec.add(in.string());
+        spec.add((long) in.uint16());
+        return spec;
+    }
+
     private static void writeValue(MessageWriter out, Object o) {
         if(o == null) {
             out.uint8(T_NIL);
-        } else if(o instanceof String) {
+            return;
+        }
+        if(o instanceof String) {
             out.uint8(T_STR).string((String) o);
-        } else if(o instanceof Long || o instanceof Integer) {
-            writeInt(out, ((Number) o).longValue());
-        } else if(o instanceof Double || o instanceof Float) {
-            out.uint8(T_FLOAT64).float64(((Number) o).doubleValue());
-        } else if(o instanceof List) {
-            out.uint8(T_TTOL);
-            for(Object item : (List<?>) o)
-                writeValue(out, item);
-            out.uint8(T_END);
-        } else if(o instanceof Map) {
-            out.uint8(T_MAP);
-            for(Map.Entry<?, ?> e : ((Map<?, ?>) o).entrySet()) {
-                writeValue(out, String.valueOf(e.getKey()));
-                writeValue(out, e.getValue());
-            }
-            out.uint8(T_END);
-        } else {
-            throw new Unsupported("cannot encode " + o.getClass().getSimpleName() + " as props value");
+            return;
+        }
+        if(!(o instanceof Map) || ((Map<?, ?>) o).size() != 1)
+            throw new Unsupported("props value must be a string or a single-tag object");
+        Map.Entry<?, ?> e = ((Map<?, ?>) o).entrySet().iterator().next();
+        String tag = String.valueOf(e.getKey());
+        Object v = e.getValue();
+        switch(tag) {
+            case "u8":       out.uint8(T_UINT8).uint8(Nums.u8(v)); break;
+            case "u16":      out.uint8(T_UINT16).uint16(Nums.u16(v)); break;
+            case "i8":       out.uint8(T_INT8).int8(Nums.i8(v)); break;
+            case "i16":      out.uint8(T_INT16).int16(Nums.i16(v)); break;
+            case "int":      out.uint8(T_INT).int32(Nums.i32(v)); break;
+            case "long":     out.uint8(T_LONG).int64(((Number) v).longValue()); break;
+            case "f32":      out.uint8(T_FLOAT32).float32((float) ((Number) v).doubleValue()); break;
+            case "f64":      out.uint8(T_FLOAT64).float64(((Number) v).doubleValue()); break;
+            case "color":    writeColor(out, v); break;
+            case "fcolor":   writeFloat32Array(out, T_FCOLOR, v, 4, "fcolor"); break;
+            case "coord":    writeCoord(out, v); break;
+            case "fcoord32": writeFloat32Array(out, T_FCOORD32, v, 2, "fcoord32"); break;
+            case "fcoord64": writeFloat64Array(out, T_FCOORD64, v, 2, "fcoord64"); break;
+            case "bytes":    writeBytes(out, v); break;
+            case "uid":      out.uint8(T_UID).int64(((Number) v).longValue()); break;
+            case "resid":    out.uint8(T_RESID).uint16(Nums.u16(v)); break;
+            case "resspec":  writeResSpec(out, v); break;
+            case "list":     writeList(out, v); break;
+            case "map":      writeMap(out, v); break;
+            default:         throw new Unsupported("unknown props value tag '" + tag + "'");
         }
     }
 
-    /** Encodes an integer using the same canonical smallest-type rule as haven.Message.addtto. */
-    private static void writeInt(MessageWriter out, long v) {
-        if(v >= 0 && v < 256) {
-            out.uint8(T_UINT8).uint8((int) v);
-        } else if(v >= 0 && v < 65536) {
-            out.uint8(T_UINT16).uint16((int) v);
-        } else if(v >= -128 && v < 0) {
-            out.uint8(T_INT8).int8((int) v);
-        } else if(v >= -32768 && v < 0) {
-            out.uint8(T_INT16).int16((int) v);
-        } else if(v >= Integer.MIN_VALUE && v <= Integer.MAX_VALUE) {
-            out.uint8(T_INT).int32((int) v);
-        } else {
-            out.uint8(T_LONG).int64(v);
+    private static void writeColor(MessageWriter out, Object v) {
+        out.uint8(T_COLOR);
+        for(Object c : asArray(v, 4, "color"))
+            out.uint8(Nums.u8(c));
+    }
+
+    private static void writeCoord(MessageWriter out, Object v) {
+        out.uint8(T_COORD);
+        for(Object c : asArray(v, 2, "coord"))
+            out.int32(Nums.i32(c));
+    }
+
+    private static void writeFloat32Array(MessageWriter out, int type, Object v, int n, String what) {
+        out.uint8(type);
+        for(Object c : asArray(v, n, what))
+            out.float32((float) ((Number) c).doubleValue());
+    }
+
+    private static void writeFloat64Array(MessageWriter out, int type, Object v, int n, String what) {
+        out.uint8(type);
+        for(Object c : asArray(v, n, what))
+            out.float64(((Number) c).doubleValue());
+    }
+
+    /** Writes a {@code T_BYTES} blob, mirroring {@code Message.addtto}'s length prefix:
+     *  a single {@code uint8} for lengths under 128, else a {@code 0x80} flag byte and
+     *  an {@code int32} length. */
+    private static void writeBytes(MessageWriter out, Object v) {
+        if(!(v instanceof String))
+            throw new Unsupported("bytes must be a base64 string");
+        byte[] b = Base64.getDecoder().decode((String) v);
+        out.uint8(T_BYTES);
+        if(b.length < 128)
+            out.uint8(b.length);
+        else
+            out.uint8(0x80).int32(b.length);
+        out.bytes(b);
+    }
+
+    private static void writeResSpec(MessageWriter out, Object v) {
+        List<?> spec = asArray(v, 2, "resspec");
+        if(!(spec.get(0) instanceof String))
+            throw new Unsupported("resspec name must be a string");
+        out.uint8(T_RESSPEC).string((String) spec.get(0)).uint16(Nums.u16(spec.get(1)));
+    }
+
+    private static void writeList(MessageWriter out, Object v) {
+        if(!(v instanceof List))
+            throw new Unsupported("list value must be an array");
+        out.uint8(T_TTOL);
+        for(Object item : (List<?>) v)
+            writeValue(out, item);
+        out.uint8(T_END);
+    }
+
+    private static void writeMap(MessageWriter out, Object v) {
+        if(!(v instanceof Map))
+            throw new Unsupported("map value must be an object");
+        out.uint8(T_MAP);
+        for(Map.Entry<?, ?> e : ((Map<?, ?>) v).entrySet()) {
+            out.uint8(T_STR).string(String.valueOf(e.getKey()));
+            writeValue(out, e.getValue());
         }
+        out.uint8(T_END);
+    }
+
+    private static List<?> asArray(Object v, int n, String what) {
+        if(!(v instanceof List) || ((List<?>) v).size() != n)
+            throw new Unsupported(what + " must be a " + n + "-element array");
+        return (List<?>) v;
+    }
+
+    private static Map<String, Object> tag(String name, Object value) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put(name, value);
+        return m;
     }
 }

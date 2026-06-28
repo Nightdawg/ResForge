@@ -92,7 +92,16 @@ byte-exact). Ver 3 (typed metadata) stays read-only.
 end (`00 01 00 00` / `OTTO` / `true` / `ttcf`). Split into header + `.ttf`/`.otf`.
 
 ## props / action layers
-`props`: `uint8 ver` (==1) + a tto list of alternating key/value. `action`
+`props`: `uint8 ver` (==1) + a tto list of alternating key/value. **Now editable as
+JSON** (`PropsCodec`) using the same explicit tagged-value form as `mat2`: a string
+stays a plain JSON string; every other value is a single-tag object naming its exact
+tto type (`{"u8":50}`, `{"f32":0.5}`, `{"color":[r,g,b,a]}`, `{"coord":[x,y]}`,
+`{"bytes":"<base64>"}`, `{"list":[…]}`, `{"map":{…}}`). Supported: str, nil, int
+widths, f32/f64, color, fcolor, coord, fcoord32/64, bytes, uid, resid, resspec, nested
+list/map; float8/float16 and snorm/unorm/mnorm stay raw (round-trip not byte-exact).
+Tagging everything (vs leaving ints/lists/maps bare) keeps a JSON object unambiguously
+a tag and records the exact wire width. Real sample with a non-native type:
+`belltower.res` → `{ "use-point": {"fcoord64":[0.0,-0.59]} }` (previously raw). `action`
 (AButton): `string parent; uint16 parentVer; string name; string prereq;
 uint16 hotkey; uint16 adCount; string[] ad`. Both exposed as JSON only when
 decode->encode is byte-exact (lossless-or-raw).
