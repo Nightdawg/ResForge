@@ -47,6 +47,7 @@ import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FileDialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Image;
@@ -287,11 +288,10 @@ public class ResForgeFrame extends JFrame {
             return;
         }
         byte[] data = new byte[0];
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setDialogTitle("Content for '" + name + "'  (Cancel = empty layer)");
-        if(fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
+        Path chosen = openDialog("Content for '" + name + "'  (Cancel = empty layer)", null);
+        if(chosen != null) {
             try {
-                data = Files.readAllBytes(fc.getSelectedFile().toPath());
+                data = Files.readAllBytes(chosen);
             } catch(Exception e) {
                 error("Could not read file: " + e.getMessage());
                 return;
@@ -626,23 +626,19 @@ public class ResForgeFrame extends JFrame {
     private void doOpen() {
         if(!confirmDiscard())
             return;
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setFileFilter(new FileNameExtensionFilter("Haven resource (*.res)", "res"));
-        if(fc.showOpenDialog(this) == JFileChooser.APPROVE_OPTION)
-            openFile(fc.getSelectedFile().toPath());
+        Path chosen = openDialog("Open resource", new FileNameExtensionFilter("Haven resource (*.res)", "res"));
+        if(chosen != null)
+            openFile(chosen);
     }
 
     private void doSaveAs() {
         if(res == null)
             return;
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setFileFilter(new FileNameExtensionFilter("Haven resource (*.res)", "res"));
-        if(file != null)
-            fc.setSelectedFile(file.toFile());
-        else if(suggestedName != null)
-            fc.setSelectedFile(new java.io.File(suggestedName));
-        if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            Path p = ensureResExtension(fc.getSelectedFile().toPath());
+        String defName = (file != null) ? file.getFileName().toString()
+                : (suggestedName != null ? suggestedName : null);
+        Path chosen = saveDialog("Save resource as", defName);
+        if(chosen != null) {
+            Path p = ensureResExtension(chosen);
             writeRes(p);
             this.file = p;
             updateTitle();
@@ -685,12 +681,10 @@ public class ResForgeFrame extends JFrame {
                 "Rebuild from glTF", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if(ok != JOptionPane.OK_OPTION)
             return;
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setDialogTitle("Rebuild from glTF");
-        fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
-        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+        Path chosen = openDialog("Rebuild from glTF", new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
+        if(chosen == null)
             return;
-        final java.io.File sel = fc.getSelectedFile();
+        final java.io.File sel = chosen.toFile();
         final byte[] orig = res.serialize();
         final Path curFile = file;
         final String curPath = pathField.getText();
@@ -906,12 +900,10 @@ public class ResForgeFrame extends JFrame {
                     setStatus("Ready");
                     return;
                 }
-                JFileChooser fc = new JFileChooser(dir());
-                fc.setFileFilter(new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
-                fc.setSelectedFile(new File(baseName() + ".glb"));
-                if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                Path chosen = saveDialog("Export glTF", baseName() + ".glb");
+                if(chosen != null) {
                     try {
-                        SafeFiles.write(fc.getSelectedFile().toPath(), rr.glb);
+                        SafeFiles.write(chosen, rr.glb);
                         setStatus("Exported " + rr.vertices + " vertices, " + rr.triangles
                                 + " triangles (" + rr.submeshes + " submeshes, " + rr.textures
                                 + " texture(s)) as glTF");
@@ -944,13 +936,11 @@ public class ResForgeFrame extends JFrame {
                 Toolkit.getDefaultToolkit().getSystemClipboard()
                         .setContents(new StringSelection(report), null)));
         JButton save = new JButton(action("Save", () -> {
-            JFileChooser fc = new JFileChooser(dir());
-            fc.setFileFilter(new FileNameExtensionFilter("Text (*.txt)", "txt"));
-            fc.setSelectedFile(new File(baseName() + "-references.txt"));
-            if(fc.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            Path chosen = saveDialog("Save reference list", baseName() + "-references.txt");
+            if(chosen != null) {
                 try {
-                    Files.writeString(fc.getSelectedFile().toPath(), report);
-                    setStatus("Saved reference list \u2192 " + fc.getSelectedFile().getName());
+                    Files.writeString(chosen, report);
+                    setStatus("Saved reference list \u2192 " + chosen.getFileName());
                 } catch(Exception e) {
                     error("Save failed: " + e.getMessage());
                 }
@@ -1051,12 +1041,11 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void replaceTexMask(int idx) {
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setFileFilter(filterFor("tex"));
-        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+        Path chosen = openDialog("Replace alpha mask", filterFor("tex"));
+        if(chosen == null)
             return;
         try {
-            byte[] newMask = Files.readAllBytes(fc.getSelectedFile().toPath());
+            byte[] newMask = Files.readAllBytes(chosen);
             byte[] payload = resforge.layers.TexMaskCodec.replaceMask(res.layers.get(idx).data, newMask);
             setLayerPayload(idx, payload);
             setStatus("Replaced alpha mask in layer " + idx);
@@ -1074,14 +1063,12 @@ public class ResForgeFrame extends JFrame {
             return;
         }
         String ext = ti.maskFormat != null ? ti.maskFormat : "png";
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setFileFilter(new FileNameExtensionFilter(ext.toUpperCase() + " mask (*." + ext + ")", ext));
-        fc.setSelectedFile(new File(baseName() + "_" + idx + "_tex_mask." + ext));
-        if(fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+        Path chosen = saveDialog("Export alpha mask", baseName() + "_" + idx + "_tex_mask." + ext);
+        if(chosen == null)
             return;
         try {
-            SafeFiles.write(fc.getSelectedFile().toPath(), maskBytes);
-            setStatus("Exported mask of layer " + idx + " \u2192 " + fc.getSelectedFile().getName());
+            SafeFiles.write(chosen, maskBytes);
+            setStatus("Exported mask of layer " + idx + " \u2192 " + chosen.getFileName());
         } catch(Exception e) {
             error("Export mask failed: " + e.getMessage());
         }
@@ -1120,14 +1107,11 @@ public class ResForgeFrame extends JFrame {
     /* ------------------------------------------------------------ edit actions */
 
     private void replaceFromFile(int idx, String layerName) {
-        JFileChooser fc = new JFileChooser(dir());
-        FileNameExtensionFilter filter = filterFor(layerName);
-        if(filter != null)
-            fc.setFileFilter(filter);
-        if(fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION)
+        Path chosen = openDialog("Replace layer", filterFor(layerName));
+        if(chosen == null)
             return;
         try {
-            byte[] bytes = Files.readAllBytes(fc.getSelectedFile().toPath());
+            byte[] bytes = Files.readAllBytes(chosen);
             applyBytes(idx, bytes);
             setStatus("Replaced layer " + idx + " (" + layerName + ")");
         } catch(Exception e) {
@@ -1157,14 +1141,12 @@ public class ResForgeFrame extends JFrame {
     private void exportLayer(int idx) {
         Layer l = res.layers.get(idx);
         GuiSupport.Export ex = GuiSupport.export(l);
-        JFileChooser fc = new JFileChooser(dir());
-        fc.setFileFilter(new FileNameExtensionFilter(ex.desc + " (*." + ex.ext + ")", ex.ext));
-        fc.setSelectedFile(new File(baseName() + "_" + idx + "_" + l.name + "." + ex.ext));
-        if(fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION)
+        Path chosen = saveDialog("Export layer", baseName() + "_" + idx + "_" + l.name + "." + ex.ext);
+        if(chosen == null)
             return;
         try {
-            SafeFiles.write(fc.getSelectedFile().toPath(), ex.data);
-            setStatus("Exported layer " + idx + " \u2192 " + fc.getSelectedFile().getName());
+            SafeFiles.write(chosen, ex.data);
+            setStatus("Exported layer " + idx + " \u2192 " + chosen.getFileName());
         } catch(Exception e) {
             error("Export failed: " + e.getMessage());
         }
@@ -1209,6 +1191,60 @@ public class ResForgeFrame extends JFrame {
         int r = JOptionPane.showConfirmDialog(this, "Discard unsaved changes?",
                 "Unsaved changes", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
         return r == JOptionPane.YES_OPTION;
+    }
+
+    /* ------------------------------------------------- native file dialogs */
+
+    /** True when running on Windows, where {@link FileDialog} renders the modern
+     *  native Explorer picker but ignores {@link java.io.FilenameFilter} — so we
+     *  filter through a wildcard pattern instead. */
+    private static final boolean ON_WINDOWS =
+            System.getProperty("os.name", "").toLowerCase().startsWith("windows");
+
+    /** Shows the OS-native "open" dialog. {@code filter} may be {@code null} to
+     *  accept any file. Returns the chosen path, or {@code null} if cancelled. */
+    private Path openDialog(String title, FileNameExtensionFilter filter) {
+        FileDialog fd = new FileDialog(this, title, FileDialog.LOAD);
+        File d = dir();
+        if(d != null)
+            fd.setDirectory(d.getAbsolutePath());
+        if(filter != null) {
+            fd.setFilenameFilter((dirf, name) -> filter.accept(new File(dirf, name)));
+            if(ON_WINDOWS)
+                fd.setFile(wildcards(filter));
+        }
+        fd.setVisible(true);
+        return chosenPath(fd);
+    }
+
+    /** Shows the OS-native "save" dialog, pre-filled with {@code defaultName}
+     *  (may be {@code null}). Returns the chosen path, or {@code null} if
+     *  cancelled. The native dialog handles overwrite confirmation itself. */
+    private Path saveDialog(String title, String defaultName) {
+        FileDialog fd = new FileDialog(this, title, FileDialog.SAVE);
+        File d = dir();
+        if(d != null)
+            fd.setDirectory(d.getAbsolutePath());
+        if(defaultName != null)
+            fd.setFile(defaultName);
+        fd.setVisible(true);
+        return chosenPath(fd);
+    }
+
+    private static Path chosenPath(FileDialog fd) {
+        String name = fd.getFile();
+        return name != null ? Path.of(fd.getDirectory(), name) : null;
+    }
+
+    /** Builds a Windows filter spec ({@code "*.png;*.jpg"}) from an extension filter. */
+    private static String wildcards(FileNameExtensionFilter filter) {
+        StringBuilder sb = new StringBuilder();
+        for(String e : filter.getExtensions()) {
+            if(sb.length() > 0)
+                sb.append(';');
+            sb.append("*.").append(e);
+        }
+        return sb.toString();
     }
 
     private File dir() {
