@@ -19,12 +19,15 @@ import java.util.Map;
  * resource's own {@code tex} layers (the client's {@code flayer(TexR.class, id)}
  * lookup — an id, not a positional index).
  *
- * <p>Only <strong>local</strong> textures are handled here. Materials that point
- * at an external texture (an {@code mlink}/string respath in another resource) or
- * that are supplied by a <em>variable material</em> (a {@code code}/{@code codeentry}
- * "varmat") are <em>not</em> resolved — {@link #texForMatid} returns {@code -1} —
- * and the caller falls back to flat shading for those parts. Resolving variable
- * materials is a planned follow-on (Tier 2 part 2).
+ * <p>Only <strong>local</strong> textures are handled here. A material whose base is
+ * not a local {@code tex} is left unresolved ({@link #texForMatid} returns {@code null})
+ * and the caller falls back to flat shading. Those non-local sources are three distinct
+ * things (not to be conflated): an <em>external static material</em> (an {@code mlink}/
+ * external {@code tex} string naming <em>one fixed</em> resource, e.g. mulberry's bark) —
+ * resolvable by fetching that resource, the planned <strong>Tier 2 part 2</strong>
+ * follow-on; a genuine <em>variable material</em> (runtime-chosen, its final image not
+ * stored in the model {@code .res}); or a {@code Dyntex} ({@code spr}/{@code dynspr.Dyntex})
+ * sprite <em>addition</em>, which isn't a base texture at all and is ignored.
  */
 public final class LocalTextures {
     /** Raw encoded image bytes (PNG/JPEG) for each local {@code tex} layer, in order. */
@@ -37,9 +40,9 @@ public final class LocalTextures {
     public final List<Integer> texIds = new ArrayList<>();
     private final Map<Integer, Integer> matidToTex = new LinkedHashMap<>();
     /** matids whose <em>base colour</em> texture is a local {@code tex} (so a local
-     *  texture is genuinely theirs to swap), as opposed to a variable/external base
-     *  (a {@code mlink}/external {@code tex} string, or only a local {@code otex}
-     *  overlay over a non-local base). */
+     *  texture is genuinely theirs to swap), as opposed to a non-local base (an
+     *  external-static {@code mlink}/external {@code tex} string, a runtime varmat, or
+     *  only a local {@code otex} overlay over a non-local base). */
     private final java.util.Set<Integer> localBaseMatids = new java.util.HashSet<>();
 
     private LocalTextures() {}
@@ -103,10 +106,11 @@ public final class LocalTextures {
     }
 
     /** True if this material's base colour texture is a local {@code tex} — i.e. the
-     *  local palette is genuinely its to swap (so the viewer offers a picker). A
-     *  variable/external base (a {@code code}/varmat-supplied texture, an {@code mlink}
-     *  or external {@code tex} string, or only a local {@code otex} overlay) returns
-     *  {@code false}: we can render an approximation but can't meaningfully re-point it. */
+     *  local palette is genuinely its to swap (so the viewer offers a picker). Any
+     *  non-local base returns {@code false}: an external-static material (an {@code mlink}/
+     *  external {@code tex} string naming another resource), a runtime variable material,
+     *  a {@code Dyntex} {@code spr} addition, or only a local {@code otex} overlay. We can
+     *  render an approximation but can't meaningfully re-point those. */
     public boolean isLocalBaseTex(int matid) {
         return localBaseMatids.contains(matid);
     }
