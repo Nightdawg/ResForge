@@ -775,41 +775,11 @@ public class ResForgeFrame extends JFrame {
                 + geo.triangleCount + " tris \u00b7 " + geo.submeshCount + " part(s)"
                 + (geo.hasTextures() ? "" : " \u00b7 no local textures")));
 
-        // Per-material texture pickers: choose which local tex each textured
-        // material is drawn with (e.g. mulberry's seasonal leaf variants). Only
-        // shown when there's an actual choice (more than one local texture).
-        java.util.List<Integer> palette = new java.util.ArrayList<>();
-        for(int o = 0; o < geo.localTextures.size(); o++)
-            if(geo.localTextures.get(o) != null)
-                palette.add(o);
+        // Per-material texture pickers, laid out over two balanced rows (so a model
+        // with many materials doesn't stretch into one very wide row). Empty when
+        // there's no real choice (fewer than two local textures).
         java.util.List<JComboBox<Integer>> texCombos = new java.util.ArrayList<>();
-        JPanel texControls = null;
-        if(geo.hasTextures() && palette.size() > 1) {
-            texControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-            texControls.add(new JLabel("Texture:"));
-            boolean many = geo.materials.size() > 1;
-            for(int mi = 0; mi < geo.materials.size(); mi++) {
-                ModelGeometry.Material mat = geo.materials.get(mi);
-                JComboBox<Integer> combo = new JComboBox<>(palette.toArray(new Integer[0]));
-                combo.setRenderer(new DefaultListCellRenderer() {
-                    @Override public java.awt.Component getListCellRendererComponent(
-                            JList<?> list, Object value, int index, boolean sel, boolean focus) {
-                        super.getListCellRendererComponent(list, value, index, sel, focus);
-                        int ord = (Integer) value;
-                        setText("tex id " + geo.localTexIds.get(ord)
-                                + (ord == mat.defaultTex ? " (default)" : ""));
-                        return this;
-                    }
-                });
-                combo.setSelectedItem(mat.defaultTex);
-                final int fmi = mi;
-                combo.addActionListener(e -> view.setMaterialTexture(fmi, (Integer) combo.getSelectedItem()));
-                if(many)
-                    texControls.add(new JLabel("mat " + mat.matid + ":"));
-                texControls.add(combo);
-                texCombos.add(combo);
-            }
-        }
+        java.util.List<JPanel> texRows = buildTexturePickerRows(geo, view, texCombos);
         tex.addActionListener(e -> {
             view.setTextured(tex.isSelected());
             for(JComboBox<Integer> c : texCombos)
@@ -825,9 +795,9 @@ public class ResForgeFrame extends JFrame {
         north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
         controls.setAlignmentX(Component.LEFT_ALIGNMENT);
         north.add(controls);
-        if(texControls != null) {
-            texControls.setAlignmentX(Component.LEFT_ALIGNMENT);
-            north.add(texControls);
+        for(JPanel r : texRows) {
+            r.setAlignmentX(Component.LEFT_ALIGNMENT);
+            north.add(r);
         }
 
         dlg.setLayout(new BorderLayout());
@@ -837,6 +807,65 @@ public class ResForgeFrame extends JFrame {
         dlg.pack();
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
+    }
+
+    /** Build the per-material texture-picker rows for the 3D dialog. One combo per
+     *  textured material (listing the resource's local {@code tex} layers by id,
+     *  defaulting to the authored one); the combos are split over two balanced rows
+     *  so a model with many materials doesn't make one very wide row. Returns the
+     *  rows (empty when there's no real choice — fewer than two local textures) and
+     *  collects every combo into {@code outCombos} for the Textured toggle.
+     *  Package-private + static so the layout can be unit-tested without a frame. */
+    static java.util.List<JPanel> buildTexturePickerRows(ModelGeometry geo, Model3DView view,
+                                                         java.util.List<JComboBox<Integer>> outCombos) {
+        java.util.List<JPanel> rows = new java.util.ArrayList<>();
+        java.util.List<Integer> palette = new java.util.ArrayList<>();
+        for(int o = 0; o < geo.localTextures.size(); o++)
+            if(geo.localTextures.get(o) != null)
+                palette.add(o);
+        if(!geo.hasTextures() || palette.size() <= 1)
+            return rows;
+
+        boolean many = geo.materials.size() > 1;
+        // One (label?, combo) group per textured material.
+        java.util.List<java.util.List<java.awt.Component>> groups = new java.util.ArrayList<>();
+        for(int mi = 0; mi < geo.materials.size(); mi++) {
+            ModelGeometry.Material mat = geo.materials.get(mi);
+            JComboBox<Integer> combo = new JComboBox<>(palette.toArray(new Integer[0]));
+            combo.setRenderer(new DefaultListCellRenderer() {
+                @Override public java.awt.Component getListCellRendererComponent(
+                        JList<?> list, Object value, int index, boolean sel, boolean focus) {
+                    super.getListCellRendererComponent(list, value, index, sel, focus);
+                    int ord = (Integer) value;
+                    setText("tex id " + geo.localTexIds.get(ord)
+                            + (ord == mat.defaultTex ? " (default)" : ""));
+                    return this;
+                }
+            });
+            combo.setSelectedItem(mat.defaultTex);
+            final int fmi = mi;
+            combo.addActionListener(e -> view.setMaterialTexture(fmi, (Integer) combo.getSelectedItem()));
+            java.util.List<java.awt.Component> grp = new java.util.ArrayList<>();
+            if(many)
+                grp.add(new JLabel("mat " + mat.matid + ":"));
+            grp.add(combo);
+            groups.add(grp);
+            outCombos.add(combo);
+        }
+        // Split the groups over two balanced rows; the first carries the caption.
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        row1.add(new JLabel("Texture:"));
+        int half = (groups.size() + 1) / 2;
+        for(int i = 0; i < groups.size(); i++) {
+            JPanel target = (i < half) ? row1 : row2;
+            for(java.awt.Component c : groups.get(i))
+                target.add(c);
+        }
+        rows.add(row1);
+        if(row2.getComponentCount() > 0)
+            rows.add(row2);
+        return rows;
     }
 
     private void doExportGltf() {
