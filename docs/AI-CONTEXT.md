@@ -133,11 +133,13 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 - `model/` — `Vbuf2Data` (de-quantise vertices + decode bone weights for export),
   `ModelGeometry` (assemble a triangle soup — positions+normals+**UVs**, Haven Z-up,
   with a per-triangle **material index** + the full local-texture **palette** and each
-  textured material's default texture — from `vbuf2`+`mesh` for the in-app 3D viewer;
+  textured material's default texture + a `localBase` flag (local `tex` base vs
+  variable/external) — from `vbuf2`+`mesh` for the in-app 3D viewer;
   reuses the same decoders as the glTF export), `LocalTextures` (resolve the
   `matid → mat2 → local tex` chain to raw image bytes, mirroring the export; the
   `tex`/`otex` command's index is the **tex layer's id** — `flayer(TexR.class, id)` —
-  not its position; external
+  not its position; `isLocalBaseTex(matid)` distinguishes a local base `tex` from a
+  variable/external one (`mlink`/external string/`otex`-overlay-only); external
   `mlink`/variable-material textures are left unresolved),
   `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
   `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
@@ -182,10 +184,12 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   **perspective-correct texture mapping** (local textures, alpha-mask cutout) + optional
   wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`
   + `model/LocalTextures`. Carries the full local-texture **palette** + a per-material
-  default; `setMaterialTexture(matIndex, paletteOrd)` re-points a material, and the dialog
-  shows one combo per textured material — split over **two balanced rows** (testable
-  `ResForgeFrame.buildTexturePickerRows`) so many-material models stay compact — so a
-  model's alternate `tex` layers, e.g. mulberry's seasonal leaves, can be selected live).
+  default + a `localBase` flag; `setMaterialTexture(matIndex, paletteOrd)` re-points a
+  material, and the dialog shows one combo only per **locally-textured** material
+  (variable/external bases — varmat/`mlink`/`otex`-only — get none) — split over **two
+  balanced rows** (testable `ResForgeFrame.buildTexturePickerRows`) so many-material
+  models stay compact; so a model's alternate `tex` layers, e.g. mulberry's seasonal
+  leaves, can be selected live, while knarr shows one picker not ten).
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT; the Ogg player joins the previous play thread before restarting

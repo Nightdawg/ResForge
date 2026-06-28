@@ -32,10 +32,11 @@ an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; a built-in **3D viewer** (**View 3D** — a dependency-free software
 renderer that shows the model **textured** and shaded, with an optional wireframe
 and mouse orbit/zoom/pan, in its bind pose; a **per-material texture picker** lets
-you choose which of the resource's own `tex` layers each textured part is drawn
-with — e.g. flip a tree's leaves between its seasonal variants live; parts whose
-texture comes from a variable material or another resource aren't textured yet and
-show shaded); and a full **3D model round-trip** — export to a Blender-ready binary
+you choose which of the resource's own `tex` layers each locally-textured part is
+drawn with — e.g. flip a tree's leaves between its seasonal variants live; a material
+whose base texture is variable/external (a `varmat` declared in `code`, or another
+resource via `mlink`) gets no picker and shows shaded, since the local textures aren't
+its to swap); and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
 file); **Rebuild from glTF** to bring edits back — regenerate geometry so you can

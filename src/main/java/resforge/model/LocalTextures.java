@@ -36,6 +36,11 @@ public final class LocalTextures {
      *  ({@code -1} where the header didn't parse). */
     public final List<Integer> texIds = new ArrayList<>();
     private final Map<Integer, Integer> matidToTex = new LinkedHashMap<>();
+    /** matids whose <em>base colour</em> texture is a local {@code tex} (so a local
+     *  texture is genuinely theirs to swap), as opposed to a variable/external base
+     *  (a {@code mlink}/external {@code tex} string, or only a local {@code otex}
+     *  overlay over a non-local base). */
+    private final java.util.Set<Integer> localBaseMatids = new java.util.HashSet<>();
 
     private LocalTextures() {}
 
@@ -69,9 +74,16 @@ public final class LocalTextures {
             try {
                 Map<String, Object> m = Mat2Codec.decode(l.data);
                 int id = ((Number) m.get("id")).intValue();
-                Integer ord = firstLocalTexOrdinal((List<?>) m.get("entries"), texIdToOrd);
-                if(ord != null && lt.images.get(ord) != null)
+                List<?> entries = (List<?>) m.get("entries");
+                Integer ord = firstLocalTexOrdinal(entries, texIdToOrd, true);
+                if(ord != null && lt.images.get(ord) != null) {
                     lt.matidToTex.put(id, ord);
+                    // A local base texture (not just an otex overlay) means the local
+                    // palette is genuinely this material's to swap.
+                    Integer baseOrd = firstLocalTexOrdinal(entries, texIdToOrd, false);
+                    if(baseOrd != null && lt.images.get(baseOrd) != null)
+                        lt.localBaseMatids.add(id);
+                }
             } catch(RuntimeException ignored) {
             }
         }
@@ -90,6 +102,15 @@ public final class LocalTextures {
         return matidToTex.get(matid);
     }
 
+    /** True if this material's base colour texture is a local {@code tex} — i.e. the
+     *  local palette is genuinely its to swap (so the viewer offers a picker). A
+     *  variable/external base (a {@code code}/varmat-supplied texture, an {@code mlink}
+     *  or external {@code tex} string, or only a local {@code otex} overlay) returns
+     *  {@code false}: we can render an approximation but can't meaningfully re-point it. */
+    public boolean isLocalBaseTex(int matid) {
+        return localBaseMatids.contains(matid);
+    }
+
     /** True if any material resolves to a local texture. */
     public boolean any() {
         return !matidToTex.isEmpty();
@@ -99,12 +120,15 @@ public final class LocalTextures {
      * its tex-layer ordinal. Mirrors GltfExport.firstLocalTexOrdinal — a string first
      * value means an external (mlink) texture, which is skipped. The numeric first
      * value is the tex layer's own id (the client's flayer(TexR.class, id) lookup),
-     * not its position, so it is resolved through the id->ordinal map. */
-    private static Integer firstLocalTexOrdinal(List<?> entries, Map<Integer, Integer> texIdToOrd) {
+     * not its position, so it is resolved through the id->ordinal map. When
+     * {@code includeOtex} is false only the base colour {@code tex} counts (an
+     * {@code otex} is an overlay, not the base). */
+    private static Integer firstLocalTexOrdinal(List<?> entries, Map<Integer, Integer> texIdToOrd,
+                                                boolean includeOtex) {
         for(Object e : entries) {
             Map<?, ?> entry = (Map<?, ?>) e;
             String key = String.valueOf(entry.get("key"));
-            if(!key.equals("tex") && !key.equals("otex"))
+            if(!key.equals("tex") && !(includeOtex && key.equals("otex")))
                 continue;
             List<?> vals = (List<?>) entry.get("values");
             if(vals.isEmpty() || vals.get(0) instanceof String)

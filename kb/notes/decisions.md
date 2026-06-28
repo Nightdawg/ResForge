@@ -69,17 +69,38 @@ runtime. So `model/ModelGeometry` now carries the **whole local-texture palette*
 with), and a per-triangle `triMat` (material index, or -1). `gui/Model3DView` holds a
 `matOrd[]` (palette ordinal per material, initialised from the defaults) and exposes
 `setMaterialTexture(matIndex, ord)`; `gui/ResForgeFrame.show3DDialog` builds one combo
-per material listing the non-null palette entries by tex id (shown only when there's a
-real choice — more than one local texture). The combos are split over **two balanced
-rows** (extracted as the testable static `buildTexturePickerRows`, ceil/floor split,
-caption on the first row) so a model with many materials — e.g. knarr's 10 — doesn't
+per **locally-textured** material listing the non-null palette entries by tex id (shown
+only when there's a real choice — more than one local texture). The combos are split
+over **two balanced rows** (extracted as the testable static `buildTexturePickerRows`,
+ceil/floor split, caption on the first row) so a model with many materials doesn't
 stretch the window into one very wide row. Each picked texture brings its own alpha
-mask, so foliage cutouts stay correct across variants. Only locally-textured materials
-get a picker; parts textured from another resource (mlink/`@res`, e.g. the mulberry
-trunk) stay shaded. Verified by a render-diff unit test (`gui/Model3DViewTest`, which
-renders off-screen and checks the swap changes the pixels), a layout test
-(`gui/TexturePickerLayoutTest`, which checks the two-row balanced split + caption), and
-visually on the real mulberry (green / spring / autumn / bare leaves, trunk unchanged).
+mask, so foliage cutouts stay correct across variants.
+
+Only materials whose **base colour** is a genuine local `tex` get a picker. A material
+whose base is **variable/external** — a `varmat` declared in `code`/`codeentry` (e.g.
+knarr's `lib/dynspr.Dyntex`), an `mlink` to another resource, an external `tex` string,
+or a material that carries only a local `otex` *overlay* over a non-local base — gets no
+picker: the local palette isn't its to swap. `LocalTextures.isLocalBaseTex(matid)` makes
+this call (a local `tex` command with a numeric id resolving into this resource's own
+`tex` layers; `otex` is explicitly an overlay and doesn't count as a base), surfaced as
+`ModelGeometry.Material.localBase`. Effect: knarr drops from ten pickers (one per
+otex-overlaid hull/sail part, all `mlink`-based) to **one** (matid 8, its lone local
+`tex`); mulberry stays at one (its leaf material). The variable/external parts still
+*render* (the viewer textures them with whatever local texture resolves, or shades
+them) — they just can't be re-pointed.
+
+**Future improvement (not done):** to actually pick/preview a variable or external
+texture we'd need to (a) detect the `varmat` from `code`/`codeentry` and enumerate its
+options, and/or (b) resolve `mlink`/external `tex` strings by **fetching** the referenced
+resource (the deferred Tier-2-part-2 "resolve varmat" work) — then those materials could
+get a (different) picker too. For now they're intentionally pickerless.
+
+Verified by a render-diff unit test (`gui/Model3DViewTest`, which
+renders off-screen and checks the swap changes the pixels), layout/filter tests
+(`gui/TexturePickerLayoutTest` — two-row split + caption + variable/external materials
+get no picker) and classification tests (`LocalTexturesTest.isLocalBaseTex`,
+`ModelGeometryTest`), and visually on the real mulberry (green / spring / autumn / bare
+leaves, trunk unchanged).
 
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords

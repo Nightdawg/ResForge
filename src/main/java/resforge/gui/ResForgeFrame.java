@@ -810,12 +810,15 @@ public class ResForgeFrame extends JFrame {
     }
 
     /** Build the per-material texture-picker rows for the 3D dialog. One combo per
-     *  textured material (listing the resource's local {@code tex} layers by id,
-     *  defaulting to the authored one); the combos are split over two balanced rows
-     *  so a model with many materials doesn't make one very wide row. Returns the
-     *  rows (empty when there's no real choice — fewer than two local textures) and
-     *  collects every combo into {@code outCombos} for the Textured toggle.
-     *  Package-private + static so the layout can be unit-tested without a frame. */
+     *  <em>locally-textured</em> material (listing the resource's local {@code tex}
+     *  layers by id, defaulting to the authored one); materials whose base is
+     *  variable/external (varmat/{@code mlink}/external string, or an {@code otex}
+     *  overlay only) get no combo — the local palette isn't theirs to swap. The combos
+     *  are split over two balanced rows so a model with many materials doesn't make one
+     *  very wide row. Returns the rows (empty when there's no real choice — fewer than
+     *  two local textures, or no locally-textured material) and collects every combo
+     *  into {@code outCombos} for the Textured toggle. Package-private + static so the
+     *  layout can be unit-tested without a frame. */
     static java.util.List<JPanel> buildTexturePickerRows(ModelGeometry geo, Model3DView view,
                                                          java.util.List<JComboBox<Integer>> outCombos) {
         java.util.List<JPanel> rows = new java.util.ArrayList<>();
@@ -826,10 +829,19 @@ public class ResForgeFrame extends JFrame {
         if(!geo.hasTextures() || palette.size() <= 1)
             return rows;
 
-        boolean many = geo.materials.size() > 1;
-        // One (label?, combo) group per textured material.
+        // Only materials with a local base texture are swappable; variable/external
+        // ones (mlink/varmat/otex-only) are skipped.
+        java.util.List<Integer> swappable = new java.util.ArrayList<>();
+        for(int mi = 0; mi < geo.materials.size(); mi++)
+            if(geo.materials.get(mi).localBase)
+                swappable.add(mi);
+        if(swappable.isEmpty())
+            return rows;
+
+        boolean many = swappable.size() > 1;
+        // One (label?, combo) group per swappable material.
         java.util.List<java.util.List<java.awt.Component>> groups = new java.util.ArrayList<>();
-        for(int mi = 0; mi < geo.materials.size(); mi++) {
+        for(int mi : swappable) {
             ModelGeometry.Material mat = geo.materials.get(mi);
             JComboBox<Integer> combo = new JComboBox<>(palette.toArray(new Integer[0]));
             combo.setRenderer(new DefaultListCellRenderer() {

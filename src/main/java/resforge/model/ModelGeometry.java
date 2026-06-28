@@ -49,13 +49,19 @@ public final class ModelGeometry {
     public final float radius;
 
     /** A textured material: its {@code matid} and the local-texture palette ordinal
-     *  it was authored to use (the viewer's default selection). */
+     *  it was authored to use (the viewer's default selection). {@code localBase} is
+     *  true when its base colour comes from a local {@code tex} (so the local palette
+     *  is genuinely its to swap); false for a variable/external base (varmat-,
+     *  {@code mlink}- or external-string-supplied, or a local {@code otex} overlay
+     *  only) — rendered as an approximation but not offered a picker. */
     public static final class Material {
         public final int matid;
         public final int defaultTex;
-        Material(int matid, int defaultTex) {
+        public final boolean localBase;
+        Material(int matid, int defaultTex, boolean localBase) {
             this.matid = matid;
             this.defaultTex = defaultTex;
+            this.localBase = localBase;
         }
     }
 
@@ -151,7 +157,7 @@ public final class ModelGeometry {
                 Integer mi = matidToMat.get(m.matid);
                 if(mi == null) {
                     mi = materials.size();
-                    materials.add(new Material(m.matid, ord));
+                    materials.add(new Material(m.matid, ord, lt.isLocalBaseTex(m.matid)));
                     matidToMat.put(m.matid, mi);
                 }
                 matIndex = mi;

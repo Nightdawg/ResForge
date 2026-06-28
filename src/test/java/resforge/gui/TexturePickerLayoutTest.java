@@ -60,6 +60,15 @@ class TexturePickerLayoutTest {
         return w.toByteArray();
     }
 
+    /** A mat2 with an external mlink base + a local otex overlay (variable/external). */
+    private static byte[] mat2Variable(int id, int otexId) {
+        MessageWriter w = new MessageWriter();
+        w.uint16(id);
+        w.string("mlink").uint8(2).string("gfx/x/peartree-tex").uint8(0);
+        w.string("otex").uint8(4).uint8(otexId).uint8(0);
+        return w.toByteArray();
+    }
+
     /** A model with {@code nMaterials} textured materials and {@code nTex} local textures. */
     private static ModelGeometry geo(int nMaterials, int nTex) {
         ResContainer res = new ResContainer(7);
@@ -123,6 +132,47 @@ class TexturePickerLayoutTest {
         List<JComboBox<Integer>> combos = new ArrayList<>();
         List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
         assertTrue(rows.isEmpty());
+        assertTrue(combos.isEmpty());
+    }
+
+    @Test
+    void variableExternalMaterialsGetNoPicker() {
+        // Two local-base materials + two variable/external ones, with two textures to choose.
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xA1)));
+        res.layers.add(new Layer("tex", tex(2, (byte) 0xA2)));
+        res.layers.add(new Layer("mat2", mat2Local(10, 1)));      // local base
+        res.layers.add(new Layer("mat2", mat2Local(11, 1)));      // local base
+        res.layers.add(new Layer("mat2", mat2Variable(12, 1)));   // variable/external
+        res.layers.add(new Layer("mat2", mat2Variable(13, 1)));   // variable/external
+        for(int matid : new int[]{10, 11, 12, 13})
+            res.layers.add(new Layer("mesh", meshMat(matid)));
+        res.layers.add(new Layer("vbuf2", vbufTex()));
+        ModelGeometry g = ModelGeometry.from(res);
+        assertEquals(4, g.materials.size(), "all four render (all resolve to some local texture)");
+
+        List<JComboBox<Integer>> combos = new ArrayList<>();
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        assertEquals(2, combos.size(), "only the two local-base materials get a picker");
+        assertEquals(2, rows.size(), "two pickers split one per balanced row");
+    }
+
+    @Test
+    void allVariableMeansNoRows() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xA1)));
+        res.layers.add(new Layer("tex", tex(2, (byte) 0xA2)));
+        res.layers.add(new Layer("mat2", mat2Variable(12, 1)));
+        res.layers.add(new Layer("mat2", mat2Variable(13, 1)));
+        res.layers.add(new Layer("mesh", meshMat(12)));
+        res.layers.add(new Layer("mesh", meshMat(13)));
+        res.layers.add(new Layer("vbuf2", vbufTex()));
+        ModelGeometry g = ModelGeometry.from(res);
+        assertTrue(g.hasTextures(), "they still render (via the local otex overlay)");
+
+        List<JComboBox<Integer>> combos = new ArrayList<>();
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        assertTrue(rows.isEmpty(), "no local-base material -> no pickers");
         assertTrue(combos.isEmpty());
     }
 }
