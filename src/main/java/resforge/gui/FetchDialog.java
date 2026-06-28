@@ -41,6 +41,17 @@ final class FetchDialog {
         JTextField pathFld = new JTextField(24);
         JTextField baseFld = new JTextField(base, 24);
 
+        // JOptionPane initially focuses its default button, so grab focus for the
+        // path field once it's shown (one-shot: removes itself after firing).
+        pathFld.addAncestorListener(new javax.swing.event.AncestorListener() {
+            public void ancestorAdded(javax.swing.event.AncestorEvent e) {
+                pathFld.requestFocusInWindow();
+                pathFld.removeAncestorListener(this);
+            }
+            public void ancestorMoved(javax.swing.event.AncestorEvent e) { }
+            public void ancestorRemoved(javax.swing.event.AncestorEvent e) { }
+        });
+
         JPanel form = new JPanel(new java.awt.GridBagLayout());
         java.awt.GridBagConstraints gc = new java.awt.GridBagConstraints();
         gc.gridx = 0;

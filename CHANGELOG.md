@@ -18,6 +18,13 @@ All notable changes to ResForge are documented here. The format is based on
   overlay) gets no dropdown — the local palette isn't its to swap — so a model like knarr
   shows one picker (its one locally-textured part) rather than ten.
 
+### Changed
+
+- **The "Fetch from server" dialog now focuses the Resource path field on open.**
+  Opening the dialog (toolbar **Fetch from Server**, **File ▸ Fetch from server**, or
+  **Ctrl+R**) puts the keyboard cursor straight in the *Resource path* box, so you can
+  type a path immediately without first clicking the field.
+
 ### Fixed
 
 - **Local 3D texture lookup resolved by id, not position.** A material's
