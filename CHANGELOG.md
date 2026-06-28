@@ -9,12 +9,14 @@ All notable changes to ResForge are documented here. The format is based on
 ### Added
 
 - **Per-material texture picker in the 3D viewer.** The **View 3D** window now shows a
-  dropdown for each textured material (split across two balanced rows when a model has
-  several), listing the resource's own `tex` layers (by id), so you can choose which
-  texture a part is drawn with — e.g. flip a tree's leaves between their seasonal
+  dropdown for each *locally-textured* material (split across two balanced rows when a
+  model has several), listing the resource's own `tex` layers (by id), so you can choose
+  which texture a part is drawn with — e.g. flip a tree's leaves between their seasonal
   variants live (mulberry carries four). The full local-texture palette is offered,
-  including variants no mesh uses by default; parts textured from another resource
-  still render shaded.
+  including variants no mesh uses by default. A material whose base is variable/external
+  (a `varmat` declared in `code`, an `mlink` to another resource, or only a local `otex`
+  overlay) gets no dropdown — the local palette isn't its to swap — so a model like knarr
+  shows one picker (its one locally-textured part) rather than ten.
 
 ### Fixed
 

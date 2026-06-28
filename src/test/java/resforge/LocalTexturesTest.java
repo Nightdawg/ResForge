@@ -39,6 +39,16 @@ class LocalTexturesTest {
         return w.toByteArray();
     }
 
+    /** A mat2 whose base is an external `mlink` but which carries a local `otex`
+     *  overlay (the knarr hull/sail pattern) — textured locally, but not a local base. */
+    private static byte[] mat2MlinkPlusLocalOtex(int id, String link, int otexId) {
+        MessageWriter w = new MessageWriter();
+        w.uint16(id);
+        w.string("mlink").uint8(2).string(link).uint8(0);
+        w.string("otex").uint8(4).uint8(otexId).uint8(0);
+        return w.toByteArray();
+    }
+
     @Test
     void mapsMatidToTheLocalTextureBytes() {
         ResContainer res = new ResContainer(7);
@@ -53,6 +63,32 @@ class LocalTexturesTest {
         assertTrue(img != null);
         assertEquals((byte) 0x22, img[8], "resolved to the second tex layer's image");
         assertNull(lt.texForMatid(99), "unknown matid -> no texture");
+        assertTrue(lt.isLocalBaseTex(5), "a local `tex` is a local base (swappable)");
+        assertFalse(lt.isLocalBaseTex(99));
+    }
+
+    @Test
+    void mlinkBaseWithLocalOtexIsTexturedButNotALocalBase() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0, (byte) 0x11)));   // id 0, the otex overlay
+        res.layers.add(new Layer("tex", tex(1, (byte) 0x22)));
+        res.layers.add(new Layer("mat2", mat2MlinkPlusLocalOtex(7, "gfx/terobjs/trees/peartree-tex", 0)));
+
+        LocalTextures lt = LocalTextures.from(res);
+        // It resolves to a local texture (the otex overlay), so it still renders textured...
+        assertEquals(Integer.valueOf(0), lt.ordForMatid(7));
+        // ...but its base is the external mlink, so it is not a local base (no picker).
+        assertFalse(lt.isLocalBaseTex(7), "an mlink base with only a local otex overlay is not a local base");
+    }
+
+    @Test
+    void externalBaseTexIsNotALocalBase() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0, (byte) 0x11)));
+        res.layers.add(new Layer("mat2", mat2External(5)));
+
+        LocalTextures lt = LocalTextures.from(res);
+        assertFalse(lt.isLocalBaseTex(5));
     }
 
     @Test

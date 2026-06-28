@@ -157,9 +157,39 @@ class ModelGeometryTest {
         assertEquals(1, g.materials.size());
         assertEquals(9, g.materials.get(0).matid);
         assertEquals(0, g.materials.get(0).defaultTex);
+        assertTrue(g.materials.get(0).localBase, "a local `tex` material is a swappable local base");
         // Every triangle maps to material index 0.
         for(int m : g.triMat)
             assertEquals(0, m);
+    }
+
+    /** A mat2 with an external `mlink` base + a local `otex` overlay (knarr pattern). */
+    private static byte[] mat2MlinkPlusLocalOtex(int id, String link, int otexId) {
+        MessageWriter w = new MessageWriter();
+        w.uint16(id);
+        w.string("mlink").uint8(2).string(link).uint8(0);
+        w.string("otex").uint8(4).uint8(otexId).uint8(0);
+        return w.toByteArray();
+    }
+
+    @Test
+    void variableExternalMaterialIsTexturedButFlaggedNotLocalBase() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0, (byte) 0xAA)));   // ordinal 0 (the otex overlay)
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xBB)));   // a local base for the other material
+        res.layers.add(new Layer("mat2", mat2Local(8, 1)));                                   // local base
+        res.layers.add(new Layer("mat2", mat2MlinkPlusLocalOtex(9, "gfx/x/peartree-tex", 0)));// variable base
+        res.layers.add(new Layer("vbuf2", vbufTex()));
+        res.layers.add(new Layer("mesh", meshMat(8)));
+        res.layers.add(new Layer("mesh", meshMat(9)));
+
+        ModelGeometry g = ModelGeometry.from(res);
+        assertTrue(g != null);
+        assertEquals(2, g.materials.size(), "both materials resolve to a local texture, so both render");
+        ModelGeometry.Material m8 = g.materials.stream().filter(m -> m.matid == 8).findFirst().orElseThrow();
+        ModelGeometry.Material m9 = g.materials.stream().filter(m -> m.matid == 9).findFirst().orElseThrow();
+        assertTrue(m8.localBase, "matid 8 has a local `tex` base");
+        assertFalse(m9.localBase, "matid 9's base is an external mlink (otex overlay only)");
     }
 
     @Test
