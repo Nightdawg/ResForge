@@ -65,4 +65,31 @@ class LocalTexturesTest {
         assertFalse(lt.any(), "an external (mlink/string) texture is not a local match");
         assertNull(lt.texForMatid(5));
     }
+
+    @Test
+    void resolvesTheTexLayerByIdNotByPosition() {
+        // tex ids that differ from their positions (as in the mulberry tree: ids 1,3,4,5).
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xAA)));   // ordinal 0, id 1
+        res.layers.add(new Layer("tex", tex(3, (byte) 0xBB)));   // ordinal 1, id 3
+        res.layers.add(new Layer("mat2", mat2Local(5, 1)));      // matid 5 -> tex id 1, at ordinal 0
+        res.layers.add(new Layer("mat2", mat2Local(6, 3)));      // matid 6 -> tex id 3, at ordinal 1
+
+        LocalTextures lt = LocalTextures.from(res);
+        assertEquals(Integer.valueOf(0), lt.ordForMatid(5), "tex id 1 lives at ordinal 0, not position 1");
+        assertEquals((byte) 0xAA, lt.texForMatid(5)[8]);
+        assertEquals(Integer.valueOf(1), lt.ordForMatid(6), "tex id 3 lives at ordinal 1");
+        assertEquals((byte) 0xBB, lt.texForMatid(6)[8]);
+    }
+
+    @Test
+    void unknownTexIdResolvesToNothing() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, (byte) 0xAA)));
+        res.layers.add(new Layer("mat2", mat2Local(5, 9)));      // references tex id 9 (absent)
+
+        LocalTextures lt = LocalTextures.from(res);
+        assertFalse(lt.any());
+        assertNull(lt.texForMatid(5), "a tex id with no matching layer resolves to no texture");
+    }
 }

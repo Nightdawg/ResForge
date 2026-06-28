@@ -212,6 +212,29 @@ class GltfExportTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void materialResolvesTextureByIdNotByPosition() {
+        // tex ids that differ from their positions (as in the mulberry tree).
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(10)));          // ordinal 0, id 10
+        res.layers.add(new Layer("tex", tex(20)));          // ordinal 1, id 20
+        res.layers.add(new Layer("mat2", mat2(7, 20)));     // matid 7 -> tex id 20, at ordinal 1
+        res.layers.add(new Layer("vbuf2", vbuf(false)));
+        res.layers.add(new Layer("mesh", mesh(7)));
+
+        GltfExport.Result r = GltfExport.toGlb(res, "t.res");
+        assertEquals(2, r.textures);
+
+        Map<String, Object> root = jsonOf(r.glb);
+        List<Object> materials = (List<Object>) root.get("materials");
+        Map<String, Object> pbr = (Map<String, Object>)
+                ((Map<String, Object>) materials.get(0)).get("pbrMetallicRoughness");
+        Map<String, Object> bct = (Map<String, Object>) pbr.get("baseColorTexture");
+        assertEquals(1L, ((Number) bct.get("index")).longValue(),
+                "tex id 20 is the 2nd embedded texture (ordinal 1), resolved by id not position");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void accessorsAndBufferViewsStayWithinBuffer() {
         ResContainer res = new ResContainer(7);
         res.layers.add(new Layer("vbuf2", vbuf(true)));

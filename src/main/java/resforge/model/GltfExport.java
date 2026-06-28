@@ -115,7 +115,8 @@ public final class GltfExport {
             }
 
         List<TexMat> texMats = collectTextures(res);
-        Map<Integer, Integer> matToTex = collectMatToTex(res, texMats.size());
+        Map<Integer, Integer> texIds = collectTexIds(res);
+        Map<Integer, Integer> matToTex = collectMatToTex(res, texIds);
 
         // One glTF material per distinct submesh matid (named "rfmat_<matid>") so the
         // rebuild import can recover which part each face belongs to, and so Blender
@@ -765,9 +766,27 @@ public final class GltfExport {
         }
     }
 
-    private static Map<Integer, Integer> collectMatToTex(ResContainer res, int texCount) {
+    /* tex layer id -> ordinal, aligned with {@link #collectTextures} (which only
+     * counts located textures), so a material's tex/otex id can be mapped to the
+     * matching texMats slot. */
+    private static Map<Integer, Integer> collectTexIds(ResContainer res) {
         Map<Integer, Integer> map = new LinkedHashMap<>();
-        if(texCount == 0)
+        int ord = 0;
+        for(Layer l : res.layers) {
+            if(!l.name.equals("tex"))
+                continue;
+            TexInfo ti = TexInfo.parse(l.data);
+            if(!ti.found)
+                continue;
+            map.putIfAbsent(ti.id, ord);
+            ord++;
+        }
+        return map;
+    }
+
+    private static Map<Integer, Integer> collectMatToTex(ResContainer res, Map<Integer, Integer> texIds) {
+        Map<Integer, Integer> map = new LinkedHashMap<>();
+        if(texIds.isEmpty())
             return map;
         for(Layer l : res.layers) {
             if(!l.name.equals("mat2"))
@@ -775,7 +794,7 @@ public final class GltfExport {
             try {
                 Map<String, Object> m = Mat2Codec.decode(l.data);
                 int id = ((Number) m.get("id")).intValue();
-                Integer ord = firstLocalTexOrdinal((List<?>) m.get("entries"), texCount);
+                Integer ord = firstLocalTexOrdinal((List<?>) m.get("entries"), texIds);
                 if(ord != null)
                     map.put(id, ord);
             } catch(RuntimeException ignored) {
@@ -784,7 +803,12 @@ public final class GltfExport {
         return map;
     }
 
-    private static Integer firstLocalTexOrdinal(List<?> entries, int texCount) {
+    /* The first tex/otex command whose first value is a local texture id, mapped to
+     * its tex-layer ordinal. A string first value means an external (mlink/@res)
+     * texture, which is skipped. The numeric first value is the tex layer's own id
+     * (the client's flayer(TexR.class, id) lookup), not its position, so it is
+     * resolved through the id->ordinal map. */
+    private static Integer firstLocalTexOrdinal(List<?> entries, Map<Integer, Integer> texIds) {
         for(Object e : entries) {
             Map<?, ?> entry = (Map<?, ?>) e;
             String key = String.valueOf(entry.get("key"));
@@ -797,9 +821,9 @@ public final class GltfExport {
             if(first instanceof Map) {
                 Object v = ((Map<?, ?>) first).values().iterator().next();
                 if(v instanceof Number) {
-                    int k = ((Number) v).intValue();
-                    if(k >= 0 && k < texCount)
-                        return k;
+                    Integer ord = texIds.get(((Number) v).intValue());
+                    if(ord != null)
+                        return ord;
                 }
             }
         }

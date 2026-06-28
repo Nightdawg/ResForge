@@ -147,12 +147,21 @@ under the lossless-or-raw guard. Matches CarryGun's "id + map of key→tto-value
 ## material → texture mapping
 A `mesh` references a material by `matid`; the `mat2` with that `id` describes the
 look. A material points at its texture via a `tex`/`otex` command: a **local**
-texture is `[{u8:k}]` (k indexes this resource's own `tex` layers), while an
-**external** texture is `[<string respath>, …]` (e.g. `mlink` →
-`gfx/terobjs/trees/peartree-tex` — lives in *another* `.res`). The glTF export uses
-the local `tex` images only: single-tex models map cleanly to everything;
-multi-tex use the `matid→mat2→local tex` chain best-effort; external (mlink)
-textures aren't fetched. (knarr: 6 local tex but most parts use external mlinks.)
+texture is `[{u8:k}, …]` where **k is the `tex` layer's own id** (the client's
+`flayer(TexR.class, k)` lookup — an id, **not** a positional index into the `tex`
+layers), while an **external** texture is `[<string respath>, …]` (e.g. `mlink` →
+`gfx/terobjs/trees/peartree-tex` — lives in *another* `.res`). The id-vs-position
+distinction matters whenever a model's `tex` ids aren't `0,1,2,…` in order — e.g.
+the **mulberry tree** has `tex` ids `1,3,4,5` (four seasonal leaf variants) and its
+leaf material (`matid 9`) does `tex {u8:1}` → tex **id 1** (the green foliage), which
+is the *first* `tex` layer (ordinal 0); resolving k as an ordinal would wrongly pick
+the second layer (id 3). Both the 3D viewer (`LocalTextures`) and the glTF export
+(`GltfExport`) resolve through a tex-id→ordinal map. The export uses the local `tex`
+images only: single-tex models map cleanly to everything; multi-tex use the
+`matid→mat2→local tex` chain best-effort; external (mlink/`@res`) textures aren't
+fetched, so parts that get their texture from another resource render shaded in
+View 3D (e.g. the mulberry **trunk**, via `mlink gfx/terobjs/trees/mulberry-tex`).
+(knarr: 6 local tex but most parts use external mlinks.)
 
 ## glTF (.glb) model export
 Modern alternative to OBJ for the 3D model, and the basis for the eventual edit

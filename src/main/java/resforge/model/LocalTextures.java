@@ -15,8 +15,9 @@ import java.util.Map;
  * Resolves a resource's <em>local</em> textures and the {@code matid → texture}
  * mapping for the 3D viewer, mirroring the chain the glTF export uses:
  * a {@code mesh}'s {@code matid} selects a {@code mat2} (by id) whose
- * {@code tex}/{@code otex} command's first value is a {@code u8} index into this
- * resource's own {@code tex} layers.
+ * {@code tex}/{@code otex} command's first value is the <em>id</em> of one of this
+ * resource's own {@code tex} layers (the client's {@code flayer(TexR.class, id)}
+ * lookup — an id, not a positional index).
  *
  * <p>Only <strong>local</strong> textures are handled here. Materials that point
  * at an external texture (an {@code mlink}/string respath in another resource) or
@@ -38,11 +39,14 @@ public final class LocalTextures {
     /** Build the local-texture table + matid map for a resource. Never throws. */
     public static LocalTextures from(ResContainer res) {
         LocalTextures lt = new LocalTextures();
+        Map<Integer, Integer> texIdToOrd = new LinkedHashMap<>();   // tex layer id -> ordinal
         for(Layer l : res.layers) {
             if(!l.name.equals("tex"))
                 continue;
             try {
                 TexInfo ti = TexInfo.parse(l.data);
+                if(ti.recognized)
+                    texIdToOrd.putIfAbsent(ti.id, lt.images.size());
                 lt.images.add(ti.found
                         ? Arrays.copyOfRange(l.data, ti.imageOffset, ti.imageOffset + ti.imageLen)
                         : null);
@@ -54,14 +58,13 @@ public final class LocalTextures {
                 lt.masks.add(null);
             }
         }
-        int texCount = lt.images.size();
         for(Layer l : res.layers) {
             if(!l.name.equals("mat2"))
                 continue;
             try {
                 Map<String, Object> m = Mat2Codec.decode(l.data);
                 int id = ((Number) m.get("id")).intValue();
-                Integer ord = firstLocalTexOrdinal((List<?>) m.get("entries"), texCount);
+                Integer ord = firstLocalTexOrdinal((List<?>) m.get("entries"), texIdToOrd);
                 if(ord != null && lt.images.get(ord) != null)
                     lt.matidToTex.put(id, ord);
             } catch(RuntimeException ignored) {
@@ -87,10 +90,12 @@ public final class LocalTextures {
         return !matidToTex.isEmpty();
     }
 
-    /* The first tex/otex command whose first value is a local u8 index. Mirrors
-     * GltfExport.firstLocalTexOrdinal — a string first value means an external
-     * (mlink) texture, which is skipped. */
-    private static Integer firstLocalTexOrdinal(List<?> entries, int texCount) {
+    /* The first tex/otex command whose first value is a local texture id, mapped to
+     * its tex-layer ordinal. Mirrors GltfExport.firstLocalTexOrdinal — a string first
+     * value means an external (mlink) texture, which is skipped. The numeric first
+     * value is the tex layer's own id (the client's flayer(TexR.class, id) lookup),
+     * not its position, so it is resolved through the id->ordinal map. */
+    private static Integer firstLocalTexOrdinal(List<?> entries, Map<Integer, Integer> texIdToOrd) {
         for(Object e : entries) {
             Map<?, ?> entry = (Map<?, ?>) e;
             String key = String.valueOf(entry.get("key"));
@@ -103,9 +108,9 @@ public final class LocalTextures {
             if(first instanceof Map) {
                 Object v = ((Map<?, ?>) first).values().iterator().next();
                 if(v instanceof Number) {
-                    int k = ((Number) v).intValue();
-                    if(k >= 0 && k < texCount)
-                        return k;
+                    Integer ord = texIdToOrd.get(((Number) v).intValue());
+                    if(ord != null)
+                        return ord;
                 }
             }
         }
