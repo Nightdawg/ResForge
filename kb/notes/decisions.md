@@ -70,12 +70,16 @@ with), and a per-triangle `triMat` (material index, or -1). `gui/Model3DView` ho
 `matOrd[]` (palette ordinal per material, initialised from the defaults) and exposes
 `setMaterialTexture(matIndex, ord)`; `gui/ResForgeFrame.show3DDialog` builds one combo
 per material listing the non-null palette entries by tex id (shown only when there's a
-real choice — more than one local texture). Each picked texture brings its own alpha
+real choice — more than one local texture). The combos are split over **two balanced
+rows** (extracted as the testable static `buildTexturePickerRows`, ceil/floor split,
+caption on the first row) so a model with many materials — e.g. knarr's 10 — doesn't
+stretch the window into one very wide row. Each picked texture brings its own alpha
 mask, so foliage cutouts stay correct across variants. Only locally-textured materials
 get a picker; parts textured from another resource (mlink/`@res`, e.g. the mulberry
 trunk) stay shaded. Verified by a render-diff unit test (`gui/Model3DViewTest`, which
-renders off-screen and checks the swap changes the pixels) and visually on the real
-mulberry (green / spring / autumn / bare leaves, trunk unchanged).
+renders off-screen and checks the swap changes the pixels), a layout test
+(`gui/TexturePickerLayoutTest`, which checks the two-row balanced split + caption), and
+visually on the real mulberry (green / spring / autumn / bare leaves, trunk unchanged).
 
 ## JOrbis dependency
 The only runtime dependency, used solely by the GUI's Ogg player. Maven coords

@@ -183,8 +183,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`
   + `model/LocalTextures`. Carries the full local-texture **palette** + a per-material
   default; `setMaterialTexture(matIndex, paletteOrd)` re-points a material, and the dialog
-  shows one combo per textured material — so a model's alternate `tex` layers, e.g.
-  mulberry's seasonal leaves, can be selected live).
+  shows one combo per textured material — split over **two balanced rows** (testable
+  `ResForgeFrame.buildTexturePickerRows`) so many-material models stay compact — so a
+  model's alternate `tex` layers, e.g. mulberry's seasonal leaves, can be selected live).
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT; the Ogg player joins the previous play thread before restarting
