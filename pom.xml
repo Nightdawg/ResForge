@@ -32,11 +32,22 @@
     </properties>
 
     <dependencies>
-        <!-- The only runtime dependency: the JOrbis Ogg-Vorbis decoder (GUI sound player). -->
+        <!-- The JOrbis Ogg-Vorbis decoder (GUI sound player). -->
         <dependency>
             <groupId>org.jcraft</groupId>
             <artifactId>jorbis</artifactId>
             <version>0.0.17</version>
+        </dependency>
+        <!-- JNA: drives the modern Windows COM file-open/save dialog (address bar). -->
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>5.15.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>5.15.0</version>
         </dependency>
         <!-- Tests only. -->
         <dependency>

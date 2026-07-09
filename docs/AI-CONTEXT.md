@@ -36,13 +36,17 @@ a sibling project at `../hafen-client`).
 - **Runnable jar:** `build-gradle/libs/` or `build-ant/libs/` or `build-maven/`,
   all `resforge-1.1.0.jar`. Use the jar (not `gradlew/ant run`) for paths with
   spaces — `--args`/`-Dargs` mangle them.
-- **One runtime dependency:** `org.jcraft:jorbis` 0.0.17 (LGPL, ~97 KB, bundles
-  `jogg`+`jorbis`) — the GUI's Ogg player. Vendored in `lib/` (Gradle/Ant) or
-  pulled from Central (Maven), folded into the jar by all three (Gradle fat-jar
-  via runtimeClasspath; Ant `zipgroupfileset`; Maven shade). The CLI never uses it.
+- **Runtime dependencies (two):** `org.jcraft:jorbis` 0.0.17 (LGPL, ~97 KB, bundles
+  `jogg`+`jorbis`) — the GUI's Ogg player; and **JNA** `net.java.dev.jna:jna` +
+  `:jna-platform` 5.15.0 (dual LGPL-2.1+/Apache-2.0) — Windows-only, drives the modern
+  Explorer file dialog (`gui/WinFileDialogs`), with a `FileDialog` fallback elsewhere.
+  Both are vendored in `lib/` (Gradle/Ant) or pulled from Central (Maven), folded into
+  the jar by all three (Gradle fat-jar via runtimeClasspath; Ant `zipgroupfileset`;
+  Maven shade). The CLI never uses either.
 - **License:** project is **MIT** (`LICENSE`, Copyright Nightdawg). Bundled JOrbis
-  stays **LGPL** and the `docs/reference/*.java` client files stay **LGPL-3** —
-  both documented in `THIRD-PARTY-NOTICES.md` (keep those notices on redistribution).
+  stays **LGPL**, bundled JNA stays **LGPL-2.1+/Apache-2.0**, and the
+  `docs/reference/*.java` client files stay **LGPL-3** — all documented in
+  `THIRD-PARTY-NOTICES.md` (keep those notices on redistribution).
   Only the core JOrbis decoder is used, never the GPL JOrbisPlayer.
 - Verifying the GUI: launch the jar, screenshot the screen, view the PNG. GUI
   mouse/keys automation is flaky — prefer screenshotting + trusting shared code
@@ -183,6 +187,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   state), `FetchDialog` / `CachePickerDialog` (the "Fetch from server" and "Open from
   game cache" modal dialogs, extracted as self-contained pickers that return the chosen
   path+base — the frame still does the actual fetch via `fetchFromServer`),
+  `WinFileDialogs` (Windows-only JNA helper that shows the modern Explorer file
+  open/save dialog with the address bar via COM `IFileOpenDialog`/`IFileSaveDialog`;
+  `ResForgeFrame` prefers it and falls back to `FileDialog` off-Windows or on failure),
   `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),

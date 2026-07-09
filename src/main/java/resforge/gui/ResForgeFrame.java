@@ -1292,8 +1292,16 @@ public class ResForgeFrame extends JFrame {
             System.getProperty("os.name", "").toLowerCase().startsWith("windows");
 
     /** Shows the OS-native "open" dialog. {@code filter} may be {@code null} to
-     *  accept any file. Returns the chosen path, or {@code null} if cancelled. */
+     *  accept any file. On Windows this is the modern Explorer picker (with the
+     *  editable address bar); it falls back to {@link FileDialog} if that native
+     *  dialog can't be used. Returns the chosen path, or {@code null} if cancelled. */
     private Path openDialog(String title, FileNameExtensionFilter filter) {
+        if(ON_WINDOWS) {
+            WinFileDialogs.Result r = WinFileDialogs.open(
+                    ownerHwnd(), title, initialDirPath(), null, toFilters(filter));
+            if(r.available)
+                return r.path;
+        }
         FileDialog fd = new FileDialog(this, title, FileDialog.LOAD);
         File d = dir();
         if(d != null)
@@ -1308,9 +1316,17 @@ public class ResForgeFrame extends JFrame {
     }
 
     /** Shows the OS-native "save" dialog, pre-filled with {@code defaultName}
-     *  (may be {@code null}). Returns the chosen path, or {@code null} if
+     *  (may be {@code null}). On Windows this is the modern Explorer picker (with
+     *  the editable address bar); it falls back to {@link FileDialog} if that
+     *  native dialog can't be used. Returns the chosen path, or {@code null} if
      *  cancelled. The native dialog handles overwrite confirmation itself. */
     private Path saveDialog(String title, String defaultName) {
+        if(ON_WINDOWS) {
+            WinFileDialogs.Result r = WinFileDialogs.save(ownerHwnd(), title, initialDirPath(),
+                    defaultName, toFilters(new FileNameExtensionFilter("Haven resource (*.res)", "res")));
+            if(r.available)
+                return r.path;
+        }
         FileDialog fd = new FileDialog(this, title, FileDialog.SAVE);
         File d = dir();
         if(d != null)
@@ -1319,6 +1335,33 @@ public class ResForgeFrame extends JFrame {
             fd.setFile(defaultName);
         fd.setVisible(true);
         return chosenPath(fd);
+    }
+
+    /** The folder the native dialog should open in (the current file's folder, or
+     *  {@code null} to let Windows pick its usual default). */
+    private String initialDirPath() {
+        File d = dir();
+        return d != null ? d.getAbsolutePath() : null;
+    }
+
+    /** This frame's native window handle for dialog ownership, or 0 if unavailable. */
+    private long ownerHwnd() {
+        try {
+            com.sun.jna.Pointer p = com.sun.jna.Native.getWindowPointer(this);
+            return p != null ? com.sun.jna.Pointer.nativeValue(p) : 0L;
+        } catch(Throwable ignore) {
+            return 0L;
+        }
+    }
+
+    /** Maps a Swing extension filter to the modern dialog's file-type rows, always
+     *  appending an "All files" row so nothing is ever hidden from view. */
+    private static java.util.List<WinFileDialogs.Filter> toFilters(FileNameExtensionFilter filter) {
+        java.util.List<WinFileDialogs.Filter> out = new java.util.ArrayList<>();
+        if(filter != null)
+            out.add(new WinFileDialogs.Filter(filter.getDescription(), wildcards(filter)));
+        out.add(new WinFileDialogs.Filter("All files (*.*)", "*.*"));
+        return out;
     }
 
     private static Path chosenPath(FileDialog fd) {

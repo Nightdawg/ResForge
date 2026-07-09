@@ -320,9 +320,12 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
   layer immediately (even ones we don't understand), while still exposing the
   high-value layers (images, text) for editing. Typed editors can be added later
   without changing the pack path (it just concatenates parts).
-- **Minimal third-party deps**: the only runtime dependency is **JOrbis**
+- **Minimal third-party deps**: two runtime dependencies. **JOrbis**
   (`org.jcraft:jorbis`, ~97 KB, LGPL) — a pure-Java Ogg Vorbis decoder used by the
-  GUI's in-app sound player; it is vendored in `lib/` and folded into the runnable
+  GUI's in-app sound player; and **JNA** (`net.java.dev.jna:jna` + `:jna-platform`,
+  LGPL-2.1+/Apache-2.0) — used Windows-only to show the modern Explorer file dialog
+  (`gui/WinFileDialogs`), with a `java.awt.FileDialog` fallback everywhere else. Both
+  are vendored in `lib/` and folded into the runnable
   jar (a "fat jar"), so the tool still builds and runs offline with no network
   fetch. JUnit is test-only. The CLI uses none of this (no audio decoding), and
   the manifest/JSON formats need no library.

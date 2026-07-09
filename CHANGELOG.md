@@ -23,6 +23,18 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **Modern Windows file dialog with an address bar (paste a folder/file path).**
+  On Windows, the **Open** and **Save as** pickers now use the modern Explorer
+  "Common Item Dialog" instead of the legacy Win32 one, so you get the editable
+  breadcrumb **address bar** — paste a full folder or file path straight into the
+  top bar rather than clicking through folders. Implemented by driving the COM
+  `IFileOpenDialog`/`IFileSaveDialog` interfaces via JNA
+  (new `gui/WinFileDialogs`), run on a dedicated STA thread and made modal to the
+  editor window. It degrades gracefully: on any failure — and on every non-Windows
+  platform — it falls back to the previous `java.awt.FileDialog`, so nothing can
+  crash or regress. Adds **JNA** (`jna` + `jna-platform`, dual-licensed
+  LGPL-2.1+/Apache-2.0) as a bundled dependency, folded into the fat jar like
+  JOrbis; see [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
 - **Optional manual UI-scale override — now settable in the GUI.** Choose
   **Options → UI scale…** to pick a scale factor (0.5–4.0; 1.0 = the automatic
   default) that makes the editor uniformly larger or smaller — not just the fonts,

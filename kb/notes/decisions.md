@@ -116,11 +116,14 @@ get no picker) and classification tests (`LocalTexturesTest.isLocalBaseTex`,
 `ModelGeometryTest`), and visually on the real mulberry (green / spring / autumn / bare
 leaves, trunk unchanged).
 
-## JOrbis dependency
-The only runtime dependency, used solely by the GUI's Ogg player. Maven coords
-are `org.jcraft:jorbis:0.0.17` (LGPL, ~97KB) — note `org.jcraft`, not
-`com.jcraft`. The one jar contains both the `jogg` and `jorbis` packages. The CLI
-never touches it.
+## Runtime dependencies
+Two, both GUI-only (the CLI touches neither). **JOrbis** — the Ogg player's decoder;
+Maven coords `org.jcraft:jorbis:0.0.17` (LGPL, ~97KB) — note `org.jcraft`, not
+`com.jcraft`. The one jar contains both the `jogg` and `jorbis` packages. **JNA** —
+`net.java.dev.jna:jna:5.15.0` + `net.java.dev.jna:jna-platform:5.15.0` (dual
+LGPL-2.1+/Apache-2.0), used only on Windows to drive the modern Explorer file dialog
+via COM `IFileOpenDialog`/`IFileSaveDialog` (`gui/WinFileDialogs`); other platforms
+fall back to `java.awt.FileDialog` and never load it.
 
 ## Copyrighted samples stay out of git
 Real game `.res` files are copyrighted. They live in a gitignored `samples/`

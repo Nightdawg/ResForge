@@ -36,6 +36,37 @@ JOrbis source above.
 
 ---
 
+## JNA — Java Native Access (bundled — runtime dependency, Windows only)
+
+- **Component:** JNA (`net.java.dev.jna:jna` and `net.java.dev.jna:jna-platform`)
+  — a library for calling native code from Java without writing JNI.
+- **Author:** Timothy Wall and the JNA contributors.
+- **Homepage / source:** https://github.com/java-native-access/jna
+- **License:** dual-licensed, **your choice** of the GNU Lesser General Public
+  License, version 2.1 or later (**LGPL-2.1+**) **or** the **Apache License, 2.0**.
+- **Used for:** showing the *modern* Windows Explorer file open/save dialog (the
+  Common Item Dialog, with the editable address bar) by driving the COM
+  `IFileOpenDialog`/`IFileSaveDialog` interfaces (`gui/WinFileDialogs`). It is only
+  invoked on Windows; on other platforms ResForge falls back to `java.awt.FileDialog`
+  and the JNA code path is never entered.
+
+**How it is included.** The two jars ship standalone at
+[`lib/jna-5.15.0.jar`](lib/jna-5.15.0.jar) and
+[`lib/jna-platform-5.15.0.jar`](lib/jna-platform-5.15.0.jar). The Gradle/Maven/Ant
+builds fold their classes (and JNA's own bundled native `jnidispatch` stubs for
+every platform) into the distributed "fat" jar for convenience, so
+`java -jar resforge-…​.jar` works without a separate classpath entry.
+
+**Replaceability (LGPL option).** JNA is an unmodified, self-contained library and
+is not statically linked into ResForge's own classes (ResForge calls only its public
+API). You may replace it with your own build: drop different `jna` / `jna-platform`
+jars in `lib/` (or on the classpath) and rebuild.
+
+If you redistribute the fat jar you are redistributing JNA; keep this notice and the
+upstream license(s) available, and point recipients at the JNA source above.
+
+---
+
 ## Haven & Hearth client reference sources (reference only — not compiled)
 
 The files under [`docs/reference/`](docs/reference/) are copied **verbatim for

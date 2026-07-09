@@ -34,13 +34,17 @@ java -Dresforge.uiScale=1.25 -jar build-gradle/libs/resforge-1.1.0.jar
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
-`gfx/borka/male`). The Fetch dialog **remembers your successful paths** and lists
+`gfx/borka/male`). On Windows the **Open** and **Save as** file pickers are the
+modern Explorer dialog — with the editable **address bar**, so you can paste a
+full folder or file path straight into the top bar instead of clicking through
+folders (it falls back to the classic picker if the modern one is unavailable).
+The Fetch dialog **remembers your successful paths** and lists
 them below the input as substring-matched, click-to-use suggestions (type any part
 of a path, e.g. `borka`, to filter; double-click to fetch). Or **Open from game
 cache…** to browse the resources you already have locally: it scans Haven's cache
 (`%APPDATA%\Haven and Hearth\data`), lists every resource name found there, and
 fetches the one you pick **fresh from the server** — the cache supplies only the
-names, so you always open the latest version. Selecting a layer shows the right tool for it: a **picture preview** with
+names, so you always open the latest version.Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for tooltips/pagina;
@@ -181,7 +185,7 @@ skinning, skeleton rest pose and morph shapes all round-trip.
 
 Requires JDK 21. There are three equivalent builds — use whichever you prefer;
 all compile the same sources, run the same JUnit 5 tests, and produce the same
-runnable fat jar (the JOrbis Ogg decoder folded in). Each writes to its own
+runnable fat jar (the JOrbis Ogg decoder and JNA folded in). Each writes to its own
 output directory so they never clash.
 
 **Gradle** (bundled wrapper, auto-downloads dependencies):
@@ -376,9 +380,11 @@ ResForge is open source under the **MIT License** — use it however you like
 It bundles and references third-party components under their own licenses —
 notably the **LGPL** [JOrbis](http://www.jcraft.com/jorbis/) Ogg/Vorbis decoder
 (shipped standalone as `lib/jorbis-0.0.17.jar` and folded into the fat jar for
-convenience) and the **LGPL-3** Haven & Hearth client sources kept for reference
-under [`docs/reference/`](docs/reference/) (not compiled into the tool). Those
-remain under their respective licenses; see
+convenience), **[JNA](https://github.com/java-native-access/jna)** (dual-licensed
+**LGPL-2.1+ / Apache-2.0**, folded in; used only on Windows to show the modern
+Explorer file dialog), and the **LGPL-3** Haven & Hearth client sources kept for
+reference under [`docs/reference/`](docs/reference/) (not compiled into the tool).
+Those remain under their respective licenses; see
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). If you redistribute ResForge,
 keep those notices intact.
 
