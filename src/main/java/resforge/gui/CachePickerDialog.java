@@ -151,7 +151,7 @@ final class CachePickerDialog {
         gc.weightx = 1;
         gc.anchor = java.awt.GridBagConstraints.WEST;
         gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gc.insets = new java.awt.Insets(0, 0, 4, 0);
+        gc.insets = UiScaling.insets(0, 0, 4, 0);
         form.add(new JLabel("Filter (type any part of a path, e.g. borka):"), gc);
         form.add(filterFld, gc);
         gc.weighty = 1;

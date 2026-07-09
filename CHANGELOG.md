@@ -6,6 +6,33 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **HiDPI/fractional-scaling: the GUI no longer renders too small.** On a monitor
+  using fractional Windows display scaling (e.g. a 4K screen at 150%), the Windows
+  Look&Feel handed back its core control fonts (`Label`, `Button`, `TextField`,
+  `Table`, `List`, …) at roughly the 96-dpi point size *divided* by the scale
+  factor — Tahoma 7 instead of ~12 — while menu fonts stayed correct. Since Java
+  already applies the display's render transform to everything, those mis-sized
+  fonts came out ~1/scale too small and the whole editor looked tiny, even though
+  the layout scaled fine. ResForge now normalises the Look&Feel's default fonts
+  after selecting it, lifting any that are too small up to a trusted reference size
+  while preserving each font's family and style. The correct *logical* size is
+  DPI-independent (the transform handles pixel density), so this is a no-op on a
+  100%-scaled display and fixes 125%/150%/200% (`gui/UiScaling`).
+
+### Added
+
+- **Optional manual UI-scale override — now settable in the GUI.** Choose
+  **Options → UI scale…** to pick a scale factor (0.5–4.0; 1.0 = the automatic
+  default) that makes the editor uniformly larger or smaller — not just the fonts,
+  but the layout too (table row height and thumbnails, panel/preview sizes, the
+  window, spinners, paddings), so everything stays proportional at any factor. It's
+  saved to your preferences and applied on the next launch (the app tells you a
+  restart is needed). For scripted/one-off use the same override is still available
+  at launch via `RESFORGE_UI_SCALE` (environment variable) or `-Dresforge.uiScale`
+  (JVM property); a launch override takes precedence over the saved GUI preference.
+
 ## [1.1.0] — 2026-06-28
 
 ### Added

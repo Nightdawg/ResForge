@@ -175,7 +175,7 @@ final class LayerEditors {
     private static JPanel headerRow() {
         JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
         row.setAlignmentX(Component.LEFT_ALIGNMENT);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 30));
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, UiScaling.scale(30)));
         return row;
     }
 
@@ -197,7 +197,7 @@ final class LayerEditors {
         area.setWrapStyleWord(true);
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
+        sp.setPreferredSize(UiScaling.scale(420, 320));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(act("Apply text", () -> {
@@ -220,10 +220,10 @@ final class LayerEditors {
             return;
         }
         JTextArea area = new JTextArea(json);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, height));
+        sp.setPreferredSize(new Dimension(UiScaling.scale(420), UiScaling.scale(height)));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(act("Apply JSON", () -> {
@@ -261,7 +261,7 @@ final class LayerEditors {
         content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
                 + " (true relative size & offset)"));
         AnimView view = new AnimView();
-        Dimension d = new Dimension(220, 180);
+        Dimension d = UiScaling.scale(220, 180);
         view.setPreferredSize(d);
         view.setMaximumSize(d);
         view.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -363,7 +363,7 @@ final class LayerEditors {
             JTextArea area = new JTextArea(detail);
             area.setEditable(false);
             area.setOpaque(false);
-            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+            area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
             area.setAlignmentX(Component.LEFT_ALIGNMENT);
             content.add(area);
         } else {
@@ -381,10 +381,10 @@ final class LayerEditors {
     void buildCodePanel(JPanel content, int idx, Layer l) {
         JTextArea area = new JTextArea(GuiSupport.codeText(l));
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
+        sp.setPreferredSize(UiScaling.scale(420, 320));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(act("Export", () -> host.exportLayer(idx)))));
@@ -393,11 +393,11 @@ final class LayerEditors {
     void buildReferencePanel(JPanel content, int idx, Layer l) {
         JTextArea area = new JTextArea(GuiSupport.referenceText(l));
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
         area.setCaretPosition(0);
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
+        sp.setPreferredSize(UiScaling.scale(420, 320));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("Read-only: this resource references the items above; preserved exactly on save."));
@@ -416,11 +416,11 @@ final class LayerEditors {
     void buildRigPanel(JPanel content, int idx, Layer l) {
         JTextArea area = new JTextArea(GuiSupport.rigText(l));
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
         area.setCaretPosition(0);
         JScrollPane sp = new JScrollPane(area);
         sp.setAlignmentX(Component.LEFT_ALIGNMENT);
-        sp.setPreferredSize(new Dimension(420, 320));
+        sp.setPreferredSize(UiScaling.scale(420, 320));
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(labeled("Read-only structural view; the layer is preserved exactly on save."));

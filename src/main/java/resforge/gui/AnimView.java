@@ -68,7 +68,7 @@ public class AnimView extends JComponent {
 
     @Override
     public Dimension getPreferredSize() {
-        return isPreferredSizeSet() ? super.getPreferredSize() : new Dimension(240, 200);
+        return isPreferredSizeSet() ? super.getPreferredSize() : UiScaling.scale(240, 200);
     }
 
     @Override

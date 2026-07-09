@@ -69,7 +69,7 @@ public class AudioPlayerPanel extends JPanel {
         stopBtn.addActionListener(e -> stop());
         slider.addChangeListener(e -> onSliderChanged());
 
-        setMaximumSize(new Dimension(Integer.MAX_VALUE, getPreferredSize().height + 10));
+        setMaximumSize(new Dimension(Integer.MAX_VALUE, getPreferredSize().height + UiScaling.scale(10)));
     }
 
     /* --------------------------------------------------------------- controls */

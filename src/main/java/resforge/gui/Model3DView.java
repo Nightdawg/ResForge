@@ -84,7 +84,7 @@ final class Model3DView extends JPanel {
         for(int i = 0; i < matOrd.length; i++)
             matOrd[i] = geo.materials.get(i).defaultTex;
         textured = geo.hasTextures();
-        setPreferredSize(new Dimension(640, 520));
+        setPreferredSize(UiScaling.scale(640, 520));
         setBackground(BG);
 
         java.awt.event.MouseAdapter m = new java.awt.event.MouseAdapter() {

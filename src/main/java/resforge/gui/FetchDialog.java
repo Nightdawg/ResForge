@@ -58,7 +58,7 @@ final class FetchDialog {
         gc.weightx = 1;
         gc.anchor = java.awt.GridBagConstraints.WEST;
         gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
-        gc.insets = new java.awt.Insets(0, 0, 4, 0);
+        gc.insets = UiScaling.insets(0, 0, 4, 0);
         form.add(new JLabel("Resource path (e.g. gfx/borka/male):"), gc);
         form.add(pathFld, gc);
 

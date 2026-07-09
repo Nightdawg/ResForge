@@ -219,3 +219,36 @@ editors can now be reasoned about and unit-tested in isolation (as `FetchHistory
 `src/main/java`, so new source files are picked up automatically. Rule: keep the frame
 the orchestrator (document, undo, table, threading); push per-kind panel construction
 and self-contained dialogs out into their own classes.
+
+## HiDPI: normalise the Look&Feel fonts, don't touch the layout
+Java (9+) is DPI-aware on Windows and applies the monitor's render transform
+(e.g. 1.5× at 150%) automatically, so widget sizes expressed in logical pixels —
+every hardcoded `Dimension`, the table row height, the split-pane widths — scale
+correctly with no code change. The one thing the Windows Look&Feel gets wrong at
+*fractional* scaling is its default control fonts: it returns them at the 96-dpi
+point size divided by the scale factor (Tahoma 7 instead of ~12), so with the
+transform on top they render ~1/scale too small and the whole UI looks tiny.
+`gui/UiScaling.normalizeFonts()` (called once, right after `setLookAndFeel`) fixes
+only that: it lifts any default `*.font` that is smaller than a trusted reference
+size (taken from the menu fonts, which the bug misses, floored at 12) up to that
+size, preserving family and style. Because the correct *logical* size is
+DPI-independent (the transform handles density), this is a no-op at 100% and
+corrects 125/150/200%. Rule: don't scale the layout by hand *for DPI* — the JVM
+already does the pixel-density math, and double-scaling would over-size everything.
+A manual multiplier (clamped 0.5–4.0) can override the size for users who want the
+UI bigger or smaller: it is settable persistently from the GUI (*Options → UI
+scale…*, stored via `Preferences.userNodeForPackage(ResForgeFrame)` under key
+`uiScale`) or as an advanced one-off launch override (`RESFORGE_UI_SCALE` env /
+`-Dresforge.uiScale` property). Precedence: a launch override wins over the stored
+preference, which wins over the 1.0 default. This *manual* multiplier — and only
+this one, exposed as `UiScaling.factor()` — is also applied to the code's own
+hardcoded pixel sizes and code-set font sizes (`UiScaling.scale(int)`,
+`scale(w,h)`, `font(float)`, `emptyBorder`, `insets`): the table row height and
+thumbnail size, the split/panel/preview preferred sizes, the window, spinners and
+paddings, plus the monospaced/bold fonts set in code. That keeps those in
+proportion with the (also-multiplied) L&F fonts, so a large factor doesn't crowd
+text into unscaled rows. At factor 1.0 every `scale()` call is an identity no-op,
+so the default/automatic path is byte-for-byte the old behaviour. Fonts and sizes
+are resolved once at startup, so a changed multiplier takes effect on the next
+launch — the dialog says so rather than trying to re-theme the live component tree
+(fragile, and the fixed-size fonts wouldn't follow anyway).

@@ -150,10 +150,10 @@ public class ResForgeFrame extends JFrame {
         add(north, BorderLayout.NORTH);
 
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        table.setRowHeight(36);
-        table.getColumnModel().getColumn(0).setMaxWidth(40);
-        table.getColumnModel().getColumn(1).setMaxWidth(44);
-        table.getColumnModel().getColumn(1).setMinWidth(44);
+        table.setRowHeight(UiScaling.scale(36));
+        table.getColumnModel().getColumn(0).setMaxWidth(UiScaling.scale(40));
+        table.getColumnModel().getColumn(1).setMaxWidth(UiScaling.scale(44));
+        table.getColumnModel().getColumn(1).setMinWidth(UiScaling.scale(44));
         table.getSelectionModel().addListSelectionListener(e -> {
             if(!e.getValueIsAdjusting()) {
                 showSelected();
@@ -164,20 +164,20 @@ public class ResForgeFrame extends JFrame {
         JPanel left = new JPanel(new BorderLayout());
         left.add(tableScroll, BorderLayout.CENTER);
         left.add(buildLayerBar(), BorderLayout.SOUTH);
-        left.setPreferredSize(new Dimension(380, 480));
+        left.setPreferredSize(UiScaling.scale(380, 480));
 
-        detail.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        detail.setBorder(UiScaling.emptyBorder(8, 8, 8, 8));
         showPlaceholder("Open a .res file to begin (File \u2192 Open, or drag one in).");
 
         JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, detail);
-        split.setDividerLocation(380);
+        split.setDividerLocation(UiScaling.scale(380));
         add(split, BorderLayout.CENTER);
 
-        status.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        status.setBorder(UiScaling.emptyBorder(2, 6, 2, 6));
         add(status, BorderLayout.SOUTH);
 
         setTransferHandler(new FileDropHandler());
-        setSize(900, 600);
+        setSize(UiScaling.scale(900), UiScaling.scale(600));
         setLocationByPlatform(true);
         updateLayerButtons();
     }
@@ -377,6 +377,10 @@ public class ResForgeFrame extends JFrame {
         editMenu.add(redoItem);
         bar.add(editMenu);
 
+        JMenu options = new JMenu("Options");
+        options.add(menuItem("UI scale\u2026", this::doUiScale));
+        bar.add(options);
+
         JMenu help = new JMenu("Help");
         help.add(menuItem("About", this::doAbout));
         bar.add(help);
@@ -385,7 +389,7 @@ public class ResForgeFrame extends JFrame {
 
     private JComponent buildPathBar() {
         JPanel bar = new JPanel(new BorderLayout(6, 0));
-        bar.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+        bar.setBorder(UiScaling.emptyBorder(3, 6, 3, 6));
         JLabel lab = new JLabel("File: ");
         lab.setFont(lab.getFont().deriveFont(Font.BOLD));
         pathField.setEditable(false);
@@ -398,8 +402,8 @@ public class ResForgeFrame extends JFrame {
         JLabel vl = new JLabel("Resource version: ");
         versionSpinner.setToolTipText("Resource format version (0\u201365535). Saved into the file header.");
         versionSpinner.setEnabled(false);
-        versionSpinner.setMaximumSize(new Dimension(90, 28));
-        versionSpinner.setPreferredSize(new Dimension(90, 28));
+        versionSpinner.setMaximumSize(UiScaling.scale(90, 28));
+        versionSpinner.setPreferredSize(UiScaling.scale(90, 28));
         versionSpinner.addChangeListener(e -> {
             if(updatingVersion || res == null)
                 return;
@@ -762,7 +766,7 @@ public class ResForgeFrame extends JFrame {
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
                 + " \u2014 shown in bind pose (no skinning/animation)");
         hint.setForeground(java.awt.Color.GRAY);
-        hint.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        hint.setBorder(UiScaling.emptyBorder(2, 4, 2, 4));
         dlg.add(hint, BorderLayout.SOUTH);
 
         // Only offered when the model actually has external static materials to resolve
@@ -1013,10 +1017,10 @@ public class ResForgeFrame extends JFrame {
 
         JTextArea area = new JTextArea(report);
         area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
         area.setCaretPosition(0);
         JScrollPane sp = new JScrollPane(area);
-        sp.setPreferredSize(new Dimension(520, 420));
+        sp.setPreferredSize(UiScaling.scale(520, 420));
 
         JButton copy = new JButton(action("Copy", () ->
                 Toolkit.getDefaultToolkit().getSystemClipboard()
@@ -1067,7 +1071,7 @@ public class ResForgeFrame extends JFrame {
 
         JLabel head = new JLabel(GuiSupport.kind(l.name) + "  \u2014  " + l.name
                 + "  (" + l.data.length + " bytes)");
-        head.setFont(head.getFont().deriveFont(Font.BOLD, 14f));
+        head.setFont(head.getFont().deriveFont(Font.BOLD, UiScaling.font(14f)));
         head.setAlignmentX(Component.LEFT_ALIGNMENT);
         content.add(head);
         content.add(Box.createVerticalStrut(8));
@@ -1362,6 +1366,65 @@ public class ResForgeFrame extends JFrame {
                 + "edit 3D models through Blender via glTF. Unchanged layers are preserved byte-for-byte.");
     }
 
+    private void doUiScale() {
+        double current = UiScaling.storedScale();
+        SpinnerNumberModel model = new SpinnerNumberModel(
+                current, UiScaling.MIN_SCALE, UiScaling.MAX_SCALE, 0.05);
+        JSpinner spinner = new JSpinner(model);
+        spinner.setEditor(new JSpinner.NumberEditor(spinner, "0.00"));
+        ((JSpinner.DefaultEditor) spinner.getEditor()).getTextField().setColumns(5);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.add(leftRow(new JLabel("Adjust the size of all editor text and controls.")));
+        panel.add(leftRow(new JLabel(String.format(
+                "1.00 = automatic default. Range %.2f\u2013%.1f.",
+                UiScaling.MIN_SCALE, UiScaling.MAX_SCALE))));
+        panel.add(Box.createVerticalStrut(6));
+        JPanel pick = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+        pick.add(new JLabel("Scale factor:"));
+        pick.add(spinner);
+        panel.add(leftRow(pick));
+        Double launch = UiScaling.launchOverride();
+        if(launch != null) {
+            panel.add(Box.createVerticalStrut(6));
+            panel.add(leftRow(new JLabel(String.format(
+                    "Note: a launch override (%.2f) is active and overrides this until removed.",
+                    launch))));
+        }
+
+        int r = JOptionPane.showConfirmDialog(this, panel, "UI scale",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if(r != JOptionPane.OK_OPTION)
+            return;
+        try {
+            spinner.commitEdit();
+        } catch(java.text.ParseException ignored) {
+        }
+        double chosen = UiScaling.clamp(((Number) spinner.getValue()).doubleValue());
+        if(chosen == current) {
+            setStatus("UI scale unchanged (" + fmtScale(chosen) + ").");
+            return;
+        }
+        UiScaling.setStoredScale(chosen);
+        setStatus("UI scale set to " + fmtScale(chosen) + " \u2014 restart to apply.");
+        String extra = (launch != null)
+                ? "\n\nA launch override is currently active, so this preference will\n"
+                + "only take effect once that override is removed."
+                : "";
+        info("UI scale saved: " + fmtScale(chosen) + ".\n\n"
+                + "Restart ResForge for the new scale to take effect." + extra);
+    }
+
+    private static String fmtScale(double v) {
+        return String.format("\u00d7%.2f", v);
+    }
+
+    private static JComponent leftRow(JComponent c) {
+        c.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return c;
+    }
+
     /* ---------------------------------------------------------- table + d-and-d */
 
     private class LayerTableModel extends AbstractTableModel {
@@ -1416,7 +1479,7 @@ public class ResForgeFrame extends JFrame {
         java.awt.image.BufferedImage img = GuiSupport.preview(l);
         if(img == null)
             return null;
-        int max = 30;
+        int max = UiScaling.scale(30);
         int w = img.getWidth(), h = img.getHeight();
         double s = Math.min((double) max / w, (double) max / h);
         if(s > 1)
@@ -1455,6 +1518,7 @@ public class ResForgeFrame extends JFrame {
             javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName());
         } catch(Exception ignored) {
         }
+        UiScaling.normalizeFonts();
         SwingUtilities.invokeLater(() -> {
             ResForgeFrame f = new ResForgeFrame();
             f.setVisible(true);

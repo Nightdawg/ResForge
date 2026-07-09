@@ -16,6 +16,22 @@ java -jar build-gradle/libs/resforge-1.1.0.jar          # opens the editor
 java -jar build-gradle/libs/resforge-1.1.0.jar gui horse.res   # opens a file
 ```
 
+**Display scaling (HiDPI).** The editor adapts to the monitor's scale factor, so
+it renders at the right size on 4K/HiDPI screens and at fractional Windows scaling
+(125%, 150%, …). If you'd like the whole UI a little larger or smaller, adjust the
+**scale factor** (1.0 = automatic default) — the simplest way is in the GUI under
+**Options → UI scale…**, which remembers your choice and applies it on the next
+launch. It scales the layout as well as the text (row height, thumbnails, panels,
+the window), so everything stays proportional. For scripted or one-off use you can
+also pass an override — the environment variable `RESFORGE_UI_SCALE` or the JVM
+property `-Dresforge.uiScale` (both clamped to 0.5–4.0); a launch override wins
+over the saved GUI preference:
+
+```sh
+RESFORGE_UI_SCALE=1.25 java -jar build-gradle/libs/resforge-1.1.0.jar
+java -Dresforge.uiScale=1.25 -jar build-gradle/libs/resforge-1.1.0.jar
+```
+
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
 `gfx/borka/male`). The Fetch dialog **remembers your successful paths** and lists
