@@ -1,7 +1,6 @@
 package resforge.gui;
 
 import javax.swing.JComponent;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -9,7 +8,7 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 /** A simple component that paints a {@link BufferedImage} scaled to fit and
- *  centred, over a light checkerboard so transparency is visible. */
+ *  centred, over a checkerboard so transparency is visible. */
 public class ImageView extends JComponent {
     private BufferedImage image;
     private String placeholder = "No preview";
@@ -36,7 +35,7 @@ public class ImageView extends JComponent {
         int w = getWidth(), h = getHeight();
         paintCheckerboard(g, w, h);
         if(image == null) {
-            g.setColor(Color.DARK_GRAY);
+            g.setColor(Theme.placeholderText());
             int tw = g.getFontMetrics().stringWidth(placeholder);
             g.drawString(placeholder, (w - tw) / 2, h / 2);
             g.dispose();
@@ -60,7 +59,7 @@ public class ImageView extends JComponent {
         for(int y = 0; y < h; y += s) {
             for(int x = 0; x < w; x += s) {
                 boolean even = ((x / s) + (y / s)) % 2 == 0;
-                g.setColor(even ? new Color(0xf0f0f0) : new Color(0xd8d8d8));
+                g.setColor(even ? Theme.checkerLight() : Theme.checkerDark());
                 g.fillRect(x, y, s, s);
             }
         }

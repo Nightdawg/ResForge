@@ -40,10 +40,10 @@
         <fileset dir="${lib.dir}" includes="*.jar"/>
     </path>
 
-    <!-- Runtime libraries bundled into the app: the JOrbis Ogg-Vorbis decoder
-         and JNA (the modern Windows COM file dialog). -->
+    <!-- Runtime libraries bundled into the app: the JOrbis Ogg-Vorbis decoder,
+         JNA (the modern Windows COM file dialog) and FlatLaf (the GUI themes). -->
     <path id="runtime.libs">
-        <fileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar"/>
+        <fileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar,flatlaf-*.jar"/>
     </path>
 
     <target name="clean" description="Remove the Ant build output">
@@ -63,8 +63,8 @@
         <mkdir dir="${jar.dir}"/>
         <jar destfile="${jar.file}">
             <fileset dir="${classes.dir}"/>
-            <!-- Fold the JOrbis decoder and JNA classes/natives in so `java -jar` works standalone. -->
-            <zipgroupfileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar"/>
+            <!-- Fold the JOrbis decoder, JNA and FlatLaf classes/natives in so `java -jar` works standalone. -->
+            <zipgroupfileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar,flatlaf-*.jar"/>
             <manifest>
                 <attribute name="Main-Class" value="${main.class}"/>
             </manifest>

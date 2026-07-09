@@ -1,7 +1,6 @@
 package resforge.gui;
 
 import javax.swing.JComponent;
-import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -104,7 +103,7 @@ public class AnimView extends JComponent {
         for(int y = 0; y < h; y += s) {
             for(int x = 0; x < w; x += s) {
                 boolean even = ((x / s) + (y / s)) % 2 == 0;
-                g.setColor(even ? new Color(0xf0f0f0) : new Color(0xd8d8d8));
+                g.setColor(even ? Theme.checkerLight() : Theme.checkerDark());
                 g.fillRect(x, y, s, s);
             }
         }

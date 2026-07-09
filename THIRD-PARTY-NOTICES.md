@@ -67,6 +67,32 @@ upstream license(s) available, and point recipients at the JNA source above.
 
 ---
 
+## FlatLaf (bundled — runtime dependency)
+
+- **Component:** FlatLaf (`com.formdev:flatlaf`) — a modern flat Look&Feel for Java
+  Swing, providing ResForge's light and dark GUI themes.
+- **Author:** FormDev Software GmbH and the FlatLaf contributors.
+- **Homepage / source:** https://www.formdev.com/flatlaf/ — https://github.com/JFormDesigner/FlatLaf
+- **License:** Apache License, version 2.0 (**Apache-2.0**).
+- **Used for:** the GUI's Look&Feel and the **Options → Dark mode** toggle
+  (`gui/Theme`). ResForge calls only its public API (`FlatLightLaf` / `FlatDarkLaf`).
+
+**How it is included.** The library ships as a standalone jar at
+[`lib/flatlaf-3.7.2.jar`](lib/flatlaf-3.7.2.jar). The Gradle/Maven/Ant builds fold
+its classes (and FlatLaf's own bundled native window-decoration stubs) into the
+distributed "fat" jar for convenience, so `java -jar resforge-…​.jar` works without
+a separate classpath entry.
+
+**Replaceability.** FlatLaf is an unmodified, self-contained library and is not
+statically linked into ResForge's own classes. You may replace it with your own
+build: drop a different `flatlaf` jar in `lib/` (or on the classpath) and rebuild.
+
+If you redistribute the fat jar you are redistributing FlatLaf; keep this notice and
+the upstream Apache-2.0 license available, and point recipients at the FlatLaf source
+above.
+
+---
+
 ## Haven & Hearth client reference sources (reference only — not compiled)
 
 The files under [`docs/reference/`](docs/reference/) are copied **verbatim for

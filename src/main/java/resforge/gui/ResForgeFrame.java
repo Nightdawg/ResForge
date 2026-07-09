@@ -18,6 +18,7 @@ import javax.swing.Icon;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -378,6 +379,12 @@ public class ResForgeFrame extends JFrame {
         bar.add(editMenu);
 
         JMenu options = new JMenu("Options");
+        JCheckBoxMenuItem darkMode = new JCheckBoxMenuItem("Dark mode", Theme.isDarkPreferred());
+        darkMode.addActionListener(e -> {
+            Theme.setDark(darkMode.isSelected());
+            setStatus(darkMode.isSelected() ? "Dark mode on." : "Dark mode off.");
+        });
+        options.add(darkMode);
         options.add(menuItem("UI scale\u2026", this::doUiScale));
         bar.add(options);
 
@@ -765,7 +772,7 @@ public class ResForgeFrame extends JFrame {
 
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
                 + " \u2014 shown in bind pose (no skinning/animation)");
-        hint.setForeground(java.awt.Color.GRAY);
+        Theme.muted(hint);
         hint.setBorder(UiScaling.emptyBorder(2, 4, 2, 4));
         dlg.add(hint, BorderLayout.SOUTH);
 
@@ -1259,7 +1266,7 @@ public class ResForgeFrame extends JFrame {
     private void showPlaceholder(String text) {
         detail.removeAll();
         JLabel lab = new JLabel(text, JLabel.CENTER);
-        lab.setForeground(java.awt.Color.GRAY);
+        Theme.muted(lab);
         detail.add(lab, BorderLayout.CENTER);
         detail.revalidate();
         detail.repaint();
@@ -1557,10 +1564,7 @@ public class ResForgeFrame extends JFrame {
 
     /** Launches the GUI, optionally opening {@code initial}. */
     public static void launch(Path initial) {
-        try {
-            javax.swing.UIManager.setLookAndFeel(javax.swing.UIManager.getSystemLookAndFeelClassName());
-        } catch(Exception ignored) {
-        }
+        Theme.install();
         UiScaling.normalizeFonts();
         SwingUtilities.invokeLater(() -> {
             ResForgeFrame f = new ResForgeFrame();

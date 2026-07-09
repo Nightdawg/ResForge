@@ -23,6 +23,13 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **Dark mode.** A new **Options → Dark mode** toggle switches the whole editor
+  between a light and a dark theme, applied live (no restart) and remembered
+  between launches. The GUI now uses the [FlatLaf](https://www.formdev.com/flatlaf/)
+  Look&Feel to provide both themes; the transparency checkerboard and placeholder
+  text behind image/animation previews adapt to the active theme, and muted hint
+  labels re-tint on a live switch (`gui/Theme`).
+
 - **Modern Windows file dialog with an address bar (paste a folder/file path).**
   On Windows, the **Open** and **Save as** pickers now use the modern Explorer
   "Common Item Dialog" instead of the legacy Win32 one, so you get the editable

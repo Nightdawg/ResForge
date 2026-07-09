@@ -49,6 +49,12 @@
             <artifactId>jna-platform</artifactId>
             <version>5.15.0</version>
         </dependency>
+        <!-- FlatLaf: modern Swing Look&Feel providing the light/dark GUI themes. -->
+        <dependency>
+            <groupId>com.formdev</groupId>
+            <artifactId>flatlaf</artifactId>
+            <version>3.7.2</version>
+        </dependency>
         <!-- Tests only. -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>

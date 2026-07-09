@@ -61,12 +61,12 @@ final class CachePickerDialog {
                 String s = String.valueOf(value);
                 if(resforge.net.CacheIndex.isDynamic(s)) {
                     if(!sel)
-                        setForeground(java.awt.Color.GRAY);
+                        setForeground(Theme.mutedColor());
                     boolean firstDyn = index == 0 || !resforge.net.CacheIndex.isDynamic(
                             String.valueOf(l.getModel().getElementAt(index - 1)));
                     if(firstDyn)
                         setBorder(BorderFactory.createCompoundBorder(
-                                BorderFactory.createMatteBorder(1, 0, 0, 0, java.awt.Color.LIGHT_GRAY),
+                                BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.mutedColor()),
                                 getBorder()));
                 }
                 return this;
@@ -161,7 +161,7 @@ final class CachePickerDialog {
         gc.fill = java.awt.GridBagConstraints.HORIZONTAL;
         JLabel dynHint = new JLabel("Greyed \u201cdyn/\u201d entries are dynamic, account-attached "
                 + "resources (listed last; may not be fetchable).");
-        dynHint.setForeground(java.awt.Color.GRAY);
+        dynHint.setForeground(Theme.mutedColor());
         dynHint.setFont(dynHint.getFont().deriveFont(dynHint.getFont().getSize2D() - 1f));
         form.add(dynHint, gc);
         form.add(new JLabel("Server base URL:"), gc);

@@ -25,6 +25,8 @@ dependencies {
     // JNA: drives the modern Windows COM file-open/save dialog (address bar).
     implementation 'net.java.dev.jna:jna:5.15.0'
     implementation 'net.java.dev.jna:jna-platform:5.15.0'
+    // FlatLaf: modern Swing Look&Feel providing the light/dark GUI themes.
+    implementation 'com.formdev:flatlaf:3.7.2'
     testImplementation 'org.junit.jupiter:junit-jupiter:5.10.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
