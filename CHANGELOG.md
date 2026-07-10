@@ -8,6 +8,11 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Deeply nested typed-object data no longer crashes layer parsing.** The
+  `rlink`, `codeentry`, and `mat2` readers now cap nested `tto` lists/maps at
+  256 levels. Crafted resources that previously escaped malformed-layer handling
+  with a `StackOverflowError` are now rejected through each parser's normal
+  failure path.
 - **HiDPI/fractional-scaling: the GUI no longer renders too small.** On a monitor
   using fractional Windows display scaling (e.g. a 4K screen at 150%), the Windows
   Look&Feel handed back its core control fonts (`Label`, `Button`, `TextField`,

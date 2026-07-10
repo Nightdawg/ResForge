@@ -35,6 +35,8 @@ import java.util.Map;
  * the link refers back to its own resource and contributes no external reference.
  */
 public final class RLinkInfo {
+    private static final int MAX_TTO_DEPTH = 256;
+
     public static final class Ref {
         public final String name;
         public final int ver;       // -1 if unknown
@@ -94,7 +96,7 @@ public final class RLinkInfo {
                         String key = in.string();
                         if(key.isEmpty())
                             break;
-                        info.put(key, readValue(in, in.uint8(), refs));
+                        info.put(key, readValue(in, in.uint8(), refs, 0));
                     }
                 }
             } else {
@@ -150,7 +152,7 @@ public final class RLinkInfo {
                     int tag = in.uint8();
                     if(tag == 0)
                         break;
-                    args.add(readValue(in, tag, refs));
+                    args.add(readValue(in, tag, refs, 0));
                 }
                 return new Link(id, type, "parameters", nm, ver, args.isEmpty() ? null : render(args), refs, info);
             }
@@ -184,27 +186,29 @@ public final class RLinkInfo {
 
     /* ----- a small tto reader, collecting nested resource references ----- */
 
-    private static List<Object> readList(MessageReader in, List<Ref> refs) {
+    private static List<Object> readList(MessageReader in, List<Ref> refs, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new IllegalStateException("tto nesting too deep");
         List<Object> list = new ArrayList<>();
         int t;
         while((t = in.uint8()) != 0)
-            list.add(readValue(in, t, refs));
+            list.add(readValue(in, t, refs, depth));
         return list;
     }
 
-    private static Object readValue(MessageReader in, int t, List<Ref> refs) {
+    private static Object readValue(MessageReader in, int t, List<Ref> refs, int depth) {
         switch(t) {
             case 1:  return (long) in.int32();
             case 2:  return in.string();
             case 4:  return (long) in.uint8();
             case 5:  return (long) in.uint16();
-            case 8:  return readList(in, refs);
+            case 8:  return readList(in, refs, depth + 1);
             case 9:  return (long) in.int8();
             case 10: return (long) in.int16();
             case 12: return null;
             case 15: return (double) in.float32();
             case 16: return in.float64();
-            case 32: return readMap(in, refs);
+            case 32: return readMap(in, refs, depth + 1);
             case 33: return in.int64();
             case 34: {
                 String nm = in.string();
@@ -217,12 +221,14 @@ public final class RLinkInfo {
         }
     }
 
-    private static Map<String, Object> readMap(MessageReader in, List<Ref> refs) {
+    private static Map<String, Object> readMap(MessageReader in, List<Ref> refs, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new IllegalStateException("tto nesting too deep");
         Map<String, Object> m = new LinkedHashMap<>();
         int t;
         while((t = in.uint8()) != 0) {
-            Object k = readValue(in, t, refs);
-            m.put(String.valueOf(k), readValue(in, in.uint8(), refs));
+            Object k = readValue(in, t, refs, depth);
+            m.put(String.valueOf(k), readValue(in, in.uint8(), refs, depth));
         }
         return m;
     }

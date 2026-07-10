@@ -37,6 +37,8 @@ import java.util.Map;
  * simply keep the layer raw.
  */
 public final class Mat2Codec {
+    private static final int MAX_TTO_DEPTH = 256;
+
     private static final int T_END = 0;
     private static final int T_INT = 1;
     private static final int T_STR = 2;
@@ -71,7 +73,7 @@ public final class Mat2Codec {
             List<Object> values = new ArrayList<>();
             int t;
             while((t = in.uint8()) != T_END)
-                values.add(readValue(in, t));
+                values.add(readValue(in, t, 0));
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("key", key);
             entry.put("values", values);
@@ -126,7 +128,7 @@ public final class Mat2Codec {
         return null;
     }
 
-    private static Object readValue(MessageReader in, int t) {
+    private static Object readValue(MessageReader in, int t, int depth) {
         switch(t) {
             case T_STR:     return in.string();
             case T_NIL:     return null;
@@ -139,8 +141,8 @@ public final class Mat2Codec {
             case T_FLOAT32: return tag("f32", (double) in.float32());
             case T_FLOAT64: return tag("f64", in.float64());
             case T_COLOR:   return tag("color", colorList(in));
-            case T_TTOL:    return tag("list", readList(in));
-            case T_MAP:     return tag("map", readMap(in));
+            case T_TTOL:    return tag("list", readList(in, depth + 1));
+            case T_MAP:     return tag("map", readMap(in, depth + 1));
             default:        throw new Unsupported("tto type tag " + t);
         }
     }
@@ -152,22 +154,26 @@ public final class Mat2Codec {
         return rgba;
     }
 
-    private static List<Object> readList(MessageReader in) {
+    private static List<Object> readList(MessageReader in, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new Unsupported("tto nesting too deep");
         List<Object> list = new ArrayList<>();
         int t;
         while((t = in.uint8()) != T_END)
-            list.add(readValue(in, t));
+            list.add(readValue(in, t, depth));
         return list;
     }
 
-    private static Map<String, Object> readMap(MessageReader in) {
+    private static Map<String, Object> readMap(MessageReader in, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new Unsupported("tto nesting too deep");
         Map<String, Object> map = new LinkedHashMap<>();
         int t;
         while((t = in.uint8()) != T_END) {
-            Object key = readValue(in, t);
+            Object key = readValue(in, t, depth);
             if(!(key instanceof String))
                 throw new Unsupported("non-string map key");
-            map.put((String) key, readValue(in, in.uint8()));
+            map.put((String) key, readValue(in, in.uint8(), depth));
         }
         return map;
     }

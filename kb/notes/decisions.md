@@ -173,9 +173,10 @@ otherwise tried to allocate ~2 GB → OOM), and `string()` decodes strict UTF-8
 re-encode and silently break the invariant). A negative internal length used to
 rewind the cursor and hang; the same `ensure` fix closes that. `Json` rejects
 truncated `\u`/dangling escapes and duplicate object keys. Recursion is depth-capped
-(`Json` object/array nesting, `PropsCodec` and `TtoSkip` tto list/map nesting all cap
-at 256), so a pathologically deep document fails with a clear exception instead of a
-`StackOverflowError` — which, being an `Error`, would otherwise slip past the codecs'
+(`Json` object/array nesting and the `PropsCodec`, `TtoSkip`, `RLinkInfo`,
+`CodeEntryInfo`, and `Mat2Codec` tto list/map readers all cap at 256), so a
+pathologically deep document fails with a clear exception instead of a
+`StackOverflowError` — which, being an `Error`, would otherwise slip past
 `catch(RuntimeException)` guards. Rule: a corrupt file
 must fail with a clear exception, never OOM, hang, or corrupt.
 

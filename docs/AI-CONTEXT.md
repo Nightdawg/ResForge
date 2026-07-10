@@ -271,9 +271,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 - **Hostile-input safe**: the parser is hardened to fail cleanly (clear exception),
   never OOM/hang/corrupt, on a crafted or truncated `.res` — overflow-safe reader
   bounds, length validation, strict UTF-8, no magic-scanning, and recursion-depth
-  caps (`Json` object/array nesting + `PropsCodec`/`TtoSkip` tto list/map nesting cap
-  at 256, so a deeply nested document fails with a clear exception rather than a
-  `StackOverflowError` that would escape the codecs' `catch(RuntimeException)` guards).
+  caps (`Json` object/array nesting plus `PropsCodec`, `TtoSkip`, `RLinkInfo`,
+  `CodeEntryInfo`, and `Mat2Codec` tto list/map nesting cap at 256), so a deeply
+  nested document fails through normal malformed-input handling rather than a
+  `StackOverflowError` that would escape `catch(RuntimeException)` guards.
   Typed-codec *edits*
   are range-checked (`Nums`) so a bad value is rejected, not silently wrapped.
 - **Atomic writes**: all `.res`/`.glb` output goes through `io/SafeFiles` (temp +

@@ -334,6 +334,13 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 
 ## 7. Verification performed
 
+- **TTO recursion hardening (2026-07-10):** `RLinkInfo`,
+  `CodeEntryInfo`, and `Mat2Codec` now carry an explicit nesting depth through
+  every recursive list/map value and reject depth above 256. A crafted payload
+  with 12,000 nested containers previously raised `StackOverflowError`, bypassing
+  the readers' `catch(RuntimeException)` malformed-layer fallback. The failure is
+  now bounded and graceful; `TtoDepthTest` covers deep lists/maps and the exact
+  256-level boundary through all three public entry points.
 - `./gradlew build` → BUILD SUCCESSFUL; JUnit round-trip tests pass.
 - End-to-end CLI run on a synthesized resource (image + tooltip + neg):
   `info` reported metadata correctly; `unpack` split image into `.imghdr`+`.png`,

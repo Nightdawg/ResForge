@@ -29,6 +29,8 @@ import java.util.Map;
  * modder can see what a resource does. The layer itself stays raw/lossless.
  */
 public final class CodeEntryInfo {
+    private static final int MAX_TTO_DEPTH = 256;
+
     public static final class Entry {
         public final String name;
         public final String className;
@@ -68,7 +70,7 @@ public final class CodeEntryInfo {
                         String cn = in.string();
                         if(en.isEmpty())
                             break;
-                        String args = (t == 3) ? render(readList(in)) : null;
+                        String args = (t == 3) ? render(readList(in, 0)) : null;
                         ce.entries.add(new Entry(en, cn, args));
                     }
                 } else if(t == 2) {
@@ -79,7 +81,7 @@ public final class CodeEntryInfo {
                         ce.classpath.add(new Dep(ln, in.uint16()));
                     }
                 } else if(t == 4) {
-                    for(Object datum : readList(in)) {
+                    for(Object datum : readList(in, 0)) {
                         if(!(datum instanceof List))
                             continue;
                         List<?> d = (List<?>) datum;
@@ -108,27 +110,29 @@ public final class CodeEntryInfo {
 
     /* ----- a small tto reader, just enough to render codeentry arguments ----- */
 
-    private static List<Object> readList(MessageReader in) {
+    private static List<Object> readList(MessageReader in, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new IllegalStateException("tto nesting too deep");
         List<Object> list = new ArrayList<>();
         int t;
         while((t = in.uint8()) != 0)
-            list.add(readValue(in, t));
+            list.add(readValue(in, t, depth));
         return list;
     }
 
-    private static Object readValue(MessageReader in, int t) {
+    private static Object readValue(MessageReader in, int t, int depth) {
         switch(t) {
             case 1:  return (long) in.int32();
             case 2:  return in.string();
             case 4:  return (long) in.uint8();
             case 5:  return (long) in.uint16();
-            case 8:  return readList(in);
+            case 8:  return readList(in, depth + 1);
             case 9:  return (long) in.int8();
             case 10: return (long) in.int16();
             case 12: return null;
             case 15: return (double) in.float32();
             case 16: return in.float64();
-            case 32: return readMap(in);
+            case 32: return readMap(in, depth + 1);
             case 33: return in.int64();
             case 34: { String nm = in.string(); int ver = in.uint16(); return "res(" + nm + "@v" + ver + ")"; }
             case 35: return "resid:" + in.uint16();
@@ -136,12 +140,14 @@ public final class CodeEntryInfo {
         }
     }
 
-    private static Map<String, Object> readMap(MessageReader in) {
+    private static Map<String, Object> readMap(MessageReader in, int depth) {
+        if(depth > MAX_TTO_DEPTH)
+            throw new IllegalStateException("tto nesting too deep");
         Map<String, Object> m = new LinkedHashMap<>();
         int t;
         while((t = in.uint8()) != 0) {
-            Object k = readValue(in, t);
-            m.put(String.valueOf(k), readValue(in, in.uint8()));
+            Object k = readValue(in, t, depth);
+            m.put(String.valueOf(k), readValue(in, in.uint8(), depth));
         }
         return m;
     }
