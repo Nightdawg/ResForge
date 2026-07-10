@@ -38,8 +38,9 @@ import java.util.Map;
  * {@code snorm16} integers rather than a decoded unit vector, because the octahedral
  * round-trip is not byte-exact (a decoded→re-encoded axis can drift ±1). Storing the
  * raw components guarantees every recognised {@code boneoff} round-trips exactly while
- * still letting the friendlier {@code cpfloat}/{@code float32} translations be edited
- * as plain numbers. Like the other typed layers, it is offered as editable JSON only
+ * still letting the angle be edited within its unsigned-16-bit turn range and the
+ * friendlier {@code cpfloat}/{@code float32} translations be edited as plain numbers.
+ * Like the other typed layers, it is offered as editable JSON only
  * under the lossless-or-raw guard ({@link #toJsonIfLossless}): if decode → JSON →
  * encode does not reproduce the original bytes, the layer stays raw.
  */
@@ -257,7 +258,12 @@ public final class BoneOffCodec {
     private static int turns(Object o) {
         if(!(o instanceof Number))
             throw new Unsupported("angleTurns must be a number");
-        long v = Math.round(((Number) o).doubleValue() * 65536.0);
-        return (int) (v & 0xffff);
+        double turns = ((Number) o).doubleValue();
+        double maximum = 65535.0 / 65536.0;
+        if(!Double.isFinite(turns))
+            throw new Unsupported("angleTurns must be finite");
+        if(turns < 0.0 || turns > maximum)
+            throw new Unsupported("angleTurns out of range [0, " + maximum + "]: " + turns);
+        return (int) Math.round(turns * 65536.0);
     }
 }

@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BoneOffJsonTest {
@@ -94,6 +95,31 @@ class BoneOffJsonTest {
     }
 
     @Test
+    void quantizedRotationAcceptsRepresentableAngleBounds() {
+        assertEquals(0, rawQuantizedAngle(0.0));
+        assertEquals(0xffff, rawQuantizedAngle(65535.0 / 65536.0));
+    }
+
+    @Test
+    void quantizedRotationRejectsOutOfRangeAngles() {
+        for(double angle : new double[]{-0.25, 1.0, 1.5}) {
+            BoneOffCodec.Unsupported error = assertThrows(BoneOffCodec.Unsupported.class,
+                    () -> BoneOffCodec.encode(quantizedRotation(angle)));
+            assertTrue(error.getMessage().contains("angleTurns"));
+        }
+    }
+
+    @Test
+    void quantizedRotationRejectsNonFiniteAngles() {
+        for(double angle : new double[]{Double.NaN, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY}) {
+            BoneOffCodec.Unsupported error = assertThrows(BoneOffCodec.Unsupported.class,
+                    () -> BoneOffCodec.encode(quantizedRotation(angle)));
+            assertTrue(error.getMessage().contains("finite"));
+        }
+    }
+
+    @Test
     void bonealignOpcodesRoundTrip() {
         MessageWriter w = new MessageWriter();
         w.string("a");
@@ -133,5 +159,23 @@ class BoneOffJsonTest {
         Map<String, Object> remodel = BoneOffCodec.decode(Packer.pack(dir).layers.get(0).data);
         Map<?, ?> translate = (Map<?, ?>) ((List<?>) remodel.get("ops")).get(1);
         assertEquals(0.75, translate.get("x"));
+    }
+
+    private static Map<String, Object> quantizedRotation(double angle) {
+        Map<String, Object> op = new java.util.LinkedHashMap<>();
+        op.put("op", "rotate_q");
+        op.put("angleTurns", angle);
+        op.put("axisOct", List.of(0L, 0L));
+        Map<String, Object> model = new java.util.LinkedHashMap<>();
+        model.put("name", "q");
+        model.put("ops", List.of(op));
+        return model;
+    }
+
+    private static int rawQuantizedAngle(double angle) {
+        MessageReader in = new MessageReader(BoneOffCodec.encode(quantizedRotation(angle)));
+        in.string();
+        assertEquals(17, in.uint8());
+        return in.uint16();
     }
 }

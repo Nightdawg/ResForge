@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Quantized BoneOff rotation edits no longer wrap modulo one turn.**
+  `angleTurns` now rejects non-finite values and values outside the representable
+  `0` through `65535/65536` range instead of masking values such as `1.5` into
+  an unrelated `0.5`-turn rotation.
 - **Malformed UTF-8 text layers can no longer be silently rewritten.** The
   `tooltip`/`pagina` editor now requires strict UTF-8 decoding and byte-identical
   re-encoding. Invalid payloads stay raw and expose only Replace/Export actions
