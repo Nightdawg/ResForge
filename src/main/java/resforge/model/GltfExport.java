@@ -366,8 +366,8 @@ public final class GltfExport {
             List<Object> materials = new ArrayList<>();
             for(int matid : matidToMat.keySet()) {
                 Map<String, Object> pbr = new LinkedHashMap<>();
-                Integer texOrd = texOrdFor(matid, matToTex, texMats.size());
-                if(texOrd >= 0 && texOrd < texMats.size())
+                Integer texOrd = matToTex.get(matid);
+                if(texOrd != null && texOrd >= 0 && texOrd < texMats.size())
                     pbr.put("baseColorTexture", obj("index", texOrd, "texCoord", 0));
                 pbr.put("metallicFactor", 0.0);
                 pbr.put("roughnessFactor", 1.0);
@@ -828,13 +828,6 @@ public final class GltfExport {
             }
         }
         return null;
-    }
-
-    private static int texOrdFor(int matid, Map<Integer, Integer> matToTex, int texCount) {
-        if(texCount == 1)
-            return 0;
-        Integer ord = matToTex.get(matid);
-        return (ord != null) ? ord : 0;
     }
 
     private static String baseName(String sourceName) {

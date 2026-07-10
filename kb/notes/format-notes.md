@@ -165,11 +165,12 @@ the **mulberry tree** has `tex` ids `1,3,4,5` (four seasonal leaf variants) and 
 leaf material (`matid 9`) does `tex {u8:1}` → tex **id 1** (the green foliage), which
 is the *first* `tex` layer (ordinal 0); resolving k as an ordinal would wrongly pick
 the second layer (id 3). Both the 3D viewer (`LocalTextures`) and the glTF export
-(`GltfExport`) resolve through a tex-id→ordinal map. The export uses the local `tex`
-images only: single-tex models map cleanly to everything; multi-tex use the
-`matid→mat2→local tex` chain best-effort; external (mlink/`@res`) textures aren't
-fetched, so parts that get their texture from another resource render shaded in
-View 3D (e.g. the mulberry **trunk**, via `mlink gfx/terobjs/trees/mulberry-tex`).
+(`GltfExport`) resolve through a tex-id→ordinal map. The export uses local `tex`
+images only and requires an explicit mapping even when there is just one texture;
+unmapped, `matid=-1`, and external-only materials omit `baseColorTexture` rather
+than receiving an unrelated first image. External (mlink/`@res`) textures aren't
+fetched for export, so those parts remain untextured in glTF (e.g. the mulberry
+**trunk**, via `mlink gfx/terobjs/trees/mulberry-tex`).
 (knarr: 6 local tex but most parts use external mlinks.)
 
 A material's texture source falls into one of four kinds, classifiable from its

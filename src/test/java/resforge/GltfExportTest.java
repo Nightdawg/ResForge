@@ -64,6 +64,13 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    private static byte[] mat2External(int id, String path) {
+        MessageWriter w = new MessageWriter();
+        w.uint16(id);
+        w.string("tex").uint8(2).string(path).uint8(0);
+        return w.toByteArray();
+    }
+
     /** vbuf2 ver0 with pos2 + a bones2 attribute: one bone "root", full weight on all 3 verts. */
     private static byte[] vbufBones() {
         MessageWriter w = new MessageWriter();
@@ -231,6 +238,74 @@ class GltfExportTest {
         Map<String, Object> bct = (Map<String, Object>) pbr.get("baseColorTexture");
         assertEquals(1L, ((Number) bct.get("index")).longValue(),
                 "tex id 20 is the 2nd embedded texture (ordinal 1), resolved by id not position");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void singleTextureIsNotAssignedToUnmappedMaterials() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0)));
+        res.layers.add(new Layer("mat2", mat2(7, 0)));
+        res.layers.add(new Layer("vbuf2", vbuf(false)));
+        res.layers.add(new Layer("mesh", mesh(7)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "mixed.res").glb);
+        Map<String, Map<String, Object>> materials = materialsByName(root);
+
+        assertTrue(pbr(materials.get("rfmat_7")).containsKey("baseColorTexture"));
+        assertFalse(pbr(materials.get("rfmat_-1")).containsKey("baseColorTexture"),
+                "matid -1 means no local material and must not inherit texture zero");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void multipleTexturesAreNotAssignedToUnknownMaterialIds() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(10)));
+        res.layers.add(new Layer("tex", tex(20)));
+        res.layers.add(new Layer("mat2", mat2(7, 20)));
+        res.layers.add(new Layer("vbuf2", vbuf(false)));
+        res.layers.add(new Layer("mesh", mesh(7)));
+        res.layers.add(new Layer("mesh", mesh(99)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "mixed.res").glb);
+        Map<String, Map<String, Object>> materials = materialsByName(root);
+
+        Map<String, Object> mappedTexture =
+                (Map<String, Object>) pbr(materials.get("rfmat_7")).get("baseColorTexture");
+        assertEquals(1L, ((Number) mappedTexture.get("index")).longValue());
+        assertFalse(pbr(materials.get("rfmat_99")).containsKey("baseColorTexture"));
+    }
+
+    @Test
+    void externalOnlyMaterialDoesNotReceiveLocalTexture() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0)));
+        res.layers.add(new Layer("mat2",
+                mat2External(7, "gfx/terobjs/trees/mulberry-tex")));
+        res.layers.add(new Layer("vbuf2", vbuf(false)));
+        res.layers.add(new Layer("mesh", mesh(7)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "external.res").glb);
+        Map<String, Map<String, Object>> materials = materialsByName(root);
+
+        assertFalse(pbr(materials.get("rfmat_7")).containsKey("baseColorTexture"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Map<String, Object>> materialsByName(Map<String, Object> root) {
+        Map<String, Map<String, Object>> byName = new java.util.LinkedHashMap<>();
+        for(Object material : (List<Object>) root.get("materials")) {
+            Map<String, Object> map = (Map<String, Object>) material;
+            byName.put((String) map.get("name"), map);
+        }
+        return byName;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> pbr(Map<String, Object> material) {
+        return (Map<String, Object>) material.get("pbrMetallicRoughness");
     }
 
     @Test

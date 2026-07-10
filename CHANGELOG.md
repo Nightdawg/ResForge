@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **glTF export no longer assigns unrelated textures to unmapped materials.**
+  Materials without an explicit local `matid → mat2 → tex` mapping—including
+  `matid=-1` and external-only materials—now omit `baseColorTexture` instead of
+  inheriting the first embedded texture.
 - **Rejected text/JSON replacements no longer report success.** The GUI apply
   path now returns whether a mutation was committed, so malformed JSON,
   unsupported codec values, and out-of-range numbers leave payload, dirty/undo
