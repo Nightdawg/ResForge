@@ -211,8 +211,8 @@ final class LayerEditors {
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(act("Apply text", () -> {
-            host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
-            host.setStatus("Updated text in layer " + idx);
+            if(host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8)))
+                host.setStatus("Updated text in layer " + idx);
         })), new JButton(act("Export", () -> host.exportLayer(idx)))));
     }
 
@@ -237,8 +237,8 @@ final class LayerEditors {
         content.add(sp);
         content.add(Box.createVerticalStrut(8));
         content.add(buttonRow(new JButton(act("Apply JSON", () -> {
-            host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8));
-            host.setStatus("Updated " + l.name + " in layer " + idx);
+            if(host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8)))
+                host.setStatus("Updated " + l.name + " in layer " + idx);
         })), new JButton(act("Export JSON", () -> host.exportLayer(idx)))));
     }
 

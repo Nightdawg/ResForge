@@ -98,7 +98,7 @@ class TextEditingTest {
     private static final class StubHost implements EditorHost {
         public ResContainer res() { return null; }
         public void setLayerPayload(int idx, byte[] payload) { }
-        public void applyBytes(int idx, byte[] bytes) { }
+        public boolean applyBytes(int idx, byte[] bytes) { return true; }
         public void replaceFromFile(int idx, String layerName) { }
         public void exportLayer(int idx) { }
         public void replaceTexMask(int idx) { }

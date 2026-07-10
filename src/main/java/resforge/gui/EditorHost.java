@@ -17,8 +17,9 @@ interface EditorHost {
     /** Replaces a layer's entire payload (header/whole-payload edits). */
     void setLayerPayload(int idx, byte[] payload);
 
-    /** Routes a content edit through the tested {@code Replacer} by absolute index. */
-    void applyBytes(int idx, byte[] bytes);
+    /** Routes a content edit through the tested {@code Replacer} by absolute index.
+     *  Returns true only when the document mutation was committed. */
+    boolean applyBytes(int idx, byte[] bytes);
 
     /** Opens a file chooser and replaces the layer's media/content from disk. */
     void replaceFromFile(int idx, String layerName);

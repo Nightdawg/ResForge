@@ -98,7 +98,7 @@ public class ResForgeFrame extends JFrame {
     private final LayerEditors editors = new LayerEditors(new EditorHost() {
         public ResContainer res() { return res; }
         public void setLayerPayload(int idx, byte[] payload) { ResForgeFrame.this.setLayerPayload(idx, payload); }
-        public void applyBytes(int idx, byte[] bytes) { ResForgeFrame.this.applyBytes(idx, bytes); }
+        public boolean applyBytes(int idx, byte[] bytes) { return ResForgeFrame.this.applyBytes(idx, bytes); }
         public void replaceFromFile(int idx, String layerName) { ResForgeFrame.this.replaceFromFile(idx, layerName); }
         public void exportLayer(int idx) { ResForgeFrame.this.exportLayer(idx); }
         public void replaceTexMask(int idx) { ResForgeFrame.this.replaceTexMask(idx); }
@@ -1274,23 +1274,23 @@ public class ResForgeFrame extends JFrame {
             return;
         try {
             byte[] bytes = Files.readAllBytes(chosen);
-            applyBytes(idx, bytes);
-            setStatus("Replaced layer " + idx + " (" + layerName + ")");
+            if(applyBytes(idx, bytes))
+                setStatus("Replaced layer " + idx + " (" + layerName + ")");
         } catch(Exception e) {
             error("Replace failed: " + e.getMessage());
         }
     }
 
     /** Routes every in-memory edit through the tested Replacer (by absolute index). */
-    private void applyBytes(int idx, byte[] bytes) {
+    private boolean applyBytes(int idx, byte[] bytes) {
         if(res == null)
-            return;
+            return false;
         Snapshot before = snapshot();
         try {
             Replacer.replace(res, "#" + idx, bytes);
         } catch(Replacer.ReplaceException e) {
             error(e.getMessage());
-            return;
+            return false;
         }
         commit(before);
         markDirty();
@@ -1298,6 +1298,7 @@ public class ResForgeFrame extends JFrame {
         model.fireTableRowsUpdated(idx, idx);
         if(sel == idx)
             showSelected();
+        return true;
     }
 
     private void exportLayer(int idx) {

@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Rejected text/JSON replacements no longer report success.** The GUI apply
+  path now returns whether a mutation was committed, so malformed JSON,
+  unsupported codec values, and out-of-range numbers leave payload, dirty/undo
+  state, and status consistent instead of displaying a false “Updated” message.
 - **Quantized BoneOff rotation edits no longer wrap modulo one turn.**
   `angleTurns` now rejects non-finite values and values outside the representable
   `0` through `65535/65536` range instead of masking values such as `1.5` into
