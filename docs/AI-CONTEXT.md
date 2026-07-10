@@ -209,8 +209,13 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   leaves, can be selected live, while knarr shows one picker not ten).
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
-  don't freeze the EDT; the Ogg player joins the previous play thread before restarting
-  so two threads never share the line.
+  don't freeze the EDT. Document-replacing open/fetch/rebuild workers capture one
+  shared operation generation plus the active document identity/revision; a completion
+  is discarded if a newer operation, document load, edit, undo, or redo made its
+  snapshot stale. glTF rebuild additionally uses an application-modal indeterminate
+  progress dialog, so the user cannot start a conflicting document action while it
+  runs. The Ogg player joins the previous play thread before restarting so two threads
+  never share the line.
 
 ## 6. Per-layer status
 | Layer | Status |
@@ -284,6 +289,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   are range-checked (`Nums`) so a bad value is rejected, not silently wrapped.
 - **Atomic writes**: all `.res`/`.glb` output goes through `io/SafeFiles` (temp +
   atomic rename), so an interrupted save never destroys the original/only copy.
+- **Background results are revision-gated**: any worker that can replace the active
+  document must capture `DocumentRevision.Token` and complete it before changing GUI
+  state. Every content edit and undo/redo advances the revision; every load advances
+  document identity.
 - `Layer` is immutable; edits *replace* it (enables cheap snapshot undo).
 - Edits route through `Replacer` where possible (tested, format-checked).
 - Commit per feature with a `Co-authored-by: Copilot …` trailer; keep all three

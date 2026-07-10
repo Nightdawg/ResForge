@@ -181,8 +181,9 @@ glTF:
    can **reshape/sculpt, re-UV, add, remove or re-topologize** vertices and faces (and
    whole parts). It re-encodes positions/normals/UVs/weights into the original formats,
    recomputes tangents, rebuilds the submeshes/morphs, and **re-poses the skeleton** if
-   you moved a bone. It isn't byte-lossless, so verify in-game. Multi-part, skinned,
-   morph-animated and normal-mapped models are all supported.
+   you moved a bone. An application-modal progress dialog prevents other document
+   actions while this runs. It isn't byte-lossless, so verify in-game. Multi-part,
+   skinned, morph-animated and normal-mapped models are all supported.
 
 What still can't be edited through the round-trip: the skeleton's *animation
 keyframes* (`skan`) and adding/removing morph *frames* — the meshes, materials,

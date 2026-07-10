@@ -8,6 +8,11 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Late GUI workers can no longer overwrite a newer document or edit.** Open,
+  fetch, and glTF rebuild operations now capture the active document identity,
+  revision, and operation generation; stale completions are discarded. Rebuild
+  also shows an application-modal progress dialog, preventing conflicting user
+  actions while geometry is regenerated.
 - **Resource downloads now have a 64 MiB response limit.** Fetching uses a
   bounded streaming subscriber: an excessive `Content-Length` is rejected before
   body allocation, and chunked/unknown-length responses are cancelled as soon as

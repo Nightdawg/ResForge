@@ -334,6 +334,14 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 
 ## 7. Verification performed
 
+- **Stale GUI worker protection (2026-07-10):** open, fetch, and glTF rebuild
+  completions now pass through one `DocumentRevision` gate containing document
+  identity, monotonic revision, and operation generation. A newer operation, document
+  load, edit, undo, or redo makes an older result inapplicable; stale errors, fetch
+  history updates, and status changes are gated with the document replacement itself.
+  Rebuild displays an application-modal indeterminate progress dialog while its worker
+  runs. `DocumentRevisionTest` deterministically completes operations out of order and
+  covers edits, replacement, duplicate completion, and explicit invalidation.
 - **Bounded resource downloads (2026-07-10):** `ResourceFetcher` no longer uses
   `BodyHandlers.ofByteArray()` for an unbounded response. Its streaming subscriber
   rejects a declared body above 64 MiB before allocation and cancels a chunked or

@@ -233,6 +233,17 @@ editors can now be reasoned about and unit-tested in isolation (as `FetchHistory
 the orchestrator (document, undo, table, threading); push per-kind panel construction
 and self-contained dialogs out into their own classes.
 
+## Background document results require identity and revision checks
+Open, fetch, and glTF rebuild run off the EDT but can replace the active document when
+their completion returns to Swing. They all begin through one `DocumentRevision`
+operation generation and capture the current document identity plus monotonic content
+revision. A completion is accepted only if all three still match; otherwise it must
+not replace state, report a stale error, update fetch history, or overwrite status for
+a newer operation. Loading a document advances identity, and every content edit plus
+undo/redo advances revision. glTF rebuild also uses an application-modal progress
+dialog to prevent conflicting user actions while it runs; the revision gate remains
+the correctness backstop for already-running or programmatic operations.
+
 ## HiDPI: normalise the Look&Feel fonts, don't touch the layout
 Java (9+) is DPI-aware on Windows and applies the monitor's render transform
 (e.g. 1.5× at 150%) automatically, so widget sizes expressed in logical pixels —

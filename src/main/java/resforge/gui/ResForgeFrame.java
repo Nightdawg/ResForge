@@ -31,6 +31,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
@@ -78,6 +79,7 @@ public class ResForgeFrame extends JFrame {
     private Path file;
     private boolean dirty;
     private String suggestedName;
+    private final DocumentRevision documentRevision = new DocumentRevision();
 
     private final LayerTableModel model = new LayerTableModel();
     private final JTable table = new JTable(model);
@@ -131,16 +133,41 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
+    private static final class RebuildProgress {
+        private final JDialog dialog;
+
+        RebuildProgress(ResForgeFrame owner, String sourceName) {
+            dialog = new JDialog(owner, "Rebuilding from glTF", true);
+            dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+
+            JProgressBar progress = new JProgressBar();
+            progress.setIndeterminate(true);
+            JPanel body = new JPanel(new BorderLayout(UiScaling.scale(8), UiScaling.scale(8)));
+            body.setBorder(UiScaling.emptyBorder(12, 12, 12, 12));
+            body.add(new JLabel("Rebuilding from " + sourceName + "\u2026"), BorderLayout.NORTH);
+            body.add(progress, BorderLayout.CENTER);
+            dialog.setContentPane(body);
+            dialog.pack();
+            dialog.setResizable(false);
+            dialog.setLocationRelativeTo(owner);
+        }
+
+        void showModal() {
+            dialog.setVisible(true);
+        }
+
+        void close() {
+            dialog.dispose();
+        }
+    }
+
     public ResForgeFrame() {
         super("ResForge");
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
-                if(confirmDiscard()) {
-                    if(currentPlayer != null)
-                        currentPlayer.dispose();
+                if(confirmDiscard())
                     dispose();
-                }
             }
         });
 
@@ -181,6 +208,14 @@ public class ResForgeFrame extends JFrame {
         setSize(UiScaling.scale(900), UiScaling.scale(600));
         setLocationByPlatform(true);
         updateLayerButtons();
+    }
+
+    @Override
+    public void dispose() {
+        documentRevision.invalidateOperations();
+        if(currentPlayer != null)
+            currentPlayer.dispose();
+        super.dispose();
     }
 
     private JComponent buildLayerBar() {
@@ -256,6 +291,7 @@ public class ResForgeFrame extends JFrame {
         res.layers.clear();
         res.layers.addAll(s.layers);
         dirty = s.dirty;
+        documentRevision.modified();
         updatingVersion = true;
         versionSpinner.setValue(res.version);
         updatingVersion = false;
@@ -484,6 +520,7 @@ public class ResForgeFrame extends JFrame {
     /* ------------------------------------------------------------- file logic */
 
     public void openFile(Path p) {
+        DocumentRevision.Token operation = documentRevision.beginOperation();
         setStatus("Opening " + p.getFileName() + " \u2026");
         Thread t = new Thread(() -> {
             ResContainer parsed = null;
@@ -496,6 +533,8 @@ public class ResForgeFrame extends JFrame {
             final ResContainer result = parsed;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
+                if(!finishOperation(operation, "Open"))
+                    return;
                 if(result == null) {
                     error("Could not open " + p + ":\n" + error);
                     setStatus("Open failed");
@@ -537,6 +576,16 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void applyLoaded(ResContainer parsed, Path f, String pathText, String status) {
+        documentRevision.replaceDocument();
+        applyDocument(parsed, f, pathText, status);
+    }
+
+    private void applyRebuilt(ResContainer parsed, Path f, String pathText, String status) {
+        applyDocument(parsed, f, pathText, status);
+        markDirty();
+    }
+
+    private void applyDocument(ResContainer parsed, Path f, String pathText, String status) {
         this.res = parsed;
         this.file = f;
         this.suggestedName = null;
@@ -561,6 +610,14 @@ public class ResForgeFrame extends JFrame {
         setStatus(status);
     }
 
+    private boolean finishOperation(DocumentRevision.Token operation, String name) {
+        if(documentRevision.complete(operation))
+            return true;
+        if(documentRevision.isLatest(operation))
+            setStatus(name + " result ignored because the document changed");
+        return false;
+    }
+
     private void doFetch() {
         if(!confirmDiscard())
             return;
@@ -579,6 +636,7 @@ public class ResForgeFrame extends JFrame {
      *  dialog and "Open from cache" (which only supplies names — the bytes always
      *  come from the server, so you get the latest version). */
     private void fetchFromServer(String path, String base) {
+        DocumentRevision.Token operation = documentRevision.beginOperation();
         java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
         prefs.put("resBaseUrl", base);
         List<String> history = FetchHistory.parse(prefs.get("fetchHistory", ""));
@@ -595,6 +653,8 @@ public class ResForgeFrame extends JFrame {
             final byte[] result = data;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
+                if(!finishOperation(operation, "Fetch"))
+                    return;
                 if(result == null) {
                     error("Fetch failed:\n" + error);
                     setStatus("Fetch failed");
@@ -700,6 +760,8 @@ public class ResForgeFrame extends JFrame {
         final byte[] orig = res.serialize();
         final Path curFile = file;
         final String curPath = pathField.getText();
+        final DocumentRevision.Token operation = documentRevision.beginOperation();
+        final RebuildProgress progress = new RebuildProgress(this, sel.getName());
         setStatus("Rebuilding from " + sel.getName() + " \u2026");
         Thread t = new Thread(() -> {
             GltfImport.RebuildResult r = null;
@@ -713,16 +775,18 @@ public class ResForgeFrame extends JFrame {
             final GltfImport.RebuildResult rr = r;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
+                progress.close();
+                if(!finishOperation(operation, "Rebuild"))
+                    return;
                 if(rr == null) {
                     error("glTF rebuild failed: " + error);
                     return;
                 }
                 try {
-                    applyLoaded(ResContainer.parse(rr.res), curFile, curPath,
+                    applyRebuilt(ResContainer.parse(rr.res), curFile, curPath,
                             "Rebuilt " + rr.vertices + " vertices, " + rr.triangles + " triangles"
                                     + (rr.skinned ? " (with skinning)" : "") + (rr.skel ? " (skeleton re-posed)" : "")
                                     + " from " + sel.getName() + " \u2014 Save to keep changes");
-                    markDirty();
                 } catch(Exception e) {
                     error("glTF rebuild failed: " + e.getMessage());
                 }
@@ -730,6 +794,7 @@ public class ResForgeFrame extends JFrame {
         }, "gltf-rebuild");
         t.setDaemon(true);
         t.start();
+        progress.showModal();
     }
 
     private void doView3D() {
@@ -1274,6 +1339,7 @@ public class ResForgeFrame extends JFrame {
 
     private void markDirty() {
         dirty = true;
+        documentRevision.modified();
         updateTitle();
     }
 
