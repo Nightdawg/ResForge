@@ -233,7 +233,7 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | `obst` | edit as JSON (collision polygons; float16 coords, lossless-or-raw) |
 | `boneoff` | edit as JSON (equip-point opcode program: translate/rotate/eqpoint/bonealign/scale; cpfloat exact, quantised rotation kept as raw octahedral ints, lossless-or-raw) |
 | `light` | edit as JSON (light source: id, ambient/diffuse/specular colours 0..1, optional attenuation/direction/exponent; cpfloat ver0 / float32 ver1, lossless-or-raw) |
-| `tooltip`/`pagina` | edit as UTF-8 text |
+| `tooltip`/`pagina` | edit as strict UTF-8 text only when decode→encode preserves the original bytes; malformed payloads stay raw |
 | `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |

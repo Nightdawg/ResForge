@@ -54,7 +54,8 @@ fetches the one you pick **fresh from the server** — the cache supplies only t
 names, so you always open the latest version.Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
-animations; an editable **text box** for tooltips/pagina;
+animations; an editable **text box** for valid UTF-8 tooltips/pagina (invalid
+payloads stay raw);
 an editable **JSON box** for properties and keybinds; Replace/Export for sounds
 and fonts; a built-in **3D viewer** (**View 3D** — a dependency-free software
 renderer that shows the model **textured** and shaded, with an optional wireframe
@@ -125,7 +126,7 @@ equals the original payload, so repacking can always rebuild the exact bytes.
 | `font`            | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font   |
 | `tile`            | `*.tilehdr` + `*.png`        | swap a terrain tile image |
 | `midi`            | `*.mid`                      | swap the MIDI music      |
-| `tooltip`,`pagina`| `*.txt`                      | edit UTF-8 text          |
+| `tooltip`,`pagina`| `*.txt`                      | edit strictly valid UTF-8 text; otherwise raw |
 | anything else     | `*.bin`                      | raw bytes (lossless)     |
 
 For images, the header (z, sub-z, id, offset, metadata) is preserved verbatim in

@@ -109,7 +109,7 @@ untouched unpack→pack is **byte-identical**, and edits are localized.
 | `action`           | `*.json`                | edit button/keybind as JSON |
 | `font`             | `*.fonthdr` + `*.ttf`/`*.otf` | swap the embedded font |
 | `midi`             | `*.mid`                 | swap the MIDI music   |
-| `tooltip`,`pagina` | `*.txt`                 | edit UTF-8 text       |
+| `tooltip`,`pagina` | `*.txt`                 | edit strict UTF-8 text; malformed payloads stay raw |
 | anything else      | `*.bin`                 | raw bytes (lossless)  |
 
 For `image`, the split point (where the encoded image begins) is found by
@@ -334,6 +334,12 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 
 ## 7. Verification performed
 
+- **Strict text editing (2026-07-10):** GUI editing for `tooltip`/`pagina` uses a
+  reporting UTF-8 decoder and requires byte-identical re-encoding before showing the
+  text box. Overlong, truncated, and lone-continuation payloads stay raw with
+  Replace/Export actions; valid non-BMP text remains editable and round-trips exactly.
+  `TextEditingTest` covers the malformed sequences, summaries, non-BMP data, and both
+  editor action sets.
 - **Stale GUI worker protection (2026-07-10):** open, fetch, and glTF rebuild
   completions now pass through one `DocumentRevision` gate containing document
   identity, monotonic revision, and operation generation. A newer operation, document

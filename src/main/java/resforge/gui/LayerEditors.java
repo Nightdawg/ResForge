@@ -192,7 +192,17 @@ final class LayerEditors {
     }
 
     void buildTextPanel(JPanel content, int idx, Layer l) {
-        JTextArea area = new JTextArea(GuiSupport.editableText(l));
+        String text = GuiSupport.editableText(l);
+        if(text == null) {
+            content.add(labeled("This " + l.name + " layer is not valid UTF-8, so text editing"
+                    + " is disabled to preserve its original bytes."));
+            content.add(Box.createVerticalStrut(8));
+            content.add(buttonRow(
+                    new JButton(act("Replace raw", () -> host.replaceFromFile(idx, l.name))),
+                    new JButton(act("Export raw", () -> host.exportLayer(idx)))));
+            return;
+        }
+        JTextArea area = new JTextArea(text);
         area.setLineWrap(true);
         area.setWrapStyleWord(true);
         JScrollPane sp = new JScrollPane(area);

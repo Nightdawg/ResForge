@@ -32,6 +32,9 @@ import resforge.res.Layer;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -103,8 +106,12 @@ public final class GuiSupport {
                     return fi.format != null ? fi.format.toUpperCase() + " font" : "font";
                 }
                 case "tooltip":
-                case "pagina":
-                    return "\"" + preview(new String(l.data, StandardCharsets.UTF_8), 30) + "\"";
+                case "pagina": {
+                    String text = editableText(l);
+                    return text != null
+                            ? "\"" + preview(text, 30) + "\""
+                            : "invalid UTF-8 (raw)";
+                }
                 case "action": {
                     java.util.Map<String, Object> m = ActionCodec.decode(l.data);
                     return "\"" + m.get("name") + "\"";
@@ -273,9 +280,18 @@ public final class GuiSupport {
 
     /** Editable plain text for tooltip/pagina, else null. */
     public static String editableText(Layer l) {
-        if(l.name.equals("tooltip") || l.name.equals("pagina"))
-            return new String(l.data, StandardCharsets.UTF_8);
-        return null;
+        if(!l.name.equals("tooltip") && !l.name.equals("pagina"))
+            return null;
+        try {
+            String text = StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(l.data))
+                    .toString();
+            return Arrays.equals(l.data, text.getBytes(StandardCharsets.UTF_8)) ? text : null;
+        } catch(CharacterCodingException e) {
+            return null;
+        }
     }
 
     /** Editable JSON for props/action/mat2 (only when losslessly reversible), else null. */

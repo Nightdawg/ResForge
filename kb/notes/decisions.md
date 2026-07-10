@@ -21,6 +21,13 @@ raw passthrough. This guarantees we never silently corrupt data the user didn't
 intend to change. It's why float16-bearing layers (e.g. `obst`) stay raw, while
 `neg` — which turned out to be all int16, exactly reversible — is editable JSON.
 
+The same rule applies to `tooltip` and `pagina`: their GUI text box is shown only
+when a strict reporting UTF-8 decode succeeds and encoding that string reproduces
+the payload bytes. Java's convenience UTF-8 constructor replaces malformed input
+with U+FFFD, so using it for editable text would turn an overlong, truncated, or
+lone-continuation sequence into different bytes on Apply. Invalid text therefore
+stays raw and offers only Replace/Export actions.
+
 ## Immutable layers + snapshot undo
 Editing replaces a layer object rather than mutating it. That makes GUI undo/redo
 cheap: snapshot the layer list before each edit and restore on undo.

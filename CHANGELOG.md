@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Malformed UTF-8 text layers can no longer be silently rewritten.** The
+  `tooltip`/`pagina` editor now requires strict UTF-8 decoding and byte-identical
+  re-encoding. Invalid payloads stay raw and expose only Replace/Export actions
+  instead of displaying replacement characters that would change bytes on Apply.
 - **Late GUI workers can no longer overwrite a newer document or edit.** Open,
   fetch, and glTF rebuild operations now capture the active document identity,
   revision, and operation generation; stale completions are discarded. Rebuild
