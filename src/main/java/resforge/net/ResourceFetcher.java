@@ -5,7 +5,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.OptionalLong;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.Flow;
 
 /**
  * Fetches a resource's bytes from a Haven &amp; Hearth resource server over HTTP,
@@ -15,6 +22,11 @@ import java.time.Duration;
 public final class ResourceFetcher {
     /** The official Haven &amp; Hearth resource server (as used by the game client). */
     public static final String DEFAULT_BASE = "http://game.havenandhearth.com/res/";
+    /** Maximum accepted response body. The largest resource in the validation corpus
+     *  is under 5 MiB; this leaves ample compatibility margin while bounding memory. */
+    public static final int MAX_RESOURCE_BYTES = 64 * 1024 * 1024;
+
+    private static final byte[] EMPTY_BODY = new byte[0];
 
     private ResourceFetcher() {
     }
@@ -49,13 +61,20 @@ public final class ResourceFetcher {
 
     /** Downloads {@code <base>/<path>.res} and returns its bytes. */
     public static byte[] fetch(String base, String path) throws IOException, InterruptedException {
+        return fetch(base, path, MAX_RESOURCE_BYTES);
+    }
+
+    static byte[] fetch(String base, String path, int maxBytes)
+            throws IOException, InterruptedException {
+        if(maxBytes < 1)
+            throw new IllegalArgumentException("maxBytes must be positive");
         String url = urlFor(base, path);
         HttpRequest req = HttpRequest.newBuilder(URI.create(url))
                 .timeout(Duration.ofSeconds(30))
                 .header("User-Agent", "ResForge")
                 .GET()
                 .build();
-        HttpResponse<byte[]> resp = Holder.CLIENT.send(req, HttpResponse.BodyHandlers.ofByteArray());
+        HttpResponse<byte[]> resp = Holder.CLIENT.send(req, boundedBodyHandler(url, maxBytes));
         int code = resp.statusCode();
         if(code == 404)
             throw new IOException("Resource not found (404): " + url);
@@ -65,6 +84,134 @@ public final class ResourceFetcher {
         if(body == null || body.length == 0)
             throw new IOException("Empty response from " + url);
         return body;
+    }
+
+    private static HttpResponse.BodyHandler<byte[]> boundedBodyHandler(String url, int maxBytes) {
+        return info -> {
+            if(info.statusCode() != 200)
+                return HttpResponse.BodySubscribers.replacing(EMPTY_BODY);
+
+            OptionalLong declaredLength;
+            try {
+                declaredLength = info.headers().firstValueAsLong("Content-Length");
+            } catch(NumberFormatException e) {
+                return new BoundedBodySubscriber(url, maxBytes, -1,
+                        new IOException("Invalid Content-Length fetching " + url, e));
+            }
+            if(declaredLength.isPresent() && declaredLength.getAsLong() > maxBytes)
+                return new BoundedBodySubscriber(url, maxBytes, -1, tooLarge(url, maxBytes));
+            int expectedLength = declaredLength.isPresent()
+                    ? (int) declaredLength.getAsLong()
+                    : -1;
+            return new BoundedBodySubscriber(url, maxBytes, expectedLength, null);
+        };
+    }
+
+    private static IOException tooLarge(String url, int maxBytes) {
+        return new IOException("Resource exceeds maximum download size of "
+                + maxBytes + " bytes: " + url);
+    }
+
+    private static final class BoundedBodySubscriber
+            implements HttpResponse.BodySubscriber<byte[]> {
+        private final int maximumBytes;
+        private final int expectedLength;
+        private final String url;
+        private final CompletableFuture<byte[]> body = new CompletableFuture<>();
+        private byte[] data;
+        private int length;
+        private Flow.Subscription subscription;
+
+        BoundedBodySubscriber(String url, int maximumBytes, int expectedLength,
+                              IOException initialFailure) {
+            this.url = url;
+            this.maximumBytes = maximumBytes;
+            this.expectedLength = expectedLength;
+            this.data = new byte[expectedLength >= 0 ? expectedLength
+                    : Math.min(8192, maximumBytes)];
+            if(initialFailure != null) {
+                data = null;
+                body.completeExceptionally(initialFailure);
+            }
+        }
+
+        @Override
+        public CompletionStage<byte[]> getBody() {
+            return body;
+        }
+
+        @Override
+        public void onSubscribe(Flow.Subscription newSubscription) {
+            if(subscription != null) {
+                newSubscription.cancel();
+                return;
+            }
+            subscription = newSubscription;
+            if(body.isDone())
+                subscription.cancel();
+            else
+                subscription.request(1);
+        }
+
+        @Override
+        public void onNext(List<ByteBuffer> buffers) {
+            if(body.isDone())
+                return;
+            long incoming = 0;
+            for(ByteBuffer buffer : buffers)
+                incoming += buffer.remaining();
+            if(incoming > maximumBytes - length) {
+                fail(tooLarge(url, maximumBytes));
+                return;
+            }
+
+            int required = length + (int) incoming;
+            ensureCapacity(required);
+            for(ByteBuffer buffer : buffers) {
+                int count = buffer.remaining();
+                buffer.get(data, length, count);
+                length += count;
+            }
+            subscription.request(1);
+        }
+
+        @Override
+        public void onError(Throwable error) {
+            data = null;
+            body.completeExceptionally(error);
+        }
+
+        @Override
+        public void onComplete() {
+            if(body.isDone())
+                return;
+            if(expectedLength >= 0 && length != expectedLength) {
+                fail(new IOException("Incomplete HTTP response body: expected "
+                        + expectedLength + " bytes, received " + length));
+                return;
+            }
+            byte[] result = length == data.length ? data : Arrays.copyOf(data, length);
+            data = null;
+            body.complete(result);
+        }
+
+        private void ensureCapacity(int required) {
+            if(required <= data.length)
+                return;
+            int capacity = data.length;
+            while(capacity < required) {
+                int grown = capacity + Math.max(1, capacity >>> 1);
+                capacity = Math.min(maximumBytes, Math.max(required, grown));
+            }
+            data = Arrays.copyOf(data, capacity);
+        }
+
+        private void fail(IOException error) {
+            data = null;
+            if(subscription != null)
+                subscription.cancel();
+            body.completeExceptionally(error);
+        }
     }
 
     /** The bare resource name from a path (the part after the last '/'), for display/saving. */

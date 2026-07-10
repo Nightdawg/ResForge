@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Resource downloads now have a 64 MiB response limit.** Fetching uses a
+  bounded streaming subscriber: an excessive `Content-Length` is rejected before
+  body allocation, and chunked/unknown-length responses are cancelled as soon as
+  they cross the same limit instead of growing until the JVM runs out of memory.
 - **Deeply nested typed-object data no longer crashes layer parsing.** The
   `rlink`, `codeentry`, and `mat2` readers now cap nested `tto` lists/maps at
   256 levels. Crafted resources that previously escaped malformed-layer handling

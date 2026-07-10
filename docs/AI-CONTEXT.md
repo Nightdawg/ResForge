@@ -173,7 +173,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `.glb` fails cleanly rather than corrupting a layer.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, one shared lazily-created JDK
-  HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads),
+  HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads;
+  response bodies cap at 64 MiB via a bounded streaming subscriber, rejecting an
+  excessive `Content-Length` before allocation and cancelling chunked/unknown-length
+  responses at the same boundary),
   `CacheIndex`
   (reads the local Haven `HashDirCache` at `%APPDATA%\Haven and Hearth\data`: each
   `%016x.%d` file's header is `byte(1)`+`writeUTF(cid)`+`writeUTF(name)`, decoded with
@@ -275,6 +278,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `CodeEntryInfo`, and `Mat2Codec` tto list/map nesting cap at 256), so a deeply
   nested document fails through normal malformed-input handling rather than a
   `StackOverflowError` that would escape `catch(RuntimeException)` guards.
+  Network-fetched resource bodies are capped at 64 MiB for both declared and
+  unknown/chunked lengths.
   Typed-codec *edits*
   are range-checked (`Nums`) so a bad value is rejected, not silently wrapped.
 - **Atomic writes**: all `.res`/`.glb` output goes through `io/SafeFiles` (temp +

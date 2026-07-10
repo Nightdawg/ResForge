@@ -180,6 +180,15 @@ pathologically deep document fails with a clear exception instead of a
 `catch(RuntimeException)` guards. Rule: a corrupt file
 must fail with a clear exception, never OOM, hang, or corrupt.
 
+## Network response bodies are bounded
+`ResourceFetcher` accepts at most 64 MiB per downloaded resource. The limit is
+well above the validation corpus maximum (4,622,480 bytes across 8,804 resources)
+but prevents a server from growing the JVM heap without bound.
+`Content-Length` above the limit is rejected before body allocation; responses
+without a usable declared length are consumed through a backpressured subscriber
+that cancels immediately when accumulated bytes cross the same boundary. HTTP
+error bodies are discarded because only their status is reported.
+
 ## Atomic writes (never destroy the only copy)
 Every `.res`/`.glb` write goes through `io/SafeFiles.write`: data is written to a
 sibling temp file, then `Files.move(..., ATOMIC_MOVE, REPLACE_EXISTING)` renames it

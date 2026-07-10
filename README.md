@@ -39,7 +39,9 @@ checkerboard behind image/animation previews adapts to the theme too.
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to
 download one straight from the game's resource server by its in-game path (e.g.
-`gfx/borka/male`). On Windows the **Open** and **Save as** file pickers are the
+`gfx/borka/male`). Downloaded response bodies are capped at 64 MiB; larger
+fixed-length or chunked responses are rejected rather than buffered without bound.
+On Windows the **Open** and **Save as** file pickers are the
 modern Explorer dialog — with the editable **address bar**, so you can paste a
 full folder or file path straight into the top bar instead of clicking through
 folders (it falls back to the classic picker if the modern one is unavailable).

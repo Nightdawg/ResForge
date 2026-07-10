@@ -334,6 +334,12 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 
 ## 7. Verification performed
 
+- **Bounded resource downloads (2026-07-10):** `ResourceFetcher` no longer uses
+  `BodyHandlers.ofByteArray()` for an unbounded response. Its streaming subscriber
+  rejects a declared body above 64 MiB before allocation and cancels a chunked or
+  unknown-length body when it crosses that boundary. Local `HttpServer` tests cover
+  fixed/chunked over-limit responses and exact-boundary success; all 8,804 resources
+  in the validation corpus fit (largest 4,622,480 bytes).
 - **TTO recursion hardening (2026-07-10):** `RLinkInfo`,
   `CodeEntryInfo`, and `Mat2Codec` now carry an explicit nesting depth through
   every recursive list/map value and reject depth above 256. A crafted payload
