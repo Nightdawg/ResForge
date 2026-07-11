@@ -25,6 +25,7 @@
     <property name="args"            value=""/>
 
     <property name="src.dir"         value="src/main/java"/>
+    <property name="resources.dir"   value="src/main/resources"/>
     <property name="test.src.dir"    value="src/test/java"/>
     <property name="lib.dir"         value="lib"/>
     <property name="jorbis.jar"      value="${lib.dir}/jorbis-0.0.17.jar"/>
@@ -65,22 +66,25 @@
             <classpath refid="runtime.libs"/>
             <compilerarg value="-Xlint:none"/>
         </javac>
+        <copy todir="${classes.dir}">
+            <fileset dir="${resources.dir}"/>
+        </copy>
     </target>
 
     <target name="unpack-runtime" description="Merge runtime libraries into a canonical classpath layout">
         <delete dir="${runtime.classes.dir}"/>
         <mkdir dir="${runtime.classes.dir}"/>
         <unzip src="${jorbis.jar}" dest="${runtime.classes.dir}">
-            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF,META-INF/LICENSE,META-INF/NOTICE"/>
         </unzip>
         <unzip src="${jna.jar}" dest="${runtime.classes.dir}">
-            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF,META-INF/LICENSE,META-INF/NOTICE"/>
         </unzip>
         <unzip src="${jna-platform.jar}" dest="${runtime.classes.dir}">
-            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF,META-INF/LICENSE,META-INF/NOTICE"/>
         </unzip>
         <unzip src="${flatlaf.jar}" dest="${runtime.classes.dir}">
-            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF,META-INF/LICENSE,META-INF/NOTICE"/>
         </unzip>
     </target>
 

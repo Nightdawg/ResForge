@@ -101,6 +101,8 @@
                                     <excludes>
                                         <!-- Canonical classpath fat-jar layout shared with Gradle/Ant. -->
                                         <exclude>module-info.class</exclude>
+                                        <exclude>META-INF/LICENSE</exclude>
+                                        <exclude>META-INF/NOTICE</exclude>
                                         <exclude>META-INF/maven/resforge/resforge/**</exclude>
                                     </excludes>
                                 </filter>

@@ -1,0 +1,9 @@
+JOrbis 0.0.17
+
+Homepage: http://www.jcraft.com/jorbis/
+Source repository: https://github.com/ymnk/jorbis
+Maven source artifact:
+https://repo1.maven.org/maven2/org/jcraft/jorbis/0.0.17/jorbis-0.0.17-sources.jar
+
+The bundled decoder remains replaceable as described in
+META-INF/licenses/THIRD-PARTY-NOTICES.md.

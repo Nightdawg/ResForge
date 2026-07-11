@@ -334,7 +334,7 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
   raster-work budget; budget failures publish an explicit preview error. Selection/dialog
   disposal invalidates workers and timers.
 - **Minimal third-party deps**: three runtime components. **JOrbis**
-  (`org.jcraft:jorbis`, ~97 KB, LGPL) — a pure-Java Ogg Vorbis decoder used by the
+  (`org.jcraft:jorbis`, ~97 KB, LGPL-2.0-or-later) — a pure-Java Ogg Vorbis decoder used by the
   GUI's in-app sound player; **JNA** (`net.java.dev.jna:jna` + `:jna-platform`,
   LGPL-2.1+/Apache-2.0) — used Windows-only to show the modern Explorer file dialog
   (`gui/WinFileDialogs`), with a `java.awt.FileDialog` fallback everywhere else; and

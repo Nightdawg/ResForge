@@ -50,5 +50,8 @@ tasks.named('jar') {
     // Classpath fat jars are not Java modules; dependency root descriptors would
     // describe the dependency rather than this merged artifact.
     exclude 'module-info.class'
+    // Dependency root names collide in a fat jar; canonical copies live under
+    // META-INF/licenses/ with component-specific names.
+    exclude 'META-INF/LICENSE', 'META-INF/NOTICE'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

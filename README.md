@@ -387,7 +387,7 @@ ResForge is open source under the **MIT License** — use it however you like
 (modify, redistribute, embed, commercial or not). See [`LICENSE`](LICENSE).
 
 It bundles and references third-party components under their own licenses —
-notably the **LGPL** [JOrbis](http://www.jcraft.com/jorbis/) Ogg/Vorbis decoder
+notably the **LGPL-2.0-or-later** [JOrbis](http://www.jcraft.com/jorbis/) Ogg/Vorbis decoder
 (shipped standalone as `lib/jorbis-0.0.17.jar` and folded into the fat jar for
 convenience), **[JNA](https://github.com/java-native-access/jna)** (dual-licensed
 **LGPL-2.1+ / Apache-2.0**, folded in; used only on Windows to show the modern
@@ -398,6 +398,7 @@ into the tool).
 Those remain under their respective licenses; see
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). If you redistribute ResForge,
 keep those notices intact.
+Runnable fat JARs include these texts under `META-INF/licenses/`.
 
 This is a personal, fan-made modding tool and is not affiliated with or endorsed
 by the makers of Haven & Hearth.

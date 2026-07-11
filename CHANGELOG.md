@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Fat JARs now carry project and third-party license metadata.** Every build
+  packages ResForge's MIT license, third-party notices, JOrbis license/source
+  location, JNA license, and FlatLaf Apache-2.0 text under `META-INF/licenses/`.
 - **Large or rapidly changing previews no longer block or exhaust the Swing UI.**
   Encoded image size and dimensions are checked before copy/decode; image, animation,
   texture-palette, triangle, framebuffer, and cumulative raster work have explicit

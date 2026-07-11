@@ -136,7 +136,7 @@ leaves, trunk unchanged).
 
 ## Runtime dependencies
 Three components, all GUI-only (the CLI touches none). **JOrbis** — the Ogg player's decoder;
-Maven coords `org.jcraft:jorbis:0.0.17` (LGPL, ~97KB) — note `org.jcraft`, not
+Maven coords `org.jcraft:jorbis:0.0.17` (LGPL-2.0-or-later, ~97KB) — note `org.jcraft`, not
 `com.jcraft`. The one jar contains both the `jogg` and `jorbis` packages. **JNA** —
 `net.java.dev.jna:jna:5.15.0` + `net.java.dev.jna:jna-platform:5.15.0` (dual
 LGPL-2.1+/Apache-2.0), used only on Windows to drive the modern Explorer file dialog
