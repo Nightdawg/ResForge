@@ -35,6 +35,50 @@ class JsonParserTest {
     }
 
     @Test
+    void nonconformantNumbersAreRejected() {
+        for(String json : new String[]{"+5", "01", "-01", "1.", "1e", "1e+", "--1", "1+2"})
+            assertThrows(IllegalArgumentException.class, () -> Json.parse(json), json);
+    }
+
+    @Test
+    void conformantNumbersStillParse() {
+        assertEquals(0L, Json.parse("0"));
+        assertEquals(-12L, Json.parse("-12"));
+        assertEquals(0.25, Json.parse("0.25"));
+        assertEquals(1000.0, Json.parse("1e+3"));
+    }
+
+    @Test
+    void pairedUnicodeSurrogatesAreAccepted() {
+        assertEquals("\ud83d\ude00", Json.parse("\"\\uD83D\\uDE00\""));
+        assertEquals("\ud83d\ude00", Json.parse("\"\ud83d\ude00\""));
+    }
+
+    @Test
+    void loneUnicodeSurrogatesAreRejected() {
+        for(String json : new String[]{
+                "\"\\uD83D\"", "\"\\uDE00\"", "\"\\uD83D\\u0041\"",
+                "\"\uD83D\"", "\"\uDE00\""
+        })
+            assertThrows(IllegalArgumentException.class, () -> Json.parse(json));
+    }
+
+    @Test
+    void unescapedControlCharactersAreRejected() {
+        assertThrows(IllegalArgumentException.class, () -> Json.parse("\"a\nb\""));
+        assertEquals("a\nb", Json.parse("\"a\\nb\""));
+    }
+
+    @Test
+    void writerRejectsNonFiniteNumbersAndLoneSurrogates() {
+        assertThrows(IllegalArgumentException.class, () -> Json.write(Double.NaN));
+        assertThrows(IllegalArgumentException.class, () -> Json.write(Double.POSITIVE_INFINITY));
+        assertThrows(IllegalArgumentException.class, () -> Json.write("\uD83D"));
+        assertThrows(IllegalArgumentException.class, () -> Json.write("\uDE00"));
+        assertEquals("\"\ud83d\ude00\"\n", Json.write("\ud83d\ude00"));
+    }
+
+    @Test
     void pathologicallyDeepNestingIsRejectedCleanly() {
         // A few thousand levels would StackOverflowError without the depth guard; that
         // is an Error, so it would slip past the codecs' catch(RuntimeException) guards.

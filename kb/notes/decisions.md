@@ -179,7 +179,9 @@ otherwise tried to allocate ~2 GB → OOM), and `string()` decodes strict UTF-8
 (reporting, not substituting U+FFFD — a lenient decode would change the bytes on
 re-encode and silently break the invariant). A negative internal length used to
 rewind the cursor and hang; the same `ensure` fix closes that. `Json` rejects
-truncated `\u`/dangling escapes and duplicate object keys. Recursion is depth-capped
+truncated `\u`/dangling escapes, duplicate object keys, non-RFC number forms,
+unescaped controls and unpaired surrogates; its writer rejects non-finite numbers
+and unpaired surrogates. Recursion is depth-capped
 (`Json` object/array nesting and the `PropsCodec`, `TtoSkip`, `RLinkInfo`,
 `CodeEntryInfo`, and `Mat2Codec` tto list/map readers all cap at 256), so a
 pathologically deep document fails with a clear exception instead of a

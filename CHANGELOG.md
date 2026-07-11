@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **The custom JSON reader now enforces RFC 8259 syntax.** Leading plus signs,
+  leading-zero integers, malformed fractions/exponents, unescaped controls, and
+  lone Unicode surrogates are rejected; valid surrogate pairs remain supported.
 - **Fetch history can no longer block a valid download from opening.** Downloaded
   bytes are validated as a resource before history is recorded, and serialized
   history is bounded to the Preferences value limit; history persistence failure

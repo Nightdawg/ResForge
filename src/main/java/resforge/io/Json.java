@@ -46,7 +46,10 @@ public final class Json {
         } else if(o instanceof Boolean) {
             sb.append(((Boolean) o) ? "true" : "false");
         } else if(o instanceof Double || o instanceof Float) {
-            sb.append(Double.toString(((Number) o).doubleValue()));
+            double value = ((Number) o).doubleValue();
+            if(!Double.isFinite(value))
+                throw new IllegalArgumentException("Cannot serialize non-finite number");
+            sb.append(Double.toString(value));
         } else if(o instanceof Number) {
             sb.append(o.toString());
         } else if(o instanceof Map) {
@@ -110,8 +113,15 @@ public final class Json {
                 default:
                     if(c < 0x20)
                         sb.append(String.format("\\u%04x", (int) c));
-                    else
+                    else if(Character.isHighSurrogate(c)) {
+                        if(i + 1 >= s.length() || !Character.isLowSurrogate(s.charAt(i + 1)))
+                            throw new IllegalArgumentException("Cannot serialize unpaired high surrogate");
+                        sb.append(c).append(s.charAt(++i));
+                    } else if(Character.isLowSurrogate(c)) {
+                        throw new IllegalArgumentException("Cannot serialize unpaired low surrogate");
+                    } else {
                         sb.append(c);
+                    }
             }
         }
         sb.append('"');
@@ -241,42 +251,111 @@ public final class Json {
                         case 'b':  sb.append('\b'); break;
                         case 'f':  sb.append('\f'); break;
                         case 'u':
-                            if(i + 4 > s.length())
-                                throw err("truncated \\u escape");
-                            try {
-                                sb.append((char) Integer.parseInt(s.substring(i, i + 4), 16));
-                            } catch(NumberFormatException nf) {
-                                throw err("invalid \\u escape");
-                            }
-                            i += 4;
+                            appendUnicodeEscape(sb);
                             break;
                         default: throw err("invalid escape \\" + e);
                     }
                 } else {
-                    sb.append(c);
+                    if(c < 0x20)
+                        throw err("unescaped control character in string");
+                    if(Character.isHighSurrogate(c)) {
+                        if(eof() || !Character.isLowSurrogate(s.charAt(i)))
+                            throw err("unpaired high surrogate");
+                        sb.append(c).append(s.charAt(i++));
+                    } else if(Character.isLowSurrogate(c)) {
+                        throw err("unpaired low surrogate");
+                    } else {
+                        sb.append(c);
+                    }
                 }
             }
             return sb.toString();
         }
 
+        void appendUnicodeEscape(StringBuilder sb) {
+            char first = unicodeEscape();
+            if(Character.isHighSurrogate(first)) {
+                if(i + 2 > s.length() || s.charAt(i) != '\\' || s.charAt(i + 1) != 'u')
+                    throw err("high surrogate must be followed by a low surrogate escape");
+                i += 2;
+                char second = unicodeEscape();
+                if(!Character.isLowSurrogate(second))
+                    throw err("high surrogate must be followed by a low surrogate escape");
+                sb.append(first).append(second);
+            } else if(Character.isLowSurrogate(first)) {
+                throw err("unpaired low surrogate");
+            } else {
+                sb.append(first);
+            }
+        }
+
+        char unicodeEscape() {
+            if(i + 4 > s.length())
+                throw err("truncated \\u escape");
+            try {
+                char value = (char) Integer.parseInt(s.substring(i, i + 4), 16);
+                i += 4;
+                return value;
+            } catch(NumberFormatException e) {
+                throw err("invalid \\u escape");
+            }
+        }
+
         Object number() {
             int start = i;
             boolean real = false;
-            while(i < s.length()) {
-                char c = s.charAt(i);
-                if((c >= '0' && c <= '9') || c == '-' || c == '+') {
+            if(peek() == '-')
+                i++;
+            if(eof())
+                throw err("invalid number");
+            if(peek() == '0') {
+                i++;
+                if(!eof() && digit(peek()))
+                    throw err("leading zero in number");
+            } else if(peek() >= '1' && peek() <= '9') {
+                while(!eof() && digit(peek()))
                     i++;
-                } else if(c == '.' || c == 'e' || c == 'E') {
-                    real = true;
-                    i++;
-                } else {
-                    break;
-                }
+            } else {
+                throw err("invalid number");
             }
+
+            if(!eof() && peek() == '.') {
+                real = true;
+                i++;
+                requireDigit("fraction");
+                while(!eof() && digit(peek()))
+                    i++;
+            }
+            if(!eof() && (peek() == 'e' || peek() == 'E')) {
+                real = true;
+                i++;
+                if(!eof() && (peek() == '+' || peek() == '-'))
+                    i++;
+                requireDigit("exponent");
+                while(!eof() && digit(peek()))
+                    i++;
+            }
+
             String tok = s.substring(start, i);
-            if(tok.isEmpty())
-                throw err("invalid value");
-            return real ? (Object) Double.parseDouble(tok) : (Object) Long.parseLong(tok);
+            try {
+                if(!real)
+                    return Long.parseLong(tok);
+                double value = Double.parseDouble(tok);
+                if(!Double.isFinite(value))
+                    throw err("number outside supported finite range");
+                return value;
+            } catch(NumberFormatException e) {
+                throw err("invalid number");
+            }
+        }
+
+        void requireDigit(String part) {
+            if(eof() || !digit(peek()))
+                throw err("number " + part + " requires a digit");
+        }
+
+        boolean digit(char c) {
+            return c >= '0' && c <= '9';
         }
 
         Object keyword(String word, Object val) {

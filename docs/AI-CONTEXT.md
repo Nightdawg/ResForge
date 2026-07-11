@@ -105,7 +105,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `MessageReader` is hardened against hostile input: overflow-safe bounds
   (`n<0 || n>end-pos`), strict-UTF-8 `string()` (rejects malformed bytes instead of
   substituting U+FFFD, so decode→encode stays byte-exact). `Json` rejects truncated
-  `\u`/dangling escapes and duplicate object keys.
+  `\u`/dangling escapes, duplicate object keys, non-RFC numbers, unescaped control
+  characters, non-finite output, and unpaired Unicode surrogates.
 - `res/` — `ResContainer` (parse/serialize the container; rejects implausible layer
   lengths — negative or > remaining bytes — so a crafted file can't trigger an OOM),
   `Layer` (name+bytes, immutable), `Manifest` (manifest.txt + per-layer codec; layer
