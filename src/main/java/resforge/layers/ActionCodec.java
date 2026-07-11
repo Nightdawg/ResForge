@@ -48,7 +48,7 @@ public final class ActionCodec {
         String prereq = in.string();
         int hotkey = in.uint16();
         int adCount = in.uint16();
-        if(adCount < 0 || adCount > in.remaining())
+        if(adCount > in.remaining())
             throw new Unsupported("implausible ad count " + adCount);
         List<Object> ad = new ArrayList<>(adCount);
         for(int i = 0; i < adCount; i++)

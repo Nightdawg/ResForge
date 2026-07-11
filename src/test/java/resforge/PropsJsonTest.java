@@ -262,6 +262,15 @@ class PropsJsonTest {
     }
 
     @Test
+    void actionCountLargerThanRemainingPayloadIsRejected() {
+        MessageWriter w = new MessageWriter();
+        w.string("p").uint16(1).string("n").string("").uint16(0);
+        w.uint16(2).uint8(0); // two strings require at least two terminator bytes
+
+        assertThrows(RuntimeException.class, () -> ActionCodec.decode(w.toByteArray()));
+    }
+
+    @Test
     void actionLayerRoundTripsAndIsEditable(@TempDir Path tmp) throws Exception {
         ResContainer res = new ResContainer(50);
         res.layers.add(new Layer("action", actionLayer()));
