@@ -51,7 +51,7 @@ of a path, e.g. `borka`, to filter; double-click to fetch). Or **Open from game
 cache…** to browse the resources you already have locally: it scans Haven's cache
 (`%APPDATA%\Haven and Hearth\data`), lists every resource name found there, and
 fetches the one you pick **fresh from the server** — the cache supplies only the
-names, so you always open the latest version.Selecting a layer shows the right tool for it: a **picture preview** with
+names, so you always open the latest version. Selecting a layer shows the right tool for it: a **picture preview** with
 Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for valid UTF-8 tooltips/pagina (invalid

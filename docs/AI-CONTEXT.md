@@ -265,8 +265,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
-| `skel`/`skan` | **read-only rig view**: bone hierarchy (`skel`: names/parents/positions), skeletal animation (`skan`: length/mode/per-bone tracks + fx events) |
-| `manim` | **read-only**: mesh/morph animation — id, length, play order, per-frame vertex-morph format + counts |
+| `skel`/`skan` | layer view is **read-only**: bone hierarchy (`skel`) and skeletal animation tracks/events (`skan`); glTF rebuild can re-pose `skel`, but does not import edited `skan` keyframes |
+| `manim` | layer view is **read-only**; glTF rebuild can replace each frame's morph shape when the original frame count is preserved, but does not add/remove/retime frames |
 | `tile` | edit: swap the terrain tile image (PNG/JPEG; runs to EOM like `image`); shows kind (ground/border/centre-transition), id, weight |
 | `tileset2`/`flavobj` | **read-only**: tileset tiler name + tags + flavor objects (`tileset2`); the sprite/sound a flavor spawns (`flavobj`) — both feed the `refs` report |
 | everything else (`clamb`,`foodev`,`overlay`,`slink`,`plparts`,`rdesc`,…) | **raw passthrough** (lossless) |
@@ -325,174 +325,38 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   document identity.
 - `Layer` is immutable; edits *replace* it (enables cheap snapshot undo).
 - Edits route through `Replacer` where possible (tested, format-checked).
-- Commit per feature with a `Co-authored-by: Copilot …` trailer; keep all three
-  builds green (Gradle/Maven/Ant); verify on real `samples/` before claiming done.
-- **Keep docs in lockstep with code.** Every add/change updates the docs in the
-  *same* commit: this primer (`AI-CONTEXT.md`), the per-layer table, the `README`
-  where relevant, and a `kb/notes/` entry for new format findings. A change isn't
-  done until its docs match — treat stale docs as a bug.
+- Commit per feature. Every AI-assisted commit must credit the assistant used:
+  include the `Co-authored-by: Copilot …` trailer and a `Powered by <model/tool>`
+  paragraph naming the actual AI model or tool. Keep all three builds green
+  (Gradle/Maven/Ant); verify on real `samples/` before claiming done.
+- **Keep docs in lockstep with code.** Every add/change updates the relevant docs in
+  the *same* commit: this primer for architecture/features/current work,
+  `DESIGN-notes.md` for detailed design and reverse-engineering history, `README.md`
+  and the per-layer table for user-visible behavior, and `kb/notes/` for durable
+  format findings and decisions. A change isn't done until its docs match.
 
-## 10. Open / next steps
-- **3D round-trip via glTF** (decided 2026-06-21 with the game dev): glTF, not Ogre
-  XML (no modern Blender importer) and not OBJ (no multi-UV / skeleton). **Phase 1
-  (export) is complete** — `GltfExport` writes a static textured `.glb`
-  (positions/normals + both UV sets + per-submesh materials/textures, Z-up→Y-up),
-  **skinning** (skel → connected glTF skin, bone weights → `JOINTS_0`/`WEIGHTS_0`),
-  **skeletal animations** (`skan` → translation/rotation channels), **and mesh-morph
-  animations** (`manim` → morph targets + weight animation). All Blender-confirmed
-  (knarr: upright, textured, posable, sails ripple). External-skeleton characters
-  get identity-placed named joints. **Bringing edits back is done via topology
-  rebuild** — `GltfImport.rebuild` (CLI `rebuild-gltf`, GUI **Rebuild from
-  glTF**) regenerates `vbuf2`+`mesh`(+`bones2`/`bones`+`manim`) from the edited glTF at
-  its own vertex count, so you can reshape, re-UV, add, remove or re-topologize vertices
-  and faces (and whole parts). It re-quantises positions/normals/both UV sets into each
-  attribute's *original* on-wire format (`f4/f2/f1`, `sn/un/rn` widths,
-  `sf9995`, `uvech/uvec1/uvec2`) and axis-inverts (Y-up→Z-up),
-  while keeping every other layer (materials, textures, code). It needs no per-vertex ids
-  and isn't byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
-  becomes a submesh; the export emits one material per matid (`rfmat_<matid>`) so
-  rebuild recovers each part's id from its material name and Blender doesn't merge
-  parts sharing a texture. Handles **skinning weights** (both `bones2`
-  and the legacy `bones` v0 header — `JOINTS_0`/`WEIGHTS_0` mapped to bone *names* via
-  the skin, since Blender reorders joints; top-4 influences re-encoded via
-  `Vbuf2Codec.setBones2`) **and morph
-  (`manim`) models** (frame shapes rebuilt from glTF morph targets, re-encoded at the
-  new vertex count via `MeshAnimInfo.encodeWith`, frame count unchanged). Normal-mapped
-  models (`tan`/`bit`) work
-  too — the tangent basis is recomputed from the new positions/UVs (Lengyel + Gram-
-  Schmidt; Haven stores `bit` identical to `tan`, matched to ~1.3° median). **Rebuild
-  also re-poses the skeleton** (change-gated: a plain reshape leaves `skel`
-  byte-identical, a moved bone is re-encoded as ver1 via `SkelInfo.encodeVer1` —
-  mnorm16 angle + snorm16 octahedral axis + float32 pos).
-  Validated
-  no-op on male + mulberry/cutblade/fairystone + wisp/algaeblob + stallion/lilypadlotus
-  (legacy `bones` v0 + skel) + **knarr** (multi-part
-  + morph + skinned + normal-mapped, `oar` bone +7 re-poses skel); cutblade add/remove
-  confirmed in-game. **Next:
-  animation-keyframe editing.**
-  The Haven *encode* toolkit is fully in the client
-  (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) +
-  `mkres-fragment.py` for the mesh choices — no dev code needed.
-- Typed editor for **`obst` is now done** (collision polygons → JSON via `ObstCodec`,
-  using the new `float16` codec under lossless-or-raw). The same `float16` codec can
-  broaden `mat2` to expose float16-bearing values that still stay raw. (**`props` is
-  now broadened** — see below — to the full tagged-value `tto` set incl. coord/color/
-  bytes/float32/fcoord; only float8/float16/norm numbers still keep it raw.)
-- Typed editor for **`boneoff` is now done** (equip-point opcode program → JSON via
-  `BoneOffCodec`, lossless-or-raw): translate/rotate/eqpoint/bonealign/scale ops, with
-  a new exact `MessageWriter.cpfloat` encoder (inverse of `Utils.floatd`). The quantised
-  rotation (opcode 17/19) keeps its axis as raw octahedral `snorm16` ints because the
-  octahedral round-trip isn't byte-exact (drifts ±1 on 4/20 sample instances), so storing
-  the raw components keeps all 28 sample boneoffs losslessly editable. The friendly
-  cpfloat/float32 translations edit as plain numbers. (`BoneOffInfo` still backs the
-  one-line table summary + CLI catalog.)
-- Typed editor for **`light` is now done** (light source → JSON via `LightCodec`,
-  lossless-or-raw): id + ambient/diffuse/specular colours (raw 0..1 fractions, not
-  0–255) + optional attenuation/direction/exponent tags; ver0 cpfloat / ver1 float32,
-  both byte-exact (reusing the `MessageWriter.cpfloat` encoder); extras re-emitted in
-  tag order. Both sample lights — wisp (ver0 purple point light) and villageidol (ver1
-  orange point light) — round-trip byte-exact. (`LightInfo` still backs the table
-  summary + CLI catalog.)
-- **Read-only dependency/reference view is now done** for `deps`/`rlink`/`src`
-  (`DepsInfo`/`RLinkInfo`/`SrcInfo`) — shows what other resources a `.res` references.
-  `RLinkInfo` decodes **all five render-link types** (0 MeshMat / 1 Ambient / 2 Collect /
-  3 Parameters / 4 Sprite), plus old `lver<3` and the `lver≥4` info map, one link per
-  layer per `haven.RenderLink.Res`. (Originally only type 3 was handled; a cache census
-  showed type 0 alone is ~80% of all rlink layers, so the aggregated report had been
-  missing the large majority of link references.)
-  The **aggregated cross-layer reference report is also done** (`res/References`,
-  CLI `refs`, GUI **References…** toolbar dialog): collects every external resource
-  from `deps` + `rlink` (every link type) + `tileset2`/`flavobj` (terrain flavor objects)
-  + `codeentry` classpath + `mat2` links (string command
-  values containing `/`, e.g. `mlink`/external `tex`), deduped with provenance.
-  (`anim` frames are local image-ids, so they contribute nothing.)
-- **Terrain tileset layers are now surfaced** (`TileInfo`/`TilesetInfo`/`FlavObjInfo`):
-  a `tile` layer's embedded image is **editable** (swap a ground/transition tile — terrain
-  re-skinning — via the `image`-style replace path in `Replacer`/GUI), and `tileset2`
-  (tiler name + tags + flavor list) and `flavobj` (the sprite/sound a flavor spawns) get a
-  **read-only view** and feed `refs` (a real-corpus census showed 439 `flavobj` references
-  that were previously missing). All three decode to EOM on 100% of the ~8.8k-file corpus.
-- **Read-only rig/light viewers are now done** for `light`/`skel`/`skan`/`boneoff`
-  (`LightInfo`/`SkelInfo`/`SkanInfo`/`BoneOffInfo`) and `manim`
-  (`MeshAnimInfo`, mesh/morph animation), ported from the client's
-  `Light.java`/`Skeleton.java`/`MeshAnim.java` (`boneoff` and `light` have since become
-  editable JSON, see above). Added the `cpfloat`/`mnorm16`/
-  `snorm16`/`unorm16`/`oct2uvec` io primitives they need. **Every layer type in the
-  samples is now decoded** (read-only or editable). These decoders + primitives are
-  the groundwork for a future skeleton/animation **write** path (would benefit from
-  the dev's `mkres` skeleton encoder — ask when starting that).
-- **Robustness/hardening pass is now done** (from a cross-model code review — GPT-5.5
-  + Claude Opus 4.8). Closed: container OOM bomb + infinite-loop on crafted lengths
-  (overflow-safe `MessageReader` bounds + length validation); malformed-UTF-8 /
-  tab/newline layer names (strict UTF-8 decode + escaped manifest fields); pack-side
-  path traversal (`Packer` containment check); non-atomic in-place saves (`io/SafeFiles`
-  temp+rename, CLI + GUI); silent numeric wrap on typed-JSON edits (`Nums` range
-  checks); image new-style split via magic-scan false-positive (exact `TtoSkip` parse);
-  unknown manifest codec (rejected); glTF rebuild dropping un-applied node transforms
-  (now baked, normals via inverse-transpose), un-renormalized skin weights, and missing
-  GLB/accessor/index validation; off-EDT open/export/rebuild; Ogg player double-thread +
-  cleanup-in-finally; JSON parser hostile-input (EOF-safe escapes, duplicate-key reject).
-  Regression tests include `HardeningTest`, `EditValidationTest`, `JsonParserTest`,
-  `GltfNodeTransformTest`, plus deterministic synthetic M15 coverage for CLI dispatch,
-  verification, font/skan inspection, layer moves, and `M4`. `OggVorbis.decode` remains
-  blocked on a redistributable Vorbis fixture; copyrighted real-game fixtures stay
-  local-only and are not covered by those synthetic tests. Source-only changes keep
-  all three builds in sync.
-- **Fetch path history/autocomplete is now done** (`gui/FetchHistory`): the Fetch
-  dialog remembers successful resource paths (persisted via `Preferences`, same as the
-  base URL) and lists them below the input as substring-matched, click-to-use
-  suggestions (double-click fetches); most-recent-first, case-insensitively deduped,
-  capped at 50 and serialized within `Preferences.MAX_VALUE_LENGTH`. Downloaded bytes
-  are parsed before a path is recorded, and history persistence occurs only after the
-  valid document is open. Pure-logic helper is unit-tested (`FetchHistoryTest`).
-- **Open from game cache is now done** (`net/CacheIndex`, CLI `cache-list`, GUI
-  **Cache**/File→*Open from game cache…*): scans the local Haven `HashDirCache`
-  (`%APPDATA%\Haven and Hearth\data`) to recover the resource *names* the player
-  already has, then re-fetches the chosen one **fresh from the server** (cache → names
-  only, so you always open the latest version; never opens stale cached bytes). Header
-  decoded with `DataInputStream.readUTF` per the client's `HashDirCache`; `res/` names
-  are the fetchable paths; parallel scan (~0.7 s over ~44k files), sorted/deduped (~8k
-  resources on a real cache). The picker (Ctrl+O) opens immediately showing a
-  "scanning…" state and is populated by the background scan (so the UI never looks
-  frozen), reuses `FetchHistory.filter` for live substring filtering, and sorts/greys
-  the `dyn/` account-attached resources last (`CacheIndex.ORDER`/`isDynamic`; they may
-  be removed server-side, so they're set apart). The filter rebuilds the `JList` with a
-  bulk `DefaultListModel.clear()`+`addAll()` (one `ListDataEvent` each) rather than a
-  per-name `addElement()` loop — the latter fired one event per item and froze the
-  search box on large caches (~8k names); the bulk swap keeps keystrokes instant.
-  be removed server-side, so they're set apart). Unit-tested (`CacheIndexTest`). (Idea
-  prompted by the read-only Rust tool `ancientchina/hafen-res`; implemented clean-room
-  from the client format.)
-- **In-app 3D viewer is now done** (`model/ModelGeometry` + `model/LocalTextures` +
-  `gui/Model3DView`, GUI **View 3D** toolbar button): a dependency-free **software
-  renderer** (hand-written z-buffered triangle rasteriser into a `BufferedImage`,
-  two-sided Lambert head-light shading, **perspective-correct texturing** with
-  alpha-mask cutout, optional wireframe overlay, mouse orbit/zoom/pan) showing the
-  model in its bind/rest pose — no native libs/OpenGL/JavaFX, matching the project's
-  pure-Java ethos. `ModelGeometry` assembles a triangle soup (positions/normals/UVs +
-  a per-triangle texture slot) from `vbuf2`+`mesh` (reusing the glTF-export decoders);
-  `LocalTextures` resolves the `matid→mat2→local tex` chain (mirroring the export).
-  Unit-tested (`ModelGeometryTest`, `LocalTexturesTest`); confirmed visually on male
-  (textured humanoid), mulberry (alpha-tested foliage) and knarr (21-part ship, local
-  parts textured, the rest shaded). **Tier 1** (shaded + wireframe) and **Tier 2 part 1**
-  (local textures) are done. **Tier 2 part 2 — external static materials is now done.**
-  A part whose base texture is an `mlink`/external `tex` string naming **one fixed
-  resource** (e.g. mulberry's bark via `mlink gfx/terobjs/trees/mulberry-tex`, its berries
-  via an external `tex` string) is resolved by **fetching** that resource and following
-  *its* own `matid→mat2→tex` chain — `model/ExternalTextures` (injectable fetcher, per-path
-  cache, depth cap + cycle guard), exposed behind a **"Resolve external textures
-  (network)"** toggle in the View-3D window (off by default, since the viewer is otherwise
-  offline). Resolved parts texture but get no picker (`localBase` false; they index an
-  appended external palette). Validated end-to-end on mulberry. Still shaded: genuine
-  **variable materials (varmat)** — runtime-chosen wood-types whose final image isn't in
-  the `.res` — and **Dyntex** (`spr`→`dynspr.Dyntex`) sprite *additions* (not a base
-  texture). A part with a local `otex` overlay over an external `mlink` base (knarr's
-  hull/sail) already shows its overlay; compositing base+overlay is a follow-on.
-  **Tier 3 (later): animation playback** (skeletal/morph).
-- GUI niceties are considered complete. **Batch re-skin a folder** is declined
-  (won't do — folder-wide modding is already scriptable via the CLI `catalog` +
-  `replace`, and a true batch needs a per-file mapping few users would set up), as
-  is **layer search/filter**.
+## 10. Open / deferred work
+Completed feature history belongs in `CHANGELOG.md` and `DESIGN-notes.md`; this
+section lists only current limitations or intentionally deferred work.
+
+- **Animation editing:** `skan` keyframes are exported to glTF but edits are not
+  imported. `manim` morph shapes are rebuilt, but the original frame count and
+  timing are retained and Blender's shape-key animation is not read. Adding,
+  removing, or retiming `skan`/`manim` frames needs a dedicated write path.
+- **Typed coverage:** unusual `mat2`/`props` values using float8/float16 or
+  snorm/unorm/mnorm still stay raw until exact decode→encode behavior is proven.
+  The new-style typed (`tto`) `image` header parser is implemented exactly but
+  remains unverified on a real sample; none occurred among 669 images in the
+  recorded corpus, so validation is opportunistic if one is found.
+- **3D viewer follow-ons:** the viewport still has no skeletal/morph playback,
+  and it does not composite a local `otex` overlay over a fetched external base.
+  Runtime-selected varmat textures and `Dyntex` sprite additions remain out of
+  scope because their final pixels are not stored in the model resource.
+- **Test fixture gap:** `OggVorbis.decode` still lacks a redistributable Vorbis
+  fixture. Copyrighted game assets remain local-only and must not be committed.
+- GUI niceties are otherwise considered complete. Folder-wide re-skinning and
+  layer search/filter were explicitly declined; use CLI `catalog` + `replace`
+  for scripted batch work.
 
 ## 11. The other tool (context)
 CarryGun's **HafenResourceTool** (GitLab, Qt/C++): broader typed coverage +

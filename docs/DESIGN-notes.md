@@ -226,44 +226,16 @@ resforge/
   lib/                               # vendored JUnit 5 jars for the Ant build
   gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.14.4; distribution SHA-256 pinned)
   src/main/java/resforge/
-    Main.java                        # CLI: gui|fetch|info|refs|unpack|pack|replace|gltf|rebuild-gltf|catalog|verify
-    gui/ResForgeFrame.java           # Swing editor window (layer table + preview/edit)
-    gui/GuiSupport.java              # per-layer preview/text/export helpers (reuses decoders)
-    gui/ImageView.java               # scaled/centred image preview component
-    gui/AudioPlayerPanel.java        # in-app Ogg player (play/stop/seek)
-    audio/OggVorbis.java             # Ogg Vorbis -> PCM decode (via bundled JOrbis)
-    net/ResourceFetcher.java         # download &lt;base&gt;/&lt;path&gt;.res from the game server
-    io/MessageReader.java            # LE primitive decoder (mirrors haven.Message)
-    io/MessageWriter.java            # LE primitive encoder
-    io/Json.java                     # tiny dependency-free JSON reader/writer
-    res/ResContainer.java            # parse/serialize container + Layer list
-    res/Layer.java                   # (name, byte[] payload)
-    res/Manifest.java                # read/write manifest.txt (+ per-layer codec)
-    res/Unpacker.java                # .res -> folder (parts model)
-    res/Packer.java                  # folder -> .res (raw | tex | props | action codecs)
-    res/Replacer.java                # one-shot single-asset swap
-    res/Verifier.java                # batch round-trip + image/tex split validation
-    res/Catalog.java                 # folder-wide editable-asset listing
-    layers/ImageInfo.java            # image header parse + PNG split point
-    layers/TexInfo.java              # tex header parse + embedded-image split point
-    layers/AudioInfo.java            # audio2 header parse + Ogg split point
-    layers/FontInfo.java             # font header parse + TTF/OTF split point
-    layers/ImageMagic.java           # encoded-image magic-byte detection
-    layers/PropsCodec.java           # props <-> JSON (tto codec, lossless-or-raw)
-    layers/ActionCodec.java          # action <-> JSON (deterministic record)
-    layers/Vbuf2Info.java            # vbuf2 read-only attribute inspector (incl. bones)
-    layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
-    layers/TtoSkip.java              # generic tto value skipper
-    model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
-    vbuf/Vbuf2Format.java            # shared fixed attribute element counts
-    vbuf/Vbuf2Codec.java             # structure-preserving vbuf2 decode/encode (+edit/rebuild)
-    model/GltfExport.java            # 3D model -> Blender-ready binary glTF (.glb)
-    model/GltfImport.java            # edited .glb -> .res (topology rebuild)
-  src/test/java/resforge/
-    RoundTripTest.java               # byte-identical round-trip + image/tex-edit tests
-    PropsJsonTest.java               # JSON + props codec tests
-    ReplaceTest.java                 # one-shot replace tests
-    VbufInfoTest.java                # vbuf2 inspector tests
+    Main.java                        # CLI dispatch + GUI launch
+    io/                              # binary/JSON primitives + atomic file writes
+    res/                             # container, parts model, replace/verify/catalog/refs
+    layers/                          # layer inspectors and lossless-or-raw codecs
+    vbuf/                            # shared VBUF2 format metadata + encoder
+    model/                           # glTF export/rebuild and 3D-viewer geometry/textures
+    gui/                             # Swing editor, previews, dialogs and software renderer
+    net/                             # server fetch + local cache-name index
+    audio/                           # JOrbis-backed Ogg decode
+  src/test/java/resforge/            # focused codec, model, GUI-logic and hardening tests
   README.md
   docs/DESIGN-notes.md               # this file
 ```
@@ -289,15 +261,22 @@ resforge/
 # Recompile -> horse.res
 ./gradlew run --args="pack horse.resdir"
 
-# One-shot single-asset swap (image/tex/audio2/font/midi/tooltip/pagina/props/action)
+# One-shot replacement of a supported media/text/JSON layer
 ./gradlew run --args="replace horse.res image newicon.png horse.res"
 ./gradlew run --args="replace theme.res audio2 newsound.ogg theme.res"
 
-# Export a 3D model to a Blender-ready glTF (then Rebuild glTF to bring edits back)
+# Inspect aggregated external resource references
+./gradlew run --args="refs path/to/horse.res"
+
+# Export a 3D model to glTF and rebuild edits back into a resource
 ./gradlew run --args="gltf path/to/horse.res"
+./gradlew run --args="rebuild-gltf path/to/horse.res path/to/horse.glb"
 
 # Catalogue what is editable across a folder of resources
 ./gradlew run --args="catalog path/to/folder"
+
+# List names in the local game cache (the GUI re-fetches a selected name fresh)
+./gradlew run --args="cache-list"
 
 # Validate real files (single file or a folder, recursive)
 ./gradlew run --args="verify path/to/horse.res"
@@ -530,19 +509,20 @@ bit2(uvec1) tex2(sn2) otex2(sn2) bones2(un1)]` with stripped submeshes like
 `2940 tris vbuf=0 mat=1 stripped`. This is the "read-only first" milestone; the
 layers remain lossless raw `.bin`.
 
-### Remaining for full 3D editing (future)
+### Completed 3D editing milestones
 
-1. ~~Decode the bone data and the `mesh` index layer~~ (done — see above);
-   `skel`/`skan` (skeleton + animations) are still raw.
-2. ~~Emit an editable form~~ — a read-only **Wavefront OBJ** export was built
+1. Bone data, `mesh`, `skel`, `skan`, and `manim` are structurally decoded for
+   inspection while their original layer bytes remain lossless.
+2. A read-only **Wavefront OBJ** export was built
    (`model/Vbuf2Data.java` de-quantises positions/normals/texcoords;
    `model/ObjExport.java` emitted OBJ; CLI `obj`). Validated: `male` → 1325 verts /
    2248 tris (humanoid bbox), `knarr` → 12838 verts / 16952 tris / 21 submeshes
-   (ship bbox). *(Since superseded and removed: the **glTF round-trip** below is the
-   editable form — it carries multi-UV/skeleton/animation and rebuilds back to `.res`.)*
-3. Gate any write path behind the usual lossless-or-raw guard. Note the float/
-   norm formats are lossy, so a faithful round-trip must preserve the exact
-   per-attribute format the original used (record it, don't re-derive).
+   (ship bbox). It was superseded and removed: the **glTF round-trip** below is
+   the editable form — it carries multi-UV/skeleton/animation and rebuilds back
+   to `.res`.
+3. The write path preserves each original float/norm attribute format rather
+   than re-deriving one; unchanged buffers re-encode byte-identically, while
+   intentional glTF edits are re-quantised into that recorded format.
 
 ### What is built for the write path (`vbuf/Vbuf2Codec.java`)
 
@@ -559,12 +539,14 @@ CLI `transform <file.res> <sx> <sy> <sz>` command exercised the encoder by scali
 a model's vertex positions, but was removed once the glTF round-trip — which also
 handles normals/tangents and is in-game validated — superseded it.)
 
-## 9. Possible next steps
+## 9. Current 3D status and open work
 
-- **3D round-trip via glTF** (format decided 2026-06-21 with the game dev loftar —
-  glTF over Ogre XML, which has no modern Blender importer, and over OBJ, which
-  can't carry Haven's two UV sets or skeleton bindings). **Phases 1a + 1b are done:**
-  `GltfExport` writes a static, textured binary glTF (`.glb`) — positions, normals,
+### Completed glTF round-trip
+
+The format was decided 2026-06-21 with the game dev loftar — glTF over Ogre XML,
+which has no modern Blender importer, and over OBJ, which can't carry Haven's two
+UV sets or skeleton bindings. `GltfExport` writes a static, textured binary glTF
+(`.glb`) — positions, normals,
   both UV sets (`tex`→`TEXCOORD_0`, `otex`→`TEXCOORD_1`), per-submesh materials with
   embedded textures, Haven Z-up→glTF Y-up — **plus skinning**: `Vbuf2Data` decodes
   the `bones`/`bones2` weights (`PoseMorph` port: top-4, normalised) →
@@ -582,8 +564,9 @@ handles normals/tangents and is in-game validated — superseded it.)
   so you can reshape, re-UV, add, remove or re-topologize vertices and faces. It
   axis-inverts glTF Y-up→Haven Z-up and re-quantises
   positions/normals/both UV sets back into each attribute's *original* on-wire
-  format via `Vbuf2Codec.decodeAttr`/`setAttr` (general f4/f2/sn1-4/un1-4/uvec1-2
-  de/re-quant), writes a fresh raw-index `mesh`, and copies every other layer
+  format via `Vbuf2Codec.decodeAttr`/`setAttr` (all reader-supported
+  `f4/f2/f1`, `sn/un/rn`, `sf9995`, and `uvech/uvec1/uvec2` formats), writes a
+  fresh raw-index `mesh`, and copies every other layer
   (materials, textures, code). It needs no per-vertex ids and gives up byte-exactness
   (in-game-validated). **Multi-submesh works**: each glTF primitive becomes a submesh,
   with each part's matid recovered from its material name — the export emits one
@@ -604,31 +587,23 @@ handles normals/tangents and is in-game validated — superseded it.)
   only ~0.04°, so the change-gate keeps an unedited skeleton byte-identical), and a moved
   bone re-encodes the whole skeleton as version-1 via `SkelInfo.encodeVer1` (mnorm16
   angle + snorm16 octahedral axis + float32 pos; the client reads both versions, so ver-0
-  cpfloat needn't be reproduced). **Remaining:** `skan`/`manim` keyframe editing (add/remove/
-  retime animation frames).
-  The Haven encode toolkit is fully in the
-  client (`Utils.hfenc`/`uvec2oct`, `Message.add*`, `NormNumber` encoders) plus
-  `mkres-fragment.py` for the mesh quantization/stripping choices — no dev code needed.
-- Eventually edit `vbuf2`/`mesh`/`manim` directly. (`mat2`, `anim`,
-  `neg`, `obst`, `boneoff` and `light` are done — editable JSON via
-  `Mat2Codec`/`AnimCodec`/`NegCodec`/`ObstCodec`/`BoneOffCodec`/`LightCodec`; `code`/`codeentry`, the
-  dependency layers `deps`/`rlink`/`src`, and the rig/morph layers
-  `skel`/`skan`/`manim` are decoded read-only via
-  `CodeInfo`/`CodeEntryInfo`/`DepsInfo`/`RLinkInfo`/`SrcInfo`/`SkelInfo`/
-  `SkanInfo`/`MeshAnimInfo` — every sample layer type is now decoded.)
-  The rig decoders + the `cpfloat`/norm io primitives are the groundwork for the
-  skeleton/animation **write** path.
-- **Done:** the `props` codec now models more `tto` types (coord/color/bytes/
-  float32/fcoord/uid/resid/resspec) using an explicit tagged JSON form like
-  `Mat2Codec`, exposing props that used to stay raw (e.g. `belltower`'s `fcoord64`
-  `use-point`). Only float8/float16 and the snorm/unorm/mnorm numbers still stay raw.
-- Validate the new-style typed (`tto`) `image` header against a real sample that
-  uses it (none of the current samples do).
-- **Done:** the `tex` alpha **mask** (part `t==4`) is now exposed as a second
-  editable image via `TexMaskCodec` (recomputing its int32 length, format-checked,
-  lossless-or-raw) — the GUI gives it its own preview/replace/export and the 3D
-  viewer uses it for cutout. (It was previously preserved verbatim inside `*.post.bin`.)
-- A small GUI or a `--watch` mode for rapid skin iteration.
+  cpfloat needn't be reproduced).
+
+The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
+`Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh
+quantization/stripping choices — no dev code needed.
+
+### Open or deferred
+
+- `skan` keyframe edits are not imported from glTF. `manim` morph shapes are
+  rebuilt, but frame count and timing remain those of the original resource;
+  adding, removing, or retiming either animation format needs a write path.
+- Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are deferred.
+  Geometry, skin weights, skeleton poses, and fixed-timeline morph shapes are
+  edited through glTF instead.
+- The exact new-style typed (`tto`) `image` header parser has not been validated
+  against a real example. None appeared among 669 recorded images, so validate
+  opportunistically if a sample is found.
 
 ---
 

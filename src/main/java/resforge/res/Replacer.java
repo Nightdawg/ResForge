@@ -25,10 +25,9 @@ import java.util.Map;
 /**
  * One-shot replacement of a single layer's editable content, without unpacking
  * the whole resource. Swaps the embedded media of {@code image}/{@code tex}/
- * {@code audio2}/{@code font}/{@code midi} (preserving the layer's header and,
- * for {@code tex}, recomputing the embedded image length), replaces the text of
- * {@code tooltip}/{@code pagina}, or re-encodes {@code props}/{@code action}
- * from a JSON file.
+ * {@code tile}/{@code audio2}/{@code font}/{@code midi} (preserving headers and
+ * recomputing embedded lengths where needed), replaces {@code tooltip}/{@code pagina}
+ * text, or re-encodes supported typed layers from JSON.
  */
 public class Replacer {
     public static class ReplaceException extends RuntimeException {

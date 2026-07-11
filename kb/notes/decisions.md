@@ -57,6 +57,15 @@ via `<build><directory>`, and its fat jar is built by the shade plugin (with
 dep/version change must be applied to all three (`build.gradle`, `pom.xml`,
 `build.xml`/`lib/`).
 
+## Credit the AI assistant in every AI-assisted commit
+Every AI-assisted commit records both forms of attribution:
+
+- `Powered by <model/tool>` names the actual AI model or tool used.
+- `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` records
+  the standard Git co-author trailer.
+
+Do not omit the `Powered by` paragraph when amending or composing a commit.
+
 ## 3D viewer is a pure-Java software renderer (no OpenGL/JavaFX)
 The in-app **View 3D** preview (`gui/Model3DView`) is a hand-written z-buffered
 triangle rasteriser drawing into a `BufferedImage` via Java2D — no JOGL/LWJGL
@@ -111,21 +120,24 @@ otex-overlaid hull/sail part, all `mlink`-based) to **one** (matid 8, its lone l
 *render* (the viewer textures them with whatever local texture resolves, or shades
 them) — they just can't be re-pointed.
 
-**Status:** **(a) external static materials is now done.** A non-local-base part whose
-base is an `mlink`/external `tex` string naming **one fixed resource** is resolved by
-fetching that resource and following *its* own `matid→mat2→tex` chain
-(`model/ExternalTextures`: injectable fetcher → per-path cache + depth cap + cycle guard),
-surfaced behind a **"Resolve external textures (network)"** toggle in the View-3D window
-(off by default — the viewer is otherwise offline and instant — and shown only when the
-model actually has such materials, via the offline `ExternalTextures.hasExternalStatic`
-check, so plain local models aren't cluttered with a useless toggle). Resolved parts
-texture but still get no picker (`localBase` false; they index the appended *external*
-palette).
-Validated end-to-end on mulberry (bark via `mulberry-tex`, berries via `items/mulberry`).
-**Still not done:** (b) genuine **variable materials** (runtime-chosen wood-types whose
-final image isn't in the `.res`) and **Dyntex** `spr` additions stay shaded; and
-compositing a local `otex` overlay over an external `mlink` base (knarr's hull/sail) —
-those parts currently render only their overlay, not base+overlay.
+**Current status:**
+
+- **Done — external static materials.** A non-local-base part whose
+  base is an `mlink`/external `tex` string naming **one fixed resource** is resolved by
+  fetching that resource and following *its* own `matid→mat2→tex` chain
+  (`model/ExternalTextures`: injectable fetcher → per-path cache + depth cap + cycle
+  guard), surfaced behind a **"Resolve external textures (network)"** toggle in the
+  View-3D window (off by default — the viewer is otherwise offline and instant — and
+  shown only when the model actually has such materials, via the offline
+  `ExternalTextures.hasExternalStatic` check, so plain local models aren't cluttered
+  with a useless toggle). Resolved parts texture but still get no picker (`localBase`
+  false; they index the appended *external* palette). Validated end-to-end on
+  mulberry (bark via `mulberry-tex`, berries via `items/mulberry`).
+- **Deferred — overlay compositing.** A local `otex` overlay over an external
+  `mlink` base (knarr's hull/sail) currently renders only the overlay.
+- **Out of scope — runtime materials.** Genuine variable materials and `Dyntex`
+  sprite additions stay shaded because their final image is not stored in the
+  model resource.
 
 Verified by a render-diff unit test (`gui/Model3DViewTest`, which
 renders off-screen and checks the swap changes the pixels), layout/filter tests

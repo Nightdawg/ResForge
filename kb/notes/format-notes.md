@@ -49,7 +49,9 @@ A tex layer can also carry an **alpha mask** as a separate part — part tag `4`
 (`int32 len` + encoded image, usually a PNG silhouette), often alongside a filter
 part (tag 1, e.g. the "Mipmapper" value) — because the color image is frequently an
 opaque JPEG (no alpha), so the cutout shape (e.g. a tree's foliage outline) lives in
-the mask. `TexInfo` locates **both** the color image (tag 0) and the mask (tag 4):
+the mask. It is editable via `TexMaskCodec`, which format-checks replacements and
+recomputes the embedded int32 length under the lossless-or-raw guard. `TexInfo`
+locates **both** the color image (tag 0) and the mask (tag 4):
 it scans the whole part stream, but once the color image is found any later trouble
 just stops the scan with the color result intact, so the (byte-exact) color split is
 never weakened. The 3D viewer uses the mask as the alpha channel for cutout (mask
@@ -210,7 +212,7 @@ the View-3D toggle); kinds 3 and 4 are left shaded/ignored (see decisions.md "3D
 per-material texture picker").
 
 ## glTF (.glb) model export
-Modern alternative to OBJ for the 3D model, and the basis for the eventual edit
+Modern alternative to OBJ for the 3D model, and the basis of the current edit
 round-trip. Format chosen 2026-06-21 on the game dev's (loftar) recommendation:
 Ogre XML has no modern Blender importer; OBJ can't carry Haven's *two* UV sets
 (`tex`+`otex`) nor skeleton bindings — glTF handles both and has native Blender
@@ -322,8 +324,8 @@ tangents within ~1.3°, legacy-`bones` weights round-trip with 100% dominant-bon
 + 0 weight error, valid containers); a moved bone re-poses `skel` on rebuild (knarr
 `oar` +7 verified); cutblade's add/remove edit confirmed in-game;
 synthetic glbs with added vertices / separate per-material blocks / a morph target /
-tangent recompute rebuild correctly. **Next:** animation-keyframe editing
-(`skan`/`manim` add/remove/retime frames).
+tangent recompute rebuild correctly. **Open limitation:** `skan` edits are not
+imported; `manim` shapes rebuild only with the original frame count/timing.
 
 Rebuild **bakes un-applied glTF node transforms**: if a Blender object was moved,
 rotated or scaled without "Apply Transform", that transform lives on the glTF node
@@ -356,8 +358,9 @@ Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 
 ## rig / lighting layers (light, skel, skan, boneoff)
 Viewers ported from the client's `Light.java` and `Skeleton.java`
-(LGPL-3, in `docs/reference/`). `skel`/`skan` stay raw/lossless (we only
-surface structure); **`boneoff` and `light` are editable JSON** (see below).
+(LGPL-3, in `docs/reference/`). `skel`/`skan` stay raw/lossless in the layer
+editor (we surface structure); glTF rebuild can re-pose `skel`, but does not
+import edited `skan` keyframes. **`boneoff` and `light` are editable JSON**.
 They use number encodings beyond the basic primitives, now in `MessageReader`:
 - **`cpfloat`** — custom-packed float: `int8` exponent + LE `uint32` (top bit sign,
   low 31 bits mantissa); value = `2^e · (1 + m/2^31)`, with `e=-128,m=0` meaning 0.
@@ -410,7 +413,9 @@ Light histogram = `json 2`). e.g.
 knarr's skel = 11 bones (Main root + sails/oar), skan = 8 s loop, 11 tracks.
 
 ## manim layer (mesh / morph animation)
-Read-only viewer (`MeshAnimInfo`) ported from the client's `haven.MeshAnim.Res`.
+Read-only layer viewer (`MeshAnimInfo`) ported from the client's
+`haven.MeshAnim.Res`; glTF rebuild can replace frame morph shapes when the
+original frame count/timing is preserved.
 Unlike `skan` (bones), `manim` animates **vertex positions** directly — a flag
 rippling, a plant swaying. Stays raw/lossless. Format: `uint8 ver`(1), `int16 id`,
 `uint8 rnd` (play frames random vs sequential), `float32 len`, then frames until a
