@@ -224,7 +224,7 @@ resforge/
   pom.xml                            # Maven build (alternative); deps+plugins from Central, output build-maven/
   build.xml                          # Ant build (alternative); JUnit jars vendored in lib/
   lib/                               # vendored JUnit 5 jars for the Ant build
-  gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.10.2)
+  gradlew, gradlew.bat, gradle/      # wrapper (Gradle 8.14.4; distribution SHA-256 pinned)
   src/main/java/resforge/
     Main.java                        # CLI: gui|fetch|info|refs|unpack|pack|replace|gltf|rebuild-gltf|catalog|verify
     gui/ResForgeFrame.java           # Swing editor window (layer table + preview/edit)

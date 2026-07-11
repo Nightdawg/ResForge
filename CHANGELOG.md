@@ -8,6 +8,8 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **The Gradle wrapper is upgraded to 8.14.4.** This moves the build off versions
+  affected by CVE-2026-22816 and pins the official binary distribution SHA-256.
 - **Fat JARs now carry project and third-party license metadata.** Every build
   packages ResForge's MIT license, third-party notices, JOrbis license/source
   location, JNA license, and FlatLaf Apache-2.0 text under `META-INF/licenses/`.
