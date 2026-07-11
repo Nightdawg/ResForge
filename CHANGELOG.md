@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **The layer table once again shows clear row and column boundaries.** Grid lines
+  use the original Windows-theme grey and inter-cell spacing for clear contrast,
+  including on selected rows, instead of depending on look-and-feel defaults.
 - **The Gradle wrapper is upgraded to 8.14.4.** This moves the build off versions
   affected by CVE-2026-22816 and pins the official binary distribution SHA-256.
 - **Fat JARs now carry project and third-party license metadata.** Every build

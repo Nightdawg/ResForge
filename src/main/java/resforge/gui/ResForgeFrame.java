@@ -48,6 +48,7 @@ import javax.swing.WindowConstants;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FileDialog;
@@ -180,6 +181,9 @@ public class ResForgeFrame extends JFrame {
         add(north, BorderLayout.NORTH);
 
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        table.setShowGrid(true);
+        table.setGridColor(Color.GRAY);
+        table.setIntercellSpacing(new Dimension(1, 1));
         table.setRowHeight(UiScaling.scale(36));
         table.getColumnModel().getColumn(0).setMaxWidth(UiScaling.scale(40));
         table.getColumnModel().getColumn(1).setMaxWidth(UiScaling.scale(44));
