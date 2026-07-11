@@ -1,5 +1,7 @@
 package resforge.res;
 
+import resforge.io.SafeFiles;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -48,7 +50,7 @@ public class Manifest {
                 sb.append('\t').append(esc(e.codec));
             sb.append('\n');
         }
-        Files.write(dir.resolve(FILENAME), sb.toString().getBytes(StandardCharsets.UTF_8));
+        SafeFiles.write(dir.resolve(FILENAME), sb.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     public static Manifest read(Path dir) throws IOException {

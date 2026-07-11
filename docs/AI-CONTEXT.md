@@ -291,8 +291,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   unknown/chunked lengths.
   Typed-codec *edits*
   are range-checked (`Nums`) so a bad value is rejected, not silently wrapped.
-- **Atomic writes**: all `.res`/`.glb` output goes through `io/SafeFiles` (temp +
-  atomic rename), so an interrupted save never destroys the original/only copy.
+- **Atomic writes**: all `.res`/`.glb` output and final unpack `manifest.txt`
+  publication goes through `io/SafeFiles` (temp + atomic rename), so interruption
+  never leaves the original/only copy or manifest truncated.
 - **Background results are revision-gated**: any worker that can replace the active
   document must capture `DocumentRevision.Token` and complete it before changing GUI
   state. Every content edit and undo/redo advances the revision; every load advances

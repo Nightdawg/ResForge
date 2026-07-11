@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Unpack manifests are now published atomically.** `manifest.txt` is still
+  written after all layer parts, but now uses the same temporary-file-and-rename
+  path as resource output so interruption cannot leave a truncated manifest.
 - **Windows file-dialog COM errors now trigger the fallback picker.** Only the
   documented `ERROR_CANCELLED` HRESULT is treated as user cancellation; failures
   such as access denied or `E_FAIL` mark the native dialog unavailable.
