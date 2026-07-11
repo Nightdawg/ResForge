@@ -432,9 +432,12 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   (now baked, normals via inverse-transpose), un-renormalized skin weights, and missing
   GLB/accessor/index validation; off-EDT open/export/rebuild; Ogg player double-thread +
   cleanup-in-finally; JSON parser hostile-input (EOF-safe escapes, duplicate-key reject).
-  Regression tests: `HardeningTest`, `EditValidationTest`, `JsonParserTest`,
-  `GltfNodeTransformTest` (152 tests total, all green). Source-only changes — all three
-  builds stay in sync.
+  Regression tests include `HardeningTest`, `EditValidationTest`, `JsonParserTest`,
+  `GltfNodeTransformTest`, plus deterministic synthetic M15 coverage for CLI dispatch,
+  verification, font/skan inspection, layer moves, and `M4`. `OggVorbis.decode` remains
+  blocked on a redistributable Vorbis fixture; copyrighted real-game fixtures stay
+  local-only and are not covered by those synthetic tests. Source-only changes keep
+  all three builds in sync.
 - **Fetch path history/autocomplete is now done** (`gui/FetchHistory`): the Fetch
   dialog remembers successful resource paths (persisted via `Preferences`, same as the
   base URL) and lists them below the input as substring-matched, click-to-use

@@ -65,6 +65,10 @@ All notable changes to ResForge are documented here. The format is based on
   Materials without an explicit local `matid → mat2 → tex` mapping—including
   `matid=-1` and external-only materials—now omit `baseColorTexture` instead of
   inheriting the first embedded texture.
+- **Empty glTF exports are structurally valid JSON-only GLBs.** Resources with no
+  exportable primitives, including skeleton-only resources, no longer emit a
+  dangling mesh node, empty required arrays, a zero-length buffer, or an empty BIN
+  chunk.
 - **Rejected text/JSON replacements no longer report success.** The GUI apply
   path now returns whether a mutation was committed, so malformed JSON,
   unsupported codec values, and out-of-range numbers leave payload, dirty/undo
@@ -105,6 +109,12 @@ All notable changes to ResForge are documented here. The format is based on
   100%-scaled display and fixes 125%/150%/200% (`gui/UiScaling`).
 
 ### Added
+
+- **Deterministic synthetic M15 regression coverage** now exercises CLI dispatch,
+  verifier ordering/histograms, font and skeletal-animation inspection, layer moves,
+  and matrix math without copyrighted assets. `OggVorbis.decode` remains blocked on
+  a redistributable Vorbis fixture; real game fixtures remain local-only and are not
+  covered by these synthetic tests.
 
 - **Dark mode.** A new **Options → Dark mode** toggle switches the whole editor
   between a light and a dark theme, applied live (no restart) and remembered

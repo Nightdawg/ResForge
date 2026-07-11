@@ -141,6 +141,24 @@ class GltfExportTest {
         return (Map<String, Object>) ((List<Object>) m0.get("primitives")).get(0);
     }
 
+    @SuppressWarnings("unchecked")
+    private static void assertEmptyGlb(byte[] glb) {
+        assertEquals("glTF", new String(glb, 0, 4, StandardCharsets.UTF_8));
+        assertEquals(2, le32(glb, 4));
+        assertEquals(glb.length, le32(glb, 8));
+        assertEquals(0x4E4F534A, le32(glb, 16));
+        assertEquals(glb.length, 20 + le32(glb, 12), "empty GLB must not contain a BIN chunk");
+
+        Map<String, Object> root = jsonOf(glb);
+        assertEquals(0L, root.get("scene"));
+        List<Object> scenes = (List<Object>) root.get("scenes");
+        assertEquals(1, scenes.size());
+        assertFalse(((Map<String, Object>) scenes.get(0)).containsKey("nodes"));
+        for(String key : List.of("nodes", "meshes", "skins", "animations", "accessors",
+                "bufferViews", "buffers", "images", "textures", "materials", "samplers"))
+            assertFalse(root.containsKey(key), "empty GLB must omit " + key);
+    }
+
     /* ----------------------------------------------------------------- tests */
 
     @Test
@@ -485,6 +503,16 @@ class GltfExportTest {
         GltfExport.Result r = GltfExport.toGlb(res, "x.res");
         assertEquals(0, r.vertices);
         assertEquals(0, r.triangles);
-        assertFalse(r.glb.length == 0);   // still a valid (empty-mesh) container
+        assertEquals(0, r.submeshes);
+        assertEquals(0, r.textures);
+        assertEmptyGlb(r.glb);
+    }
+
+    @Test
+    void skeletonAndVertexDataWithoutGeometryYieldEmptyResult() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel()));
+        res.layers.add(new Layer("vbuf2", vbufBones()));
+        assertEmptyGlb(GltfExport.toGlb(res, "rig.res").glb);
     }
 }

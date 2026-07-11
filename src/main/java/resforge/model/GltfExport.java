@@ -236,6 +236,15 @@ public final class GltfExport {
         for(List<Object> t : vbufTargets.values())
             morphCount = Math.max(morphCount, t.size());
 
+        if(primitives.isEmpty()) {
+            Map<String, Object> root = new LinkedHashMap<>();
+            root.put("asset", obj("version", "2.0", "generator", "ResForge"));
+            root.put("scene", 0);
+            root.put("scenes", List.of(new LinkedHashMap<>()));
+            byte[] glb = assembleGlb(Json.write(root), new byte[0]);
+            return new Result(glb, vertices, triangles, submeshes, 0);
+        }
+
         String base = baseName(sourceName);
         List<Object> nodes = new ArrayList<>();
         List<Object> sceneNodes = new ArrayList<>();
@@ -706,7 +715,7 @@ public final class GltfExport {
         byte[] jsonBytes = json.getBytes(StandardCharsets.UTF_8);
         byte[] jsonChunk = pad(jsonBytes, (byte) 0x20);      // pad with spaces
         byte[] binChunk = pad(bin, (byte) 0x00);             // pad with zeros
-        int total = 12 + 8 + jsonChunk.length + 8 + binChunk.length;
+        int total = 12 + 8 + jsonChunk.length + (binChunk.length == 0 ? 0 : 8 + binChunk.length);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream(total);
         le(out, 0x46546C67);                                  // "glTF"
@@ -715,9 +724,11 @@ public final class GltfExport {
         le(out, jsonChunk.length);
         le(out, 0x4E4F534A);                                  // "JSON"
         out.writeBytes(jsonChunk);
-        le(out, binChunk.length);
-        le(out, 0x004E4942);                                  // "BIN\0"
-        out.writeBytes(binChunk);
+        if(binChunk.length > 0) {
+            le(out, binChunk.length);
+            le(out, 0x004E4942);                              // "BIN\0"
+            out.writeBytes(binChunk);
+        }
         return out.toByteArray();
     }
 

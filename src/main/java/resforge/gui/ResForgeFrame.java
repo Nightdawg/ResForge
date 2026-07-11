@@ -393,8 +393,10 @@ public class ResForgeFrame extends JFrame {
         if(target < 0 || target >= res.layers.size())
             return;
         pushUndo();
-        Layer l = res.layers.remove(sel);
-        res.layers.add(target, l);
+        Layer l = res.layers.get(sel);
+        List<Layer> reordered = LayerMoves.move(res.layers, sel, delta);
+        res.layers.clear();
+        res.layers.addAll(reordered);
         model.fireTableDataChanged();
         table.setRowSelectionInterval(target, target);
         markDirty();
