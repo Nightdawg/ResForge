@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **VBUF2 attribute metadata now has one source of truth.** Fixed element counts
+  are shared by the inspector, decoder, and editor; the structure-preserving codec
+  moved to neutral `resforge.vbuf`, removing the `res → model` verifier dependency.
 - **Gradle, Maven, and Ant fat JARs now use the same entry layout.** Classpath
   artifacts explicitly omit dependency root `module-info.class` and Maven-only
   project metadata, producing identical entry-name sets across all three builds.

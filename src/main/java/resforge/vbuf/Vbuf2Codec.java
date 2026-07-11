@@ -1,4 +1,4 @@
-package resforge.model;
+package resforge.vbuf;
 
 import resforge.io.MessageReader;
 import resforge.io.MessageWriter;
@@ -6,7 +6,6 @@ import resforge.io.MessageWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Structure-preserving codec for a {@code vbuf2} layer. It captures each
@@ -37,15 +36,6 @@ public class Vbuf2Codec {
             return !name.endsWith("2");
         }
     }
-
-    private static final Map<String, Integer> ELN = Map.ofEntries(
-            Map.entry("pos", 3), Map.entry("pos2", 3),
-            Map.entry("nrm", 3), Map.entry("nrm2", 3),
-            Map.entry("col", 4), Map.entry("col2", 4),
-            Map.entry("tex", 2), Map.entry("tex2", 2),
-            Map.entry("tan", 3), Map.entry("tan2", 3),
-            Map.entry("bit", 3), Map.entry("bit2", 3),
-            Map.entry("otex", 2), Map.entry("otex2", 2));
 
     public static Vbuf2Codec parse(byte[] payload) {
         Vbuf2Codec d = new Vbuf2Codec();
@@ -105,7 +95,7 @@ public class Vbuf2Codec {
     }
 
     private int elnOf(Attr a) {
-        return ELN.get(a.name);
+        return Vbuf2Format.elements(a.name);
     }
 
     /** The on-wire format string of a formatted attribute ("f4","sn2","uvec1",…),
@@ -298,8 +288,8 @@ public class Vbuf2Codec {
             skipBones(in, name.equals("bones2"));
             return;
         }
-        Integer eln = ELN.get(name);
-        if(eln == null)
+        int eln = Vbuf2Format.elements(name);
+        if(eln < 0)
             throw new IllegalArgumentException("unknown vertex attribute: " + name);
         long cap = (long) num * eln;
         if(name.endsWith("2")) {

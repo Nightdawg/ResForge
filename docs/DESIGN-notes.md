@@ -255,7 +255,8 @@ resforge/
     layers/MeshInfo.java             # mesh index decoder (incl. delta-strip)
     layers/TtoSkip.java              # generic tto value skipper
     model/Vbuf2Data.java             # vbuf2 -> de-quantised vertex arrays (export)
-    model/Vbuf2Codec.java            # structure-preserving vbuf2 decode/encode (+edit/rebuild)
+    vbuf/Vbuf2Format.java            # shared fixed attribute element counts
+    vbuf/Vbuf2Codec.java             # structure-preserving vbuf2 decode/encode (+edit/rebuild)
     model/GltfExport.java            # 3D model -> Blender-ready binary glTF (.glb)
     model/GltfImport.java            # edited .glb -> .res (topology rebuild)
   src/test/java/resforge/
@@ -531,7 +532,7 @@ layers remain lossless raw `.bin`.
    norm formats are lossy, so a faithful round-trip must preserve the exact
    per-attribute format the original used (record it, don't re-derive).
 
-### What is built for the write path (`model/Vbuf2Codec.java`)
+### What is built for the write path (`vbuf/Vbuf2Codec.java`)
 
 A **structure-preserving** `vbuf2` codec captures each attribute's exact data
 bytes, so an *unchanged* buffer re-encodes **byte-identically** — verified on all

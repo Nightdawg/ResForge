@@ -22,7 +22,7 @@ import resforge.layers.SkelInfo;
 import resforge.layers.SrcInfo;
 import resforge.layers.TexInfo;
 import resforge.layers.Vbuf2Info;
-import resforge.model.Vbuf2Codec;
+import resforge.vbuf.Vbuf2Codec;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;

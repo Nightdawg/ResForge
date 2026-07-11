@@ -1,6 +1,7 @@
 package resforge.model;
 
 import resforge.io.MessageReader;
+import resforge.vbuf.Vbuf2Format;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,15 +24,6 @@ public class Vbuf2Data {
     public String[] boneNames;                         // influence-index -> bone name
     public int[] vJoints;                              // num*4 influence-indices (into boneNames; padded with 0)
     public float[] vWeights;                           // num*4 weights (padded with 0)
-
-    private static final Map<String, Integer> ELN = Map.ofEntries(
-            Map.entry("pos", 3), Map.entry("pos2", 3),
-            Map.entry("nrm", 3), Map.entry("nrm2", 3),
-            Map.entry("col", 4), Map.entry("col2", 4),
-            Map.entry("tex", 2), Map.entry("tex2", 2),
-            Map.entry("tan", 3), Map.entry("tan2", 3),
-            Map.entry("bit", 3), Map.entry("bit2", 3),
-            Map.entry("otex", 2), Map.entry("otex2", 2));
 
     /** Normalised lookup: returns the float array for a base name (e.g. "pos"),
      *  whether it was stored bare or formatted ("pos" or "pos2"). */
@@ -57,7 +49,7 @@ public class Vbuf2Data {
                 if(d.ver >= 1) {
                     int sublen = in.int32();
                     int at = in.position();
-                    if(ELN.containsKey(name)) {
+                    if(Vbuf2Format.elements(name) >= 0) {
                         MessageReader sub = new MessageReader(payload, at, sublen);
                         d.attribs.put(name, decodeAttr(sub, name, d.num));
                     } else if(name.equals("bones") || name.equals("bones2")) {
@@ -71,8 +63,8 @@ public class Vbuf2Data {
                     parseBones(d, in, name.equals("bones2"), d.num);
                     continue;
                 }
-                Integer eln = ELN.get(name);
-                if(eln == null)
+                int eln = Vbuf2Format.elements(name);
+                if(eln < 0)
                     break;
                 d.attribs.put(name, decodeAttr(in, name, d.num));
             }
@@ -83,7 +75,7 @@ public class Vbuf2Data {
     }
 
     private static float[] decodeAttr(MessageReader in, String name, int num) {
-        int eln = ELN.get(name);
+        int eln = Vbuf2Format.elements(name);
         float[] dst = new float[num * eln];
         if(name.endsWith("2")) {
             in.uint8();                 // data version (== 1)

@@ -7,7 +7,7 @@ import resforge.layers.MeshInfo;
 import resforge.layers.SkelInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
-import resforge.model.Vbuf2Codec;
+import resforge.vbuf.Vbuf2Codec;
 import resforge.model.Vbuf2Data;
 import resforge.res.Layer;
 import resforge.res.ResContainer;

@@ -7,6 +7,7 @@ import resforge.layers.MeshInfo;
 import resforge.layers.SkelInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
+import resforge.vbuf.Vbuf2Codec;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

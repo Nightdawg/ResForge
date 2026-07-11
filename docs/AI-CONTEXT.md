@@ -123,6 +123,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   no `../`/absolute traversal), `Replacer`
   (one-shot swap), `Verifier` (batch round-trip + histograms), `Catalog` (folder
   listing), `References` (aggregate the external resources a `.res` references).
+- `vbuf/` — `Vbuf2Format` (shared fixed attribute element counts) and
+  `Vbuf2Codec` (structure-preserving vbuf2 encode with general per-attribute
+  `decodeAttr`/`setAttr` re-quantisation). This neutral package is shared by
+  `res` verification and `model` editing without creating a package cycle.
 - `layers/` — read/locate decoders: `ImageInfo`, `TexInfo`, `AudioInfo`, `FontInfo`,
   `ImageMagic`, `Vbuf2Info`, `MeshInfo`, `TtoSkip`, `CodeInfo`, `CodeEntryInfo`,
   `DepsInfo`, `RLinkInfo`, `SrcInfo`, `LightInfo`, `SkelInfo`, `SkanInfo`,
@@ -159,9 +163,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   toggle can texture those parts; `hasExternalStatic(res)` is an offline (no-fetch) check
   the viewer uses to show that toggle only when a model has such materials; runtime
   varmat / `Dyntex` stay shaded),
-  `Vbuf2Codec` (structure-preserving vbuf2 encode, with general per-attribute
-  `decodeAttr`/`setAttr` re-quantisation), `M4` (column-major 4×4 maths),
-  `GltfExport` (geometry → Blender-ready binary glTF `.glb`, with both UV sets,
+  `M4` (column-major 4×4 maths), `GltfExport` (geometry → Blender-ready binary
+  glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
   `WEIGHTS_0` — dependency-free),
   `GltfImport.rebuild` (regenerate `vbuf2`+`mesh`(+`bones2`/`bones`/`manim`) from an

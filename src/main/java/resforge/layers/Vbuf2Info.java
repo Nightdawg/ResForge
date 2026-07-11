@@ -1,10 +1,10 @@
 package resforge.layers;
 
 import resforge.io.MessageReader;
+import resforge.vbuf.Vbuf2Format;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Read-only inspector for a {@code vbuf2} (vertex buffer) layer — reports the
@@ -39,15 +39,6 @@ public class Vbuf2Info {
     public String stoppedAt;                     // first attribute the walk could not size, or null
     public boolean fullyWalked;                  // reached end-of-message cleanly
 
-    private static final Map<String, Integer> ELN = Map.ofEntries(
-            Map.entry("pos", 3), Map.entry("pos2", 3),
-            Map.entry("nrm", 3), Map.entry("nrm2", 3),
-            Map.entry("col", 4), Map.entry("col2", 4),
-            Map.entry("tex", 2), Map.entry("tex2", 2),
-            Map.entry("tan", 3), Map.entry("tan2", 3),
-            Map.entry("bit", 3), Map.entry("bit2", 3),
-            Map.entry("otex", 2), Map.entry("otex2", 2));
-
     public static Vbuf2Info parse(byte[] payload) {
         Vbuf2Info vi = new Vbuf2Info();
         try {
@@ -75,8 +66,8 @@ public class Vbuf2Info {
                     vi.attribs.add(name + "(" + wfmt + ")");
                     continue;
                 }
-                Integer eln = ELN.get(name);
-                if(eln == null) {
+                int eln = Vbuf2Format.elements(name);
+                if(eln < 0) {
                     vi.stoppedAt = name;
                     return vi;
                 }

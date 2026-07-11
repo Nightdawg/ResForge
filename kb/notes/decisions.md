@@ -32,6 +32,14 @@ stays raw and offers only Replace/Export actions.
 Editing replaces a layer object rather than mutating it. That makes GUI undo/redo
 cheap: snapshot the layer list before each edit and restore on undo.
 
+## VBUF2 format metadata lives in a neutral package
+Fixed attribute element counts (`pos`/`nrm`/`tan`/`bit` = 3, `col` = 4,
+`tex`/`otex` = 2, for bare and `2` forms) live only in
+`resforge.vbuf.Vbuf2Format`. The structure-preserving `Vbuf2Codec` is in the same
+neutral package. Inspectors, model decoding/editing, and real-corpus verification
+all depend on it, so `res` no longer imports `model` and the old package cycle is
+gone.
+
 ## Triple build (Gradle + Maven + Ant)
 Gradle (`./gradlew`, output `build-gradle/`), Maven (`mvn package`, output
 `build-maven/`) and Ant (`ant`, output `build-ant/`) all build the same sources,

@@ -1,7 +1,7 @@
 package resforge;
 
 import resforge.io.MessageWriter;
-import resforge.model.Vbuf2Codec;
+import resforge.vbuf.Vbuf2Codec;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
