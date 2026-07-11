@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **The software 3D renderer now interpolates z-buffer depth correctly.**
+  Reciprocal depth is interpolated in screen space, matching perspective projection,
+  so overlapping oblique triangles no longer resolve in the wrong order.
 - **Unpack manifests are now published atomically.** `manifest.txt` is still
   written after all layer parts, but now uses the same temporary-file-and-rename
   path as resource output so interruption cannot leave a truncated manifest.

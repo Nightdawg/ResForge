@@ -119,4 +119,24 @@ class Model3DViewTest {
         assertTrue(bluish(swapped) > 0, "after picking the alternate, the blue texture is drawn");
         assertEquals(0, reddish(swapped), "the red texture is gone once switched");
     }
+
+    @Test
+    void obliqueTriangleDepthBeatsFlatTriangleAtCentroid() {
+        double oneThird = 1.0 / 3.0;
+        double[] oblique = {1.0, 10.0, 10.0};
+        double[] flat = {3.0, 3.0, 3.0};
+
+        double incorrectLinearOblique = (oblique[0] + oblique[1] + oblique[2]) / 3.0;
+        assertTrue(incorrectLinearOblique > 3.0,
+                "linear interpolation would incorrectly put the flat triangle in front");
+
+        float obliqueDepth =
+                Model3DView.perspectiveDepth(oneThird, oneThird, oneThird, oblique);
+        float flatDepth =
+                Model3DView.perspectiveDepth(oneThird, oneThird, oneThird, flat);
+        assertEquals(2.5f, obliqueDepth, 1e-6f);
+        assertEquals(3.0f, flatDepth, 1e-6f);
+        assertTrue(obliqueDepth < flatDepth,
+                "reciprocal depth correctly puts the oblique triangle in front");
+    }
 }

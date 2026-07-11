@@ -202,7 +202,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   obsolete layer keys are removed on replace/delete and pruned on undo/redo),
   `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle
   rasteriser into a `BufferedImage`, two-sided Lambert head-light shading,
-  **perspective-correct texture mapping** (local textures, alpha-mask cutout) + optional
+  **perspective-correct texture mapping and reciprocal z-buffer depth** (local textures,
+  alpha-mask cutout) + optional
   wireframe, mouse orbit/zoom/pan; no native libs/OpenGL, fed by `model/ModelGeometry`
   + `model/LocalTextures`. Carries the full local-texture **palette** + a per-material
   default + a `localBase` flag; `setMaterialTexture(matIndex, paletteOrd)` re-points a

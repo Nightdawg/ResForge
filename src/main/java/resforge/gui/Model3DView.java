@@ -264,14 +264,14 @@ final class Model3DView extends JPanel {
                 double l2 = 1 - l0 - l1;
                 if(l0 < 0 || l1 < 0 || l2 < 0)
                     continue;
-                float depth = (float) (l0 * z[0] + l1 * z[1] + l2 * z[2]);
+                double izp = l0 * iz0 + l1 * iz1 + l2 * iz2;
+                float depth = perspectiveDepth(l0, l1, l2, z);
                 int zi = py * w + px;
                 if(depth >= zbuf[zi])
                     continue;
                 double it = l0 * in[0] + l1 * in[1] + l2 * in[2];
                 int br, bg, bb;
                 if(tex) {
-                    double izp = l0 * iz0 + l1 * iz1 + l2 * iz2;
                     double uu = (l0 * uoz0 + l1 * uoz1 + l2 * uoz2) / izp;
                     double vv = (l0 * voz0 + l1 * voz1 + l2 * voz2) / izp;
                     uu -= Math.floor(uu);                 // wrap
@@ -304,6 +304,11 @@ final class Model3DView extends JPanel {
                 pix[zi] = (r << 16) | (g << 8) | b;
             }
         }
+
+    }
+
+    static float perspectiveDepth(double l0, double l1, double l2, double[] z) {
+        return (float) (1.0 / (l0 / z[0] + l1 / z[1] + l2 / z[2]));
     }
 
     private void drawTriEdges(int w, int h, double[] x, double[] y) {
