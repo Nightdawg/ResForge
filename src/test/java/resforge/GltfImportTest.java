@@ -439,6 +439,11 @@ class GltfImportTest {
     }
 
     private static byte[] geomGlbMorph(float[] pos, float[] nrm, float[] tex, int[] indices, float[] morph) {
+        return geomGlbMorph(pos, nrm, tex, indices, morph, null);
+    }
+
+    private static byte[] geomGlbMorph(float[] pos, float[] nrm, float[] tex, int[] indices,
+                                       float[] morph, String extraJson) {
         int m = pos.length / 3;
         int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2, mLen = m * 12;
         MessageWriter bin = new MessageWriter();
@@ -466,7 +471,8 @@ class GltfImportTest {
                 + "{\"bufferView\":3,\"componentType\":5123,\"count\":" + indices.length + ",\"type\":\"SCALAR\"},"
                 + "{\"bufferView\":4,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"}],"
                 + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},"
-                + "\"indices\":3,\"targets\":[{\"POSITION\":4}]}]}]}";
+                + "\"indices\":3,\"targets\":[{\"POSITION\":4}]}]}]"
+                + (extraJson == null ? "" : "," + extraJson) + "}";
         byte[] jb = json.getBytes(StandardCharsets.UTF_8);
         byte[] jpad = pad(jb, (byte) 0x20);
         byte[] bb = bin.toByteArray();
@@ -505,6 +511,39 @@ class GltfImportTest {
         assertEquals(0.5f, f0.pos[q * 3], 1e-2f);
         assertEquals(0.5f, f0.pos[q * 3 + 1], 1e-2f);
         assertEquals(0.5f, f0.pos[q * 3 + 2], 1e-2f);
+    }
+
+    @Test
+    void rebuildAppliesNodeRotationAndScaleToMorphDeltasWithoutTranslation() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("manim", manim1(0, 1.0f)));
+
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0};
+        float[] nrm = {0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tex = {0, 0,  1, 0,  0, 1};
+        int[] indices = {0, 1, 2};
+        float[] morph = {0, 0, 0,  0.5f, 1.0f, -0.5f,  0, 0, 0};
+        String nodes = "\"nodes\":[{\"mesh\":0,\"translation\":[10,20,30],"
+                + "\"rotation\":[0,0,0.7071067811865476,0.7071067811865476],"
+                + "\"scale\":[2,3,4]}],\"scenes\":[{\"nodes\":[0]}],\"scene\":0";
+
+        GltfImport.RebuildResult rebuilt = GltfImport.rebuild(res.serialize(),
+                geomGlbMorph(pos, nrm, tex, indices, morph, nodes));
+        MeshAnimInfo.Frame frame = MeshAnimInfo.parse(
+                manimLayer(ResContainer.parse(rebuilt.res))).frames.get(0);
+        int vertex = -1;
+        for(int i = 0; i < frame.idx.length; i++)
+            if(frame.idx[i] == 1)
+                vertex = i;
+
+        assertTrue(vertex >= 0);
+        // Scale -> (1,3,-2), rotate +90 degrees around glTF Z -> (-3,1,-2),
+        // then glTF Y-up -> Haven Z-up gives (-3,2,1). Translation must not apply.
+        assertEquals(-3f, frame.pos[vertex * 3], 1e-2f);
+        assertEquals(2f, frame.pos[vertex * 3 + 1], 1e-2f);
+        assertEquals(1f, frame.pos[vertex * 3 + 2], 1e-2f);
     }
 
     private static byte[] meshLayerBytes(ResContainer res) {

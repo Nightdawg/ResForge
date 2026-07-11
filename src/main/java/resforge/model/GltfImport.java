@@ -180,7 +180,7 @@ public final class GltfImport {
                     cWeights.add(readVec(g, a, "WEIGHTS_0", 4, "skinning weights"));
                 }
                 if(hasManim)
-                    readMorphChunks(g, prim, cnt, tChunks, targetN);
+                    readMorphChunks(g, prim, cnt, tChunks, targetN, m);
                 offset = total;
                 posOffset.put(posAcc, offset);
                 total += cnt;
@@ -387,9 +387,11 @@ public final class GltfImport {
         return new double[]{r[0] / l, r[1] / l, r[2] / l};
     }
 
-    /** Reads this primitive's morph-target POSITION deltas (axis-inverted) into the per-target chunk lists. */
+    /** Reads this primitive's morph-target POSITION deltas, applying the node's
+     *  rotation/scale without translation, then axis-inverting into Haven space. */
     private static void readMorphChunks(Glb g, Map<String, Object> prim, int cnt,
-                                        List<List<float[]>> tChunks, int[] targetN) {
+                                        List<List<float[]>> tChunks, int[] targetN,
+                                        double[] matrix) {
         Object tg = prim.get("targets");
         if(tg == null)
             throw new IllegalArgumentException(
@@ -405,7 +407,10 @@ public final class GltfImport {
         for(int t = 0; t < targetN[0]; t++) {
             Object pa = ((Map<?, ?>) targets.get(t)).get("POSITION");
             float[] td = (pa == null) ? new float[cnt * 3]
-                    : axisInvert(readAccessor(g, ((Number) pa).intValue(), 3));
+                    : readAccessor(g, ((Number) pa).intValue(), 3);
+            if(matrix != null)
+                applyVectorMatrix(td, matrix);
+            td = axisInvert(td);
             if(td.length != cnt * 3)
                 td = java.util.Arrays.copyOf(td, cnt * 3);
             tChunks.get(t).add(td);
@@ -920,6 +925,16 @@ public final class GltfImport {
             p[i]     = (float) (m[0] * x + m[4] * y + m[8] * z + m[12]);
             p[i + 1] = (float) (m[1] * x + m[5] * y + m[9] * z + m[13]);
             p[i + 2] = (float) (m[2] * x + m[6] * y + m[10] * z + m[14]);
+        }
+    }
+
+    /** Applies a column-major matrix's linear 3x3 (w=0) to xyz deltas, in place. */
+    private static void applyVectorMatrix(float[] vectors, double[] matrix) {
+        for(int i = 0; i + 2 < vectors.length; i += 3) {
+            double x = vectors[i], y = vectors[i + 1], z = vectors[i + 2];
+            vectors[i] = (float) (matrix[0] * x + matrix[4] * y + matrix[8] * z);
+            vectors[i + 1] = (float) (matrix[1] * x + matrix[5] * y + matrix[9] * z);
+            vectors[i + 2] = (float) (matrix[2] * x + matrix[6] * y + matrix[10] * z);
         }
     }
 

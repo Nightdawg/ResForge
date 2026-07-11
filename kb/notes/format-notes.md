@@ -327,7 +327,10 @@ rotated or scaled without "Apply Transform", that transform lives on the glTF no
 (translation/rotation/scale or a `matrix`), not in the vertex data. `rebuild` walks
 the scene node tree, accumulates each mesh node's world matrix, and applies it to
 that primitive's positions (and to normals via the inverse-transpose 3×3, then
-renormalised) before axis-inverting — so the edit isn't silently dropped. Identity
+renormalised). Morph position deltas receive the same matrix's linear 3×3
+(rotation/scale, no translation) before axis inversion, since deltas are vectors
+rather than points. This keeps transformed shape keys in the same frame as their
+base mesh. Identity
 nodes (and our own exporter's output, which has none) change nothing. Skinned meshes
 are skipped (glTF ignores a skinned mesh's node transform; vertices live in skin
 space). Skinning weights are also **renormalised per vertex** after any glTF joint

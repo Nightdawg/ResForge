@@ -164,8 +164,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   tangents and re-poses the `skel` skeleton, keeping all other layers; allows
   reshaped/added/removed geometry, not byte-lossless). Rebuild **bakes un-applied
   glTF node transforms** (a Blender object moved/scaled/rotated without "Apply
-  Transform") into positions (and normals via the inverse-transpose) instead of
-  dropping them; **renormalizes** skin weights after dropping joints that don't map;
+  Transform") into positions, normals via the inverse-transpose, and morph deltas
+  via rotation/scale without translation instead of dropping them; **renormalizes**
+  skin weights after dropping joints that don't map;
   and **validates** its glТF input (GLB/JSON/BIN chunk bounds, accessor in-range,
   triangle-mode + index range, `setAttr` length, and **non-finite vertex values** —
   a NaN/Inf coordinate is rejected because it would otherwise poison a quantised
