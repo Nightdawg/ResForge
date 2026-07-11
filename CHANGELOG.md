@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Gradle, Maven, and Ant fat JARs now use the same entry layout.** Classpath
+  artifacts explicitly omit dependency root `module-info.class` and Maven-only
+  project metadata, producing identical entry-name sets across all three builds.
 - **The software 3D renderer now interpolates z-buffer depth correctly.**
   Reciprocal depth is interpolated in screen space, matching perspective projection,
   so overlapping oblique triangles no longer resolve in the wrong order.

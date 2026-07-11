@@ -27,9 +27,14 @@
     <property name="src.dir"         value="src/main/java"/>
     <property name="test.src.dir"    value="src/test/java"/>
     <property name="lib.dir"         value="lib"/>
+    <property name="jorbis.jar"      value="${lib.dir}/jorbis-0.0.17.jar"/>
+    <property name="jna.jar"         value="${lib.dir}/jna-5.15.0.jar"/>
+    <property name="jna-platform.jar" value="${lib.dir}/jna-platform-5.15.0.jar"/>
+    <property name="flatlaf.jar"     value="${lib.dir}/flatlaf-3.7.2.jar"/>
 
     <property name="build.dir"       value="build-ant"/>
     <property name="classes.dir"     value="${build.dir}/classes"/>
+    <property name="runtime.classes.dir" value="${build.dir}/runtime-classes"/>
     <property name="test.classes.dir" value="${build.dir}/test-classes"/>
     <property name="jar.dir"         value="${build.dir}/libs"/>
     <property name="test.reports.dir" value="${build.dir}/test-results"/>
@@ -43,7 +48,10 @@
     <!-- Runtime libraries bundled into the app: the JOrbis Ogg-Vorbis decoder,
          JNA (the modern Windows COM file dialog) and FlatLaf (the GUI themes). -->
     <path id="runtime.libs">
-        <fileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar,flatlaf-*.jar"/>
+        <pathelement location="${jorbis.jar}"/>
+        <pathelement location="${jna.jar}"/>
+        <pathelement location="${jna-platform.jar}"/>
+        <pathelement location="${flatlaf.jar}"/>
     </path>
 
     <target name="clean" description="Remove the Ant build output">
@@ -59,12 +67,29 @@
         </javac>
     </target>
 
-    <target name="jar" depends="compile" description="Build the runnable jar">
+    <target name="unpack-runtime" description="Merge runtime libraries into a canonical classpath layout">
+        <delete dir="${runtime.classes.dir}"/>
+        <mkdir dir="${runtime.classes.dir}"/>
+        <unzip src="${jorbis.jar}" dest="${runtime.classes.dir}">
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+        </unzip>
+        <unzip src="${jna.jar}" dest="${runtime.classes.dir}">
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+        </unzip>
+        <unzip src="${jna-platform.jar}" dest="${runtime.classes.dir}">
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+        </unzip>
+        <unzip src="${flatlaf.jar}" dest="${runtime.classes.dir}">
+            <patternset excludes="module-info.class,META-INF/MANIFEST.MF"/>
+        </unzip>
+    </target>
+
+    <target name="jar" depends="compile,unpack-runtime" description="Build the runnable jar">
         <mkdir dir="${jar.dir}"/>
         <jar destfile="${jar.file}">
             <fileset dir="${classes.dir}"/>
+            <fileset dir="${runtime.classes.dir}"/>
             <!-- Fold the JOrbis decoder, JNA and FlatLaf classes/natives in so `java -jar` works standalone. -->
-            <zipgroupfileset dir="${lib.dir}" includes="jorbis-*.jar,jna-*.jar,flatlaf-*.jar"/>
             <manifest>
                 <attribute name="Main-Class" value="${main.class}"/>
             </manifest>

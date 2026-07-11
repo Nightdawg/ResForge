@@ -47,5 +47,8 @@ tasks.named('jar') {
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }
+    // Classpath fat jars are not Java modules; dependency root descriptors would
+    // describe the dependency rather than this merged artifact.
+    exclude 'module-info.class'
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }

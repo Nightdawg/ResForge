@@ -36,7 +36,10 @@ cheap: snapshot the layer list before each edit and restore on undo.
 Gradle (`./gradlew`, output `build-gradle/`), Maven (`mvn package`, output
 `build-maven/`) and Ant (`ant`, output `build-ant/`) all build the same sources,
 run the same JUnit 5 tests, and produce the same runnable fat jar (JOrbis folded
-in). Each writes to its own directory so they never clash. Ant's default target
+in). The canonical classpath layout excludes root `module-info.class` descriptors
+(which would describe a dependency, not the merged app) and Maven's project metadata;
+fresh builds have identical entry-name sets, though ZIP ordering/timestamps/compression
+can still differ. Each writes to its own directory so they never clash. Ant's default target
 is `jar` (no tests); `ant build` runs tests too (needs Ant 1.10+ for
 `junitlauncher`); `ant gui` launches the app. Gradle and Maven fetch JUnit (and
 Maven its plugins) from Maven Central; Ant uses the vendored `lib/` jars and needs

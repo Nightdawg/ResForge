@@ -41,8 +41,10 @@ a sibling project at `../hafen-client`).
   `:jna-platform` 5.15.0 (dual LGPL-2.1+/Apache-2.0) — Windows-only, drives the modern
   Explorer file dialog (`gui/WinFileDialogs`), with a `FileDialog` fallback elsewhere.
   Both are vendored in `lib/` (Gradle/Ant) or pulled from Central (Maven), folded into
-  the jar by all three (Gradle fat-jar via runtimeClasspath; Ant `zipgroupfileset`;
-  Maven shade). The CLI never uses either.
+  the jar by all three (Gradle fat-jar via runtimeClasspath; Ant merged runtime staging;
+  Maven Shade). All three omit dependency root `module-info.class` and Maven-only
+  project metadata, yielding one canonical fat-JAR entry-name set. The CLI never uses
+  either.
 - **License:** project is **MIT** (`LICENSE`, Copyright Nightdawg). Bundled JOrbis
   stays **LGPL**, bundled JNA stays **LGPL-2.1+/Apache-2.0**, and the
   `docs/reference/*.java` client files stay **LGPL-3** — all documented in
