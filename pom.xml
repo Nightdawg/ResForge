@@ -4,11 +4,11 @@
 
   This mirrors what the Gradle and Ant builds do: compile the same sources with
   JDK 21, run the JUnit 5 tests, and produce a runnable "fat" jar that bundles
-  the JOrbis Ogg-Vorbis decoder. Output goes to build-maven/ (not Maven's usual
+  JOrbis, JNA and FlatLaf. Output goes to build-maven/ (not Maven's usual
   target/) so it never clashes with build-gradle/ or build-ant/.
 
   Common commands (Maven fetches its plugins + dependencies from Maven Central):
-    mvn package         compile + run tests + build the jar -> build-maven/resforge-1.0.0.jar
+    mvn package         compile + run tests + build the jar -> build-maven/resforge-1.1.0.jar
     mvn test            compile and run the JUnit 5 tests
     mvn compile         compile main sources only
     mvn clean           remove build-maven/

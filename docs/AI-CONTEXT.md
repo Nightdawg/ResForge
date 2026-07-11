@@ -36,17 +36,21 @@ a sibling project at `../hafen-client`).
 - **Runnable jar:** `build-gradle/libs/` or `build-ant/libs/` or `build-maven/`,
   all `resforge-1.1.0.jar`. Use the jar (not `gradlew/ant run`) for paths with
   spaces — `--args`/`-Dargs` mangle them.
-- **Runtime dependencies (two):** `org.jcraft:jorbis` 0.0.17 (LGPL, ~97 KB, bundles
-  `jogg`+`jorbis`) — the GUI's Ogg player; and **JNA** `net.java.dev.jna:jna` +
+- **Runtime dependency components (three; four jars):** `org.jcraft:jorbis` 0.0.17
+  (LGPL, ~97 KB, bundles `jogg`+`jorbis`) — the GUI's Ogg player; **JNA**
+  `net.java.dev.jna:jna` +
   `:jna-platform` 5.15.0 (dual LGPL-2.1+/Apache-2.0) — Windows-only, drives the modern
-  Explorer file dialog (`gui/WinFileDialogs`), with a `FileDialog` fallback elsewhere.
-  Both are vendored in `lib/` (Gradle/Ant) or pulled from Central (Maven), folded into
-  the jar by all three (Gradle fat-jar via runtimeClasspath; Ant merged runtime staging;
-  Maven Shade). All three omit dependency root `module-info.class` and Maven-only
+  Explorer file dialog (`gui/WinFileDialogs`), with a `FileDialog` fallback elsewhere;
+  and **FlatLaf** `com.formdev:flatlaf` 3.7.2 (Apache-2.0) — Swing light/dark themes.
+  JOrbis is vendored for Gradle/Ant and pulled from Central by Maven; JNA and FlatLaf
+  are pulled from Central by Gradle/Maven and vendored for Ant. All are folded into
+  the jar (Gradle fat-jar via runtimeClasspath; Ant merged runtime staging; Maven
+  Shade). All three omit dependency root `module-info.class` and Maven-only
   project metadata, yielding one canonical fat-JAR entry-name set. The CLI never uses
   either.
 - **License:** project is **MIT** (`LICENSE`, Copyright Nightdawg). Bundled JOrbis
-  stays **LGPL**, bundled JNA stays **LGPL-2.1+/Apache-2.0**, and the
+  stays **LGPL**, bundled JNA stays **LGPL-2.1+/Apache-2.0**, FlatLaf stays
+  **Apache-2.0**, and the
   `docs/reference/*.java` client files stay **LGPL-3** — all documented in
   `THIRD-PARTY-NOTICES.md` (keep those notices on redistribution).
   Only the core JOrbis decoder is used, never the GPL JOrbisPlayer.

@@ -43,7 +43,7 @@ tasks.named('jar') {
     manifest {
         attributes 'Main-Class': 'resforge.Main'
     }
-    // Fat jar: fold the bundled Ogg-decoder (jorbis) classes in so `java -jar` works.
+    // Fat jar: fold JOrbis, JNA and FlatLaf classes in so `java -jar` works.
     from {
         configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
     }

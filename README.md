@@ -194,8 +194,8 @@ skinning, skeleton rest pose and morph shapes all round-trip.
 
 Requires JDK 21. There are three equivalent builds — use whichever you prefer;
 all compile the same sources, run the same JUnit 5 tests, and produce the same
-runnable fat jar (the JOrbis Ogg decoder and JNA folded in). Each writes to its own
-output directory so they never clash.
+runnable fat jar (JOrbis, JNA and FlatLaf folded in). Each writes to its own output
+directory so they never clash.
 
 **Gradle** (bundled wrapper, auto-downloads dependencies):
 
@@ -391,8 +391,10 @@ notably the **LGPL** [JOrbis](http://www.jcraft.com/jorbis/) Ogg/Vorbis decoder
 (shipped standalone as `lib/jorbis-0.0.17.jar` and folded into the fat jar for
 convenience), **[JNA](https://github.com/java-native-access/jna)** (dual-licensed
 **LGPL-2.1+ / Apache-2.0**, folded in; used only on Windows to show the modern
-Explorer file dialog), and the **LGPL-3** Haven & Hearth client sources kept for
-reference under [`docs/reference/`](docs/reference/) (not compiled into the tool).
+Explorer file dialog), **[FlatLaf](https://www.formdev.com/flatlaf/)** (Apache-2.0,
+folded in for the light/dark Swing themes), and the **LGPL-3** Haven & Hearth client
+sources kept for reference under [`docs/reference/`](docs/reference/) (not compiled
+into the tool).
 Those remain under their respective licenses; see
 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). If you redistribute ResForge,
 keep those notices intact.
