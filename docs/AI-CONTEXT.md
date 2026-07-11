@@ -334,7 +334,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   glTF**) regenerates `vbuf2`+`mesh`(+`bones2`/`bones`+`manim`) from the edited glTF at
   its own vertex count, so you can reshape, re-UV, add, remove or re-topologize vertices
   and faces (and whole parts). It re-quantises positions/normals/both UV sets into each
-  attribute's *original* on-wire format (f4/sn2/un2/uvec1…) and axis-inverts (Y-up→Z-up),
+  attribute's *original* on-wire format (`f4/f2/f1`, `sn/un/rn` widths,
+  `sf9995`, `uvech/uvec1/uvec2`) and axis-inverts (Y-up→Z-up),
   while keeping every other layer (materials, textures, code). It needs no per-vertex ids
   and isn't byte-lossless (in-game-validated). **Multi-submesh works**: each glTF primitive
   becomes a submesh; the export emits one material per matid (`rfmat_<matid>`) so

@@ -272,7 +272,10 @@ geometry from the glTF, so you can reshape, re-UV, add, remove or re-topologize
 vertices and faces in
 Blender. It rebuilds `vbuf2` at the glTF's vertex count — positions/normals/UVs
 re-quantised into the original attribute formats (via `Vbuf2Codec.setAttr` after
-setting `num`), and `bones2`/legacy `bones` from `JOINTS_0`/`WEIGHTS_0` (joints mapped
+setting `num`). The editable encoder covers every format the reader accepts:
+`f4/f2/f1`, `sn/un/rn` in 4/2/1-byte widths, `sf9995`, and
+`uvech/uvec1/uvec2`. Skinning rebuilds `bones2`/legacy `bones` from
+`JOINTS_0`/`WEIGHTS_0` (joints mapped
 to bone names via the skin, then `Vbuf2Codec.setBones2`, which re-encodes either the
 modern `bones2` header or the legacy `bones` header with `f4` weights) — and writes a
 fresh raw-index `mesh`

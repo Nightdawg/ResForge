@@ -1,6 +1,7 @@
 package resforge;
 
 import resforge.io.Json;
+import resforge.io.MessageReader;
 import resforge.io.MessageWriter;
 import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
@@ -215,6 +216,39 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    private static byte[] vbufFormats(String posFormat, String nrmFormat, String texFormat) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0).uint16(3);
+        formattedZeros(w, "pos2", posFormat, 9);
+        formattedZeros(w, "nrm2", nrmFormat, 9);
+        formattedZeros(w, "tex2", texFormat, 6);
+        return w.toByteArray();
+    }
+
+    private static void formattedZeros(MessageWriter w, String name, String format, int count) {
+        w.string(name).uint8(1).string(format);
+        switch(format) {
+            case "f4": for(int i = 0; i < count; i++) w.float32(0); break;
+            case "f1": for(int i = 0; i < count; i++) w.int8(0); break;
+            case "sf9995": for(int i = 0; i < count / 3; i++) w.int32(0); break;
+            case "rn4":
+                w.float32(0).float32(0);
+                for(int i = 0; i < count; i++) w.int32(0);
+                break;
+            case "rn2":
+                w.float32(0).float32(0);
+                for(int i = 0; i < count; i++) w.uint16(0);
+                break;
+            case "rn1":
+                w.float32(0).float32(0);
+                for(int i = 0; i < count; i++) w.uint8(0);
+                break;
+            case "uvech": for(int i = 0; i < count / 3; i++) w.uint8(0); break;
+            case "uvec1": for(int i = 0; i < count / 3; i++) w.int8(0).int8(0); break;
+            default: throw new AssertionError(format);
+        }
+    }
+
     @Test
     void rebuildAcceptsAddedVertices() {
         ResContainer res = new ResContainer(7);
@@ -243,6 +277,45 @@ class GltfImportTest {
         // other layers kept
         assertEquals(3, out.layers.size());
         assertEquals("tex", out.layers.get(0).name);
+    }
+
+    @Test
+    void rebuildSupportsAllPreviouslyReadOnlyVertexFormats() {
+        String[][] formats = {
+                {"f1", "uvech", "rn1"},
+                {"sf9995", "uvec1", "rn2"},
+                {"f4", "uvec1", "rn4"}
+        };
+        float[] pos = {0, 0, 0,  1, 0, 0,  0, 1, 0};
+        float[] nrm = {0, 0, 1,  0, 0, 1,  0, 0, 1};
+        float[] tex = {0, 0,  1, 0,  0, 1};
+
+        for(String[] format : formats) {
+            ResContainer res = new ResContainer(7);
+            res.layers.add(new Layer("vbuf2",
+                    vbufFormats(format[0], format[1], format[2])));
+            res.layers.add(new Layer("mesh", mesh(-1)));
+
+            GltfImport.RebuildResult rebuilt = GltfImport.rebuild(res.serialize(),
+                    geomGlb(pos, nrm, tex, new int[]{0, 1, 2}));
+            Vbuf2Codec codec = Vbuf2Codec.parse(
+                    vbufLayer(ResContainer.parse(rebuilt.res)));
+
+            assertEquals(format[0], attrFormat(codec.attr("pos")));
+            assertEquals(format[1], attrFormat(codec.attr("nrm")));
+            assertEquals(format[2], attrFormat(codec.attr("tex")));
+            assertEquals(1.0f, codec.decodeAttr("pos")[3],
+                    format[0].equals("f1") ? 0.13f : 0.01f);
+            assertEquals(-1.0f, codec.decodeAttr("nrm")[1], 0.01f);
+            assertEquals(1.0f, codec.decodeAttr("tex")[2],
+                    format[2].equals("rn1") ? 0.01f : 0.001f);
+        }
+    }
+
+    private static String attrFormat(Vbuf2Codec.Attr attr) {
+        MessageReader reader = new MessageReader(attr.data);
+        reader.uint8();
+        return reader.string();
     }
 
     /**

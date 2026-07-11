@@ -342,20 +342,7 @@ public class Vbuf2Codec {
     /* ---- position de/re-quantisation (signed formats + f4, which positions use) ---- */
 
     private static void readFmt(MessageReader in, String fmt, float[] dst) {
-        int cap = dst.length;
-        switch(fmt) {
-            case "f4":
-                for(int i = 0; i < cap; i++) dst[i] = in.float32();
-                break;
-            case "sn4": { float f = in.float32() / 2147483647.0f;
-                for(int i = 0; i < cap; i++) dst[i] = in.int32() * f; break; }
-            case "sn2": { float f = in.float32() / 32767.0f;
-                for(int i = 0; i < cap; i++) dst[i] = in.int16() * f; break; }
-            case "sn1": { float f = in.float32() / 127.0f;
-                for(int i = 0; i < cap; i++) dst[i] = in.int8() * f; break; }
-            default:
-                throw new IllegalArgumentException("position format not supported for editing: " + fmt);
-        }
+        readAny(in, fmt, dst);
     }
 
     /** Rejects NaN/Infinity before re-quantising. A single non-finite value would
@@ -371,16 +358,7 @@ public class Vbuf2Codec {
     }
 
     private static void writeFmt(MessageWriter w, String fmt, float[] vals) {
-        switch(fmt) {
-            case "f4":
-                for(float v : vals) w.float32(v);
-                break;
-            case "sn4": quantSigned(w, vals, 2147483647L); break;
-            case "sn2": quantSigned(w, vals, 32767L); break;
-            case "sn1": quantSigned(w, vals, 127L); break;
-            default:
-                throw new IllegalArgumentException("position format not supported for editing: " + fmt);
-        }
+        writeAny(w, fmt, vals);
     }
 
     private static void quantSigned(MessageWriter w, float[] vals, long max) {
@@ -413,6 +391,11 @@ public class Vbuf2Codec {
         switch(fmt) {
             case "f4": for(int i = 0; i < cap; i++) dst[i] = in.float32(); break;
             case "f2": for(int i = 0; i < cap; i++) dst[i] = in.float16(); break;
+            case "f1": for(int i = 0; i < cap; i++) dst[i] = miniFloatDecode(in.int8()); break;
+            case "sf9995":
+                for(int i = 0; i < cap; i += 3)
+                    float9995Decode(in.int32(), dst, i);
+                break;
             case "sn4": { float f = in.float32() / 2147483647.0f;
                 for(int i = 0; i < cap; i++) dst[i] = in.int32() * f; break; }
             case "sn2": { float f = in.float32() / 32767.0f;
@@ -425,6 +408,19 @@ public class Vbuf2Codec {
                 for(int i = 0; i < cap; i++) dst[i] = in.uint16() * f; break; }
             case "un1": { float f = in.float32() / 255.0f;
                 for(int i = 0; i < cap; i++) dst[i] = in.uint8() * f; break; }
+            case "rn4": { float m = in.float32(), k = in.float32() / 4294967295.0f;
+                for(int i = 0; i < cap; i++) dst[i] = (in.uint32() * k) + m; break; }
+            case "rn2": { float m = in.float32(), k = in.float32() / 65535.0f;
+                for(int i = 0; i < cap; i++) dst[i] = (in.uint16() * k) + m; break; }
+            case "rn1": { float m = in.float32(), k = in.float32() / 255.0f;
+                for(int i = 0; i < cap; i++) dst[i] = (in.uint8() * k) + m; break; }
+            case "uvech": { float F = 1.0f / 7.0f;
+                for(int i = 0; i < cap; ) {
+                    int packed = in.uint8();
+                    MessageReader.oct2uvec(vb, signedBits(packed >>> 4, 4) * F,
+                            signedBits(packed & 0xf, 4) * F);
+                    dst[i++] = vb[0]; dst[i++] = vb[1]; dst[i++] = vb[2];
+                } break; }
             case "uvec1": { float F = 1.0f / 127.0f;
                 for(int i = 0; i < cap; ) {
                     MessageReader.oct2uvec(vb, in.int8() * F, in.int8() * F);
@@ -444,12 +440,25 @@ public class Vbuf2Codec {
         switch(fmt) {
             case "f4": for(float v : vals) w.float32(v); break;
             case "f2": for(float v : vals) w.float16(v); break;
+            case "f1":
+                for(float v : vals) {
+                    int encoded = miniFloatEncode(v);
+                    if(!Float.isFinite(miniFloatDecode(encoded)))
+                        throw new IllegalArgumentException("f1 value out of finite range: " + v);
+                    w.int8(encoded);
+                }
+                break;
+            case "sf9995": quantFloat9995(w, vals); break;
             case "sn4": quantSigned(w, vals, 2147483647L); break;
             case "sn2": quantSigned(w, vals, 32767L); break;
             case "sn1": quantSigned(w, vals, 127L); break;
             case "un4": quantUnsigned(w, vals, 4294967295L); break;
             case "un2": quantUnsigned(w, vals, 65535L); break;
             case "un1": quantUnsigned(w, vals, 255L); break;
+            case "rn4": quantRange(w, vals, 4294967295L); break;
+            case "rn2": quantRange(w, vals, 65535L); break;
+            case "rn1": quantRange(w, vals, 255L); break;
+            case "uvech": quantOctHalf(w, vals); break;
             case "uvec1": quantOct(w, vals, 127); break;
             case "uvec2": quantOct(w, vals, 32767); break;
             default:
@@ -474,6 +483,32 @@ public class Vbuf2Codec {
         }
     }
 
+    private static void quantRange(MessageWriter w, float[] vals, long max) {
+        if(vals.length == 0) {
+            w.float32(0).float32(0);
+            return;
+        }
+        float min = vals[0], high = vals[0];
+        for(float value : vals) {
+            min = Math.min(min, value);
+            high = Math.max(high, value);
+        }
+        float range = high - min;
+        if(!Float.isFinite(range))
+            throw new IllegalArgumentException("range format span is not finite");
+        w.float32(min).float32(range);
+        for(float value : vals) {
+            long encoded = range == 0 ? 0
+                    : Math.round(Math.max(0.0, Math.min(1.0, (value - min) / range)) * max);
+            if(max <= 255)
+                w.uint8((int) encoded);
+            else if(max <= 65535)
+                w.uint16((int) encoded);
+            else
+                w.int32((int) encoded);
+        }
+    }
+
     /** Octahedral-encodes unit vectors (eln 3) to two signed-normalised components. */
     private static void quantOct(MessageWriter w, float[] vals, int max) {
         float[] oct = new float[2];
@@ -487,6 +522,104 @@ public class Vbuf2Codec {
                     w.int16(q);
             }
         }
+    }
+
+    private static void quantOctHalf(MessageWriter w, float[] vals) {
+        float[] oct = new float[2];
+        for(int i = 0; i + 2 < vals.length; i += 3) {
+            uvec2oct(oct, vals[i], vals[i + 1], vals[i + 2]);
+            int x = (int) Math.round(Math.max(-1.0, Math.min(1.0, oct[0])) * 7);
+            int y = (int) Math.round(Math.max(-1.0, Math.min(1.0, oct[1])) * 7);
+            w.uint8(((x & 0xf) << 4) | (y & 0xf));
+        }
+    }
+
+    private static void quantFloat9995(MessageWriter w, float[] vals) {
+        for(int i = 0; i < vals.length; i += 3) {
+            float max = Math.max(Math.abs(vals[i]),
+                    Math.max(Math.abs(vals[i + 1]), Math.abs(vals[i + 2])));
+            int exponent = -15;
+            while(exponent < 16 && max / Math.scalb(1.0f, exponent - 7) > 255.0f)
+                exponent++;
+            float scale = Math.scalb(1.0f, exponent - 7);
+            int x = Math.round(Math.abs(vals[i]) / scale);
+            int y = Math.round(Math.abs(vals[i + 1]) / scale);
+            int z = Math.round(Math.abs(vals[i + 2]) / scale);
+            if(x > 255 || y > 255 || z > 255)
+                throw new IllegalArgumentException("sf9995 vector out of range");
+            int packed = exponent + 15;
+            packed |= x << 23;
+            packed |= y << 14;
+            packed |= z << 5;
+            if(Float.floatToRawIntBits(vals[i]) < 0) packed |= 0x80000000;
+            if(Float.floatToRawIntBits(vals[i + 1]) < 0) packed |= 0x00400000;
+            if(Float.floatToRawIntBits(vals[i + 2]) < 0) packed |= 0x00002000;
+            w.int32(packed);
+        }
+    }
+
+    private static void float9995Decode(int word, float[] out, int offset) {
+        int[] magnitude = {
+                (word >>> 23) & 0xff,
+                (word >>> 14) & 0xff,
+                (word >>> 5) & 0xff
+        };
+        int exponent = (word & 0x1f) - 15;
+        float scale = Math.scalb(1.0f, exponent - 7);
+        out[offset] = magnitude[0] * scale * (((word >>> 31) & 1) == 0 ? 1 : -1);
+        out[offset + 1] = magnitude[1] * scale * (((word >>> 22) & 1) == 0 ? 1 : -1);
+        out[offset + 2] = magnitude[2] * scale * (((word >>> 13) & 1) == 0 ? 1 : -1);
+    }
+
+    private static float miniFloatDecode(int encoded) {
+        int bits = encoded & 0xff;
+        int exponent = (bits >>> 3) & 0xf;
+        int mantissa = bits & 7;
+        int floatExponent;
+        if(exponent == 0) {
+            if(mantissa == 0) {
+                floatExponent = 0;
+            } else {
+                int shift = Integer.numberOfLeadingZeros(mantissa) - 29;
+                floatExponent = -7 - shift + 127;
+                mantissa = (mantissa << (shift + 1)) & 7;
+            }
+        } else if(exponent == 0xf) {
+            floatExponent = 0xff;
+        } else {
+            floatExponent = exponent - 7 + 127;
+        }
+        int f32 = ((bits & 0x80) << 24) | (floatExponent << 23) | (mantissa << 20);
+        return Float.intBitsToFloat(f32);
+    }
+
+    private static int miniFloatEncode(float value) {
+        int bits = Float.floatToIntBits(value);
+        int exponent = (bits >>> 23) & 0xff;
+        int mantissa = bits & 0x7fffff;
+        int encodedExponent;
+        if(exponent == 0) {
+            encodedExponent = 0;
+            mantissa = 0;
+        } else if(exponent == 0xff) {
+            encodedExponent = 0xf;
+        } else if(exponent < 127 - 6) {
+            encodedExponent = 0;
+            int shift = (127 - 6) - exponent;
+            mantissa = shift >= Integer.SIZE
+                    ? 0
+                    : (mantissa | 0x800000) >>> shift;
+        } else if(exponent > 127 + 7) {
+            return (bits & 0x80000000) == 0 ? 0x78 : 0xf8;
+        } else {
+            encodedExponent = exponent - 127 + 7;
+        }
+        return ((bits >>> 24) & 0x80) | (encodedExponent << 3) | (mantissa >>> 20);
+    }
+
+    private static int signedBits(int value, int bits) {
+        int sign = 1 << (bits - 1);
+        return (value ^ sign) - sign;
     }
 
     /** Octahedral encode of a unit vector (mirrors haven.Utils.uvec2oct). */

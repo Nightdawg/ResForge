@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **glTF rebuild now preserves every VBUF2 format accepted by the reader.**
+  Editing support now includes `f1`, `sf9995`, `rn1/rn2/rn4`, and `uvech` in
+  addition to the existing float, normalized, and octahedral formats.
 - **Resource fetch paths are now encoded safely as URI path segments.** Spaces and
   non-ASCII names are UTF-8 percent-encoded, while query/fragment markers, existing
   percent escapes, controls, empty segments, and dot segments are rejected.
