@@ -368,10 +368,11 @@ These are deliberately out of scope for 1.0 — nothing here risks corrupting a 
 
 ## How this was built ("vibe coded")
 
-ResForge was written entirely by an AI coding assistant — **Claude Opus 4.8**,
-driven through the **GitHub Copilot CLI** — under human direction, i.e. "vibe
-coded." The `.res` format was reverse-engineered mainly from the Haven & Hearth
-game client, with additional context from **CarryGun's** (a.k.a. **Kerrigan**)
+ResForge was written entirely by AI coding assistants — **Claude Opus 4.8** and
+**GPT 5.6 Sol**, driven through the **GitHub Copilot CLI** — under human
+direction, i.e. "vibe coded." The `.res` format was reverse-engineered mainly
+from the Haven & Hearth game client, with additional context from **CarryGun's**
+(a.k.a. **Kerrigan**)
 [**HafenResourceTool**](https://gitlab.com/CarryGun/HafenResourceTool) (used as a
 format reference; no code taken) and the server-side **`mkres` Python scripts**
 shared by the game's developer (**loftar**) — kept for reference as
@@ -379,7 +380,7 @@ shared by the game's developer (**loftar**) — kept for reference as
 code, tests and docs were produced by prompting the assistant and validating the
 results against real game files (the round-trip oracle in `verify`). Commits
 reflect this with a `Co-authored-by: Copilot` trailer and a `Powered by Claude
-Opus 4.8` note.
+Opus 4.8` or `Powered by GPT 5.6 Sol` note identifying the model used.
 
 ## License
 
