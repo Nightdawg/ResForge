@@ -25,6 +25,10 @@ import java.util.prefs.Preferences;
  */
 final class Theme {
 
+    static {
+        FlatLaf.registerCustomDefaultsSource("resforge.gui.themes");
+    }
+
     private Theme() {
     }
 
@@ -99,12 +103,12 @@ final class Theme {
 
     /** The lighter of the two alternating transparency-checkerboard squares. */
     static Color checkerLight() {
-        return isDark() ? new Color(0x565656) : new Color(0xf0f0f0);
+        return isDark() ? new Color(0x35373b) : new Color(0xf0f0f0);
     }
 
     /** The darker of the two alternating transparency-checkerboard squares. */
     static Color checkerDark() {
-        return isDark() ? new Color(0x444444) : new Color(0xd8d8d8);
+        return isDark() ? new Color(0x2b2d30) : new Color(0xd8d8d8);
     }
 
     /** Foreground for placeholder text painted over the checkerboard. */

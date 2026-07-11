@@ -41,7 +41,9 @@ a sibling project at `../hafen-client`).
   `net.java.dev.jna:jna` +
   `:jna-platform` 5.15.0 (dual LGPL-2.1+/Apache-2.0) — Windows-only, drives the modern
   Explorer file dialog (`gui/WinFileDialogs`), with a `FileDialog` fallback elsewhere;
-  and **FlatLaf** `com.formdev:flatlaf` 3.7.2 (Apache-2.0) — Swing light/dark themes.
+  and **FlatLaf** `com.formdev:flatlaf` 3.7.2 (Apache-2.0) — Swing light/dark themes,
+  with application defaults under `resources/resforge/gui/themes/` providing the
+  layered IntelliJ-inspired dark palette and theme-specific table grids.
   JOrbis is vendored for Gradle/Ant and pulled from Central by Maven; JNA and FlatLaf
   are pulled from Central by Gradle/Maven and vendored for Ant. All are folded into
   the jar (Gradle fat-jar via runtimeClasspath; Ant merged runtime staging; Maven

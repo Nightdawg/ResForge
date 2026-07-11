@@ -6,6 +6,12 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- **Dark mode now uses an IntelliJ-inspired layered palette.** Near-black content
+  surfaces, raised controls and toolbars, clearer borders and separators, subdued
+  blue selections, and matching preview checkerboards improve visual hierarchy.
+
 ### Fixed
 
 - **The layer table once again shows clear row and column boundaries.** Grid lines

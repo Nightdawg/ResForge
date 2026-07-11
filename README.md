@@ -33,8 +33,10 @@ java -Dresforge.uiScale=1.25 -jar build-gradle/libs/resforge-1.1.0.jar
 ```
 
 **Dark mode.** Prefer a darker UI? Toggle **Options → Dark mode** to switch the
-whole editor between a light and a dark theme instantly — no restart needed. Your
-choice is remembered and re-applied on the next launch. The transparency
+whole editor between the light theme and an IntelliJ-inspired dark palette instantly
+— no restart needed. Its near-black content surfaces, raised controls, visible
+separators, and subdued blue selections make component boundaries easier to follow.
+Your choice is remembered and re-applied on the next launch. The transparency
 checkerboard behind image/animation previews adapts to the theme too.
 
 Open a `.res` (toolbar button or drag-and-drop), or **Fetch from server…** to

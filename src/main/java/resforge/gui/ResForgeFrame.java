@@ -44,11 +44,11 @@ import javax.swing.ScrollPaneConstants;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
+import javax.swing.UIManager;
 import javax.swing.WindowConstants;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.table.AbstractTableModel;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FileDialog;
@@ -182,7 +182,7 @@ public class ResForgeFrame extends JFrame {
 
         table.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
         table.setShowGrid(true);
-        table.setGridColor(Color.GRAY);
+        table.setGridColor(UIManager.getColor("Table.gridColor"));
         table.setIntercellSpacing(new Dimension(1, 1));
         table.setRowHeight(UiScaling.scale(36));
         table.getColumnModel().getColumn(0).setMaxWidth(UiScaling.scale(40));
