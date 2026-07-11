@@ -551,15 +551,10 @@ public class ResForgeFrame extends JFrame {
         t.start();
     }
 
-    /** Loads already-fetched remote bytes (no local file yet; Save As will prompt). */
-    private void openRemote(byte[] data, String url, String status) {
-        try {
-            ResContainer parsed = ResContainer.parse(data);
-            applyLoaded(parsed, null, url, status);
-            this.suggestedName = remoteFileName(url);
-        } catch(Exception e) {
-            error("Downloaded data is not a valid .res:\n" + e.getMessage());
-        }
+    /** Loads an already-validated remote resource (no local file yet; Save As prompts). */
+    private void openRemote(ResContainer parsed, String url, String status) {
+        applyLoaded(parsed, null, url, status);
+        this.suggestedName = remoteFileName(url);
     }
 
     /** Derives a "name.res" save suggestion from a fetched resource URL/path. */
@@ -646,25 +641,33 @@ public class ResForgeFrame extends JFrame {
         setStatus("Fetching " + url + " \u2026");
         Thread t = new Thread(() -> {
             byte[] data = null;
+            ResContainer parsed = null;
             String err = null;
             try {
                 data = resforge.net.ResourceFetcher.fetch(base, path);
+                parsed = ResContainer.parse(data);
             } catch(Exception ex) {
                 err = ex.getMessage();
             }
             final byte[] result = data;
+            final ResContainer resource = parsed;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 if(!finishOperation(operation, "Fetch"))
                     return;
-                if(result == null) {
+                if(resource == null) {
                     error("Fetch failed:\n" + error);
                     setStatus("Fetch failed");
                     return;
                 }
-                prefs.put("fetchHistory",
-                        FetchHistory.serialize(FetchHistory.add(history, path)));
-                openRemote(result, url, "Fetched " + url + " (" + result.length + " bytes)");
+                String fetchedStatus = "Fetched " + url + " (" + result.length + " bytes)";
+                openRemote(resource, url, fetchedStatus);
+                try {
+                    prefs.put("fetchHistory",
+                            FetchHistory.serialize(FetchHistory.add(history, path)));
+                } catch(IllegalArgumentException | SecurityException e) {
+                    setStatus(fetchedStatus + " \u2014 history not saved: " + e.getMessage());
+                }
             });
         }, "res-fetch");
         t.setDaemon(true);

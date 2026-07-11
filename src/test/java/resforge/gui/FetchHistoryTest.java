@@ -3,6 +3,7 @@ package resforge.gui;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.prefs.Preferences;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,6 +27,27 @@ class FetchHistoryTest {
     void serializeIsTheInverseOfParse() {
         List<String> h = List.of("gfx/borka/male", "gfx/terobjs/items/coin");
         assertEquals(h, FetchHistory.parse(FetchHistory.serialize(h)));
+    }
+
+    @Test
+    void serializeNeverExceedsPreferencesValueLimit() {
+        String large = "x".repeat(Preferences.MAX_VALUE_LENGTH);
+        String serialized = FetchHistory.serialize(List.of("recent/path", large, "older/path"));
+
+        assertTrue(serialized.length() <= Preferences.MAX_VALUE_LENGTH);
+        assertEquals(List.of("recent/path", "older/path"), FetchHistory.parse(serialized),
+                "an oversized entry is skipped without losing later entries that fit");
+    }
+
+    @Test
+    void serializeDropsOldestEntriesUntilValueFits() {
+        String entry = "x".repeat(Preferences.MAX_VALUE_LENGTH / 2);
+        String serialized = FetchHistory.serialize(List.of("newest", entry, entry + "2", "oldest"));
+
+        assertTrue(serialized.length() <= Preferences.MAX_VALUE_LENGTH);
+        assertEquals("newest", FetchHistory.parse(serialized).get(0));
+        assertTrue(FetchHistory.parse(serialized).contains("oldest"),
+                "later short entries still fit when an older large entry does not");
     }
 
     @Test

@@ -411,7 +411,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   dialog remembers successful resource paths (persisted via `Preferences`, same as the
   base URL) and lists them below the input as substring-matched, click-to-use
   suggestions (double-click fetches); most-recent-first, case-insensitively deduped,
-  capped at 50. Pure-logic helper is unit-tested (`FetchHistoryTest`).
+  capped at 50 and serialized within `Preferences.MAX_VALUE_LENGTH`. Downloaded bytes
+  are parsed before a path is recorded, and history persistence occurs only after the
+  valid document is open. Pure-logic helper is unit-tested (`FetchHistoryTest`).
 - **Open from game cache is now done** (`net/CacheIndex`, CLI `cache-list`, GUI
   **Cache**/File→*Open from game cache…*): scans the local Haven `HashDirCache`
   (`%APPDATA%\Haven and Hearth\data`) to recover the resource *names* the player

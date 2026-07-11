@@ -3,6 +3,7 @@ package resforge.gui;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.prefs.Preferences;
 
 /** Persistence + filtering helpers for the "Fetch from server" dialog's
  *  remembered resource paths. Successful fetches are recorded so they can be
@@ -30,9 +31,24 @@ final class FetchHistory {
         return out;
     }
 
-    /** Inverse of {@link #parse}: join the list for storage. */
+    /** Join entries for {@link Preferences} storage, dropping oldest/oversized
+     *  values as needed so {@link Preferences#put} cannot reject the result. */
     static String serialize(List<String> history) {
-        return String.join("\n", history);
+        StringBuilder out = new StringBuilder();
+        for(String entry : history) {
+            if(entry == null)
+                continue;
+            String value = entry.strip();
+            if(value.isEmpty() || value.length() > Preferences.MAX_VALUE_LENGTH)
+                continue;
+            int added = value.length() + (out.isEmpty() ? 0 : 1);
+            if(out.length() + added > Preferences.MAX_VALUE_LENGTH)
+                continue;
+            if(!out.isEmpty())
+                out.append('\n');
+            out.append(value);
+        }
+        return out.toString();
     }
 
     /** Return a new list with {@code path} as the most-recent entry:

@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Fetch history can no longer block a valid download from opening.** Downloaded
+  bytes are validated as a resource before history is recorded, and serialized
+  history is bounded to the Preferences value limit; history persistence failure
+  occurs only after the valid document is already open.
 - **glTF node transforms now apply correctly to imported morph shapes.** Morph
   position deltas receive the mesh node's accumulated rotation and scale, but not
   translation, before conversion back to Haven coordinates.
