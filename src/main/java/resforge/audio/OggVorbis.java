@@ -29,7 +29,7 @@ public final class OggVorbis {
         public final int rate;
         public final int channels;
 
-        Pcm(byte[] data, int rate, int channels) {
+        public Pcm(byte[] data, int rate, int channels) {
             this.data = data;
             this.rate = rate;
             this.channels = channels;

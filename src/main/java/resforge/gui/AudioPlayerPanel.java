@@ -18,6 +18,8 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A compact in-app player for an Ogg Vorbis sound: Play/Pause, Stop, and a
@@ -27,7 +29,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  * controls the playback position.
  */
 public class AudioPlayerPanel extends JPanel {
+    @FunctionalInterface
+    interface Decoder {
+        OggVorbis.Pcm decode(byte[] ogg) throws Exception;
+    }
+
+    @FunctionalInterface
+    interface LineFactory {
+        SourceDataLine create(AudioFormat format) throws Exception;
+    }
+
     private final byte[] ogg;
+    private final Decoder decoder;
+    private final LineFactory lineFactory;
 
     private OggVorbis.Pcm pcm;
     private AudioFormat fmt;
@@ -36,8 +50,11 @@ public class AudioPlayerPanel extends JPanel {
 
     private volatile boolean playing;
     private final AtomicInteger posFrame = new AtomicInteger(0);
+    private final AtomicLong generation = new AtomicLong();
+    private final AtomicReference<SourceDataLine> line = new AtomicReference<>();
+    private final Object lifecycleLock = new Object();
     private Thread playThread;
-    private volatile SourceDataLine line;
+    private volatile boolean disposed;
 
     private final JButton playBtn = new JButton("\u25B6 Play");
     private final JButton stopBtn = new JButton("\u25A0 Stop");
@@ -48,7 +65,13 @@ public class AudioPlayerPanel extends JPanel {
     private boolean userSeeking;
 
     public AudioPlayerPanel(byte[] ogg) {
+        this(ogg, OggVorbis::decode, AudioSystem::getSourceDataLine);
+    }
+
+    AudioPlayerPanel(byte[] ogg, Decoder decoder, LineFactory lineFactory) {
         this.ogg = ogg;
+        this.decoder = decoder;
+        this.lineFactory = lineFactory;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         setBorder(BorderFactory.createTitledBorder("Sound"));
         setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -85,8 +108,12 @@ public class AudioPlayerPanel extends JPanel {
     }
 
     private void decodeThenPlay() {
-        if(decoding)
+        if(decoding || disposed)
             return;
+        long token;
+        synchronized(lifecycleLock) {
+            token = generation.incrementAndGet();
+        }
         decoding = true;
         playBtn.setEnabled(false);
         timeLabel.setText("Decoding\u2026");
@@ -94,13 +121,15 @@ public class AudioPlayerPanel extends JPanel {
             OggVorbis.Pcm decoded = null;
             String err = null;
             try {
-                decoded = OggVorbis.decode(ogg);
-            } catch(Throwable ex) {
+                decoded = decoder.decode(ogg);
+            } catch(Exception ex) {
                 err = ex.getMessage();
             }
             final OggVorbis.Pcm result = decoded;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
+                if(!isCurrent(token))
+                    return;
                 decoding = false;
                 playBtn.setEnabled(true);
                 if(result == null) {
@@ -121,64 +150,71 @@ public class AudioPlayerPanel extends JPanel {
     }
 
     private void startPlayback() {
-        if(pcm == null || playing)
+        if(pcm == null || playing || disposed)
             return;
-        // Make sure a previous play loop (e.g. after a quick Pause then Play) has
-        // fully exited before starting a new one, so two threads never share the line.
-        Thread prev = playThread;
-        if(prev != null && prev.isAlive()) {
-            try {
-                prev.join(250);
-            } catch(InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        long token;
+        SourceDataLine staleLine;
+        synchronized(lifecycleLock) {
+            token = generation.incrementAndGet();
+            staleLine = line.getAndSet(null);
         }
+        closeLine(staleLine);
         if(posFrame.get() >= totalFrames)
             posFrame.set(0);
         playing = true;
         playBtn.setText("\u23F8 Pause");
         uiTimer.start();
-        playThread = new Thread(this::playLoop, "ogg-play");
+        OggVorbis.Pcm playingPcm = pcm;
+        AudioFormat playingFormat = fmt;
+        playThread = new Thread(() -> playLoop(token, playingPcm, playingFormat), "ogg-play");
         playThread.setDaemon(true);
         playThread.start();
     }
 
-    private void playLoop() {
+    private void playLoop(long token, OggVorbis.Pcm playingPcm, AudioFormat playingFormat) {
         SourceDataLine ln = null;
         String err = null;
         try {
-            ln = AudioSystem.getSourceDataLine(fmt);
-            ln.open(fmt);
+            ln = lineFactory.create(playingFormat);
+            ln.open(playingFormat);
             ln.start();
-            line = ln;
-            int frameBytes = pcm.channels * 2;
-            int chunkFrames = Math.max(1, pcm.rate / 20);   // ~50 ms
+            SourceDataLine previous;
+            synchronized(lifecycleLock) {
+                if(!isCurrent(token))
+                    return;
+                previous = line.getAndSet(ln);
+            }
+            if(previous != null && previous != ln)
+                closeLine(previous);
+            if(!isCurrent(token)) {
+                line.compareAndSet(ln, null);
+                return;
+            }
+            int frameBytes = playingPcm.channels * 2;
+            int chunkFrames = Math.max(1, playingPcm.rate / 20);   // ~50 ms
             byte[] buf = new byte[chunkFrames * frameBytes];
-            while(playing) {
+            while(isCurrent(token)) {
                 int pf = posFrame.get();
                 if(pf >= totalFrames)
                     break;
                 int n = Math.min(chunkFrames, totalFrames - pf);
-                System.arraycopy(pcm.data, pf * frameBytes, buf, 0, n * frameBytes);
+                System.arraycopy(playingPcm.data, pf * frameBytes, buf, 0, n * frameBytes);
                 ln.write(buf, 0, n * frameBytes);
                 posFrame.compareAndSet(pf, pf + n);          // don't clobber a seek
             }
-            if(playing)
+            if(isCurrent(token))
                 ln.drain();
-        } catch(Throwable e) {
+        } catch(Exception e) {
             err = e.getMessage();
         } finally {
-            line = null;
-            if(ln != null) {
-                try {
-                    ln.stop();
-                    ln.close();
-                } catch(RuntimeException ignored) {
-                }
-            }
-            playing = false;
+            if(ln != null)
+                line.compareAndSet(ln, null);
+            closeLine(ln);
             final String error = err;
             SwingUtilities.invokeLater(() -> {
+                if(!isCurrent(token))
+                    return;
+                playing = false;
                 playBtn.setText("\u25B6 Play");
                 uiTimer.stop();
                 if(error != null)
@@ -189,34 +225,28 @@ public class AudioPlayerPanel extends JPanel {
     }
 
     private void pause() {
-        playing = false;       // the play loop finishes its current chunk and exits
+        invalidatePlayback(false);
     }
 
     private void stop() {
-        playing = false;
-        posFrame.set(0);
-        SourceDataLine ln = line;
-        if(ln != null) {
-            try {
-                ln.flush();
-            } catch(RuntimeException ignored) {
-            }
-        }
-        SwingUtilities.invokeLater(this::refreshUi);
+        invalidatePlayback(true);
     }
 
     /** Stops playback and releases resources; call when the player is discarded. */
     public void dispose() {
+        SourceDataLine active;
+        synchronized(lifecycleLock) {
+            disposed = true;
+            generation.incrementAndGet();
+            active = line.getAndSet(null);
+        }
+        decoding = false;
         playing = false;
         uiTimer.stop();
-        Thread t = playThread;
-        if(t != null) {
-            try {
-                t.join(300);
-            } catch(InterruptedException ignored) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        closeLine(active);
+        Thread thread = playThread;
+        if(thread != null)
+            thread.interrupt();
     }
 
     /* ------------------------------------------------------------------- slider */
@@ -228,7 +258,7 @@ public class AudioPlayerPanel extends JPanel {
             userSeeking = true;
         int frame = (int) (slider.getValue() / 1000.0 * totalFrames);
         posFrame.set(Math.max(0, Math.min(frame, totalFrames)));
-        SourceDataLine ln = line;
+        SourceDataLine ln = line.get();
         if(ln != null) {
             try {
                 ln.flush();
@@ -238,6 +268,42 @@ public class AudioPlayerPanel extends JPanel {
         if(!slider.getValueIsAdjusting())
             userSeeking = false;
         timeLabel.setText(fmt(posFrame.get()) + " / " + fmt(totalFrames));
+    }
+
+    private void invalidatePlayback(boolean resetPosition) {
+        SourceDataLine active;
+        synchronized(lifecycleLock) {
+            generation.incrementAndGet();
+            active = line.getAndSet(null);
+        }
+        playing = false;
+        if(resetPosition)
+            posFrame.set(0);
+        closeLine(active);
+        playBtn.setText("\u25B6 Play");
+        uiTimer.stop();
+        refreshUi();
+    }
+
+    private boolean isCurrent(long token) {
+        return !disposed && generation.get() == token;
+    }
+
+    private static void closeLine(SourceDataLine source) {
+        if(source == null)
+            return;
+        try {
+            source.stop();
+        } catch(RuntimeException ignored) {
+        }
+        try {
+            source.flush();
+        } catch(RuntimeException ignored) {
+        }
+        try {
+            source.close();
+        } catch(RuntimeException ignored) {
+        }
     }
 
     private void refreshUi() {

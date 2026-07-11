@@ -230,8 +230,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   is discarded if a newer operation, document load, edit, undo, or redo made its
   snapshot stale. glTF rebuild additionally uses an application-modal indeterminate
   progress dialog, so the user cannot start a conflicting document action while it
-  runs. The Ogg player joins the previous play thread before restarting so two threads
-  never share the line.
+  runs. The Ogg player generation-gates decode/playback callbacks and atomically owns
+  one `SourceDataLine`; pause, stop, selection changes and frame disposal invalidate
+  stale work and close the active line.
 
 ## 6. Per-layer status
 | Layer | Status |

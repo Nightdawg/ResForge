@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Audio decode/playback callbacks are now generation-safe.** Rapid pause/play,
+  selection changes, and frame disposal invalidate stale threads; each playback
+  generation owns its `SourceDataLine`, which is closed deterministically.
 - **glTF rebuild now preserves every VBUF2 format accepted by the reader.**
   Editing support now includes `f1`, `sf9995`, `rn1/rn2/rn4`, and `uvech` in
   addition to the existing float, normalized, and octahedral formats.
