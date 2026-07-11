@@ -29,9 +29,7 @@ import resforge.layers.TilesetInfo;
 import resforge.layers.Vbuf2Info;
 import resforge.res.Layer;
 
-import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -241,13 +239,23 @@ public final class GuiSupport {
     /** A preview image for image/tex layers, else null. */
     public static BufferedImage preview(Layer l) {
         try {
-            byte[] img = embeddedImage(l);
-            if(img != null)
-                return ImageIO.read(new ByteArrayInputStream(img));
-        } catch(Exception e) {
+            return previewChecked(l);
+        } catch(RuntimeException e) {
             /* no preview */
         }
         return null;
+    }
+
+    /** Bounded preview decode that preserves the reason a preview was rejected. */
+    static BufferedImage previewChecked(Layer l) throws PreviewFailure {
+        ImagePreviewLoader.Range source = ImagePreviewLoader.embedded(l).locate();
+        if(source == null)
+            return null;
+        String kind = l.name + " preview";
+        PreviewBudget.encodedImageBytes(source.length(), kind);
+        byte[] image = Arrays.copyOfRange(source.payload(), source.offset(),
+                source.offset() + source.length());
+        return PreviewBudget.decode(image, kind);
     }
 
     /** The embedded encoded-image bytes for image/tex layers, else null. */

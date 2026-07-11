@@ -30,20 +30,36 @@ import java.nio.charset.StandardCharsets;
  */
 final class LayerEditors {
     private final EditorHost host;
+    private final AnimationPreviewLoader animationLoader;
+    private final ImagePreviewLoader imageLoader;
 
     LayerEditors(EditorHost host) {
+        this(host, new AnimationPreviewLoader(), new ImagePreviewLoader());
+    }
+
+    LayerEditors(EditorHost host, AnimationPreviewLoader animationLoader,
+                 ImagePreviewLoader imageLoader) {
         this.host = host;
+        this.animationLoader = animationLoader;
+        this.imageLoader = imageLoader;
     }
 
     void buildImagePanel(JPanel content, int idx, Layer l) {
         ImageView view = new ImageView();
-        java.awt.image.BufferedImage img = GuiSupport.preview(l);
-        if(img != null) {
-            view.setImage(img);
-            content.add(labeled(img.getWidth() + " \u00d7 " + img.getHeight() + " pixels"));
-        } else {
-            view.setPlaceholder("(image could not be decoded)");
-        }
+        view.setPlaceholder("(loading image preview\u2026)");
+        JLabel previewState = labeled("Loading image preview\u2026");
+        content.add(previewState);
+        imageLoader.load(ImagePreviewLoader.embedded(l), l.name + " preview", result -> {
+            if(result.image() != null) {
+                view.setImage(result.image());
+                previewState.setText(result.image().getWidth() + " \u00d7 "
+                        + result.image().getHeight() + " pixels");
+            } else {
+                view.setPlaceholder("(" + (result.failure() != null
+                        ? result.failure() : "image could not be decoded") + ")");
+                previewState.setText("Preview unavailable");
+            }
+        });
         resforge.layers.ImageHeaderCodec hdr =
                 l.name.equals("image") ? resforge.layers.ImageHeaderCodec.parse(l.data) : null;
         if(hdr != null && hdr.editable) {
@@ -70,39 +86,45 @@ final class LayerEditors {
                 new JButton(act("Export image", () -> host.exportLayer(idx)))));
 
         // A tex layer may carry a separate alpha mask (part tag 4) — expose it too.
-        if(l.name.equals("tex")) {
-            resforge.layers.TexInfo ti = resforge.layers.TexInfo.parse(l.data);
-            if(ti.maskFound)
-                addTexMaskSection(content, idx, l, ti);
-        }
+        if(l.name.equals("tex"))
+            addTexMaskSection(content, idx, l);
     }
 
     /** Preview + export/replace for a tex layer's alpha mask (the foliage/cutout shape). */
-    private void addTexMaskSection(JPanel content, int idx, Layer l, resforge.layers.TexInfo ti) {
-        content.add(Box.createVerticalStrut(12));
-        content.add(labeled("Alpha mask"));
+    private void addTexMaskSection(JPanel content, int idx, Layer l) {
+        JPanel section = new JPanel();
+        section.setLayout(new javax.swing.BoxLayout(section, javax.swing.BoxLayout.Y_AXIS));
+        section.setAlignmentX(Component.LEFT_ALIGNMENT);
+        section.add(Box.createVerticalStrut(12));
+        section.add(labeled("Alpha mask"));
         ImageView maskView = new ImageView();
-        byte[] maskBytes = resforge.layers.TexMaskCodec.mask(l.data);
-        java.awt.image.BufferedImage mimg = null;
-        if(maskBytes != null) {
-            try {
-                mimg = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(maskBytes));
-            } catch(Exception ignored) {
-            }
-        }
-        if(mimg != null) {
-            maskView.setImage(mimg);
-            content.add(labeled(mimg.getWidth() + " \u00d7 " + mimg.getHeight()
-                    + " pixels (" + ti.maskFormat + ")"));
-        } else {
-            maskView.setPlaceholder("(mask could not be decoded)");
-        }
+        maskView.setPlaceholder("(loading mask preview\u2026)");
+        JLabel maskState = labeled("Loading mask preview\u2026");
+        section.add(maskState);
         maskView.setAlignmentX(Component.LEFT_ALIGNMENT);
-        content.add(maskView);
-        content.add(Box.createVerticalStrut(8));
-        content.add(buttonRow(
+        section.add(maskView);
+        section.add(Box.createVerticalStrut(8));
+        section.add(buttonRow(
                 new JButton(act("Replace mask", () -> host.replaceTexMask(idx))),
                 new JButton(act("Export mask", () -> host.exportTexMask(idx)))));
+        section.setVisible(false);
+        content.add(section);
+        imageLoader.load(ImagePreviewLoader.textureMask(l), "texture mask preview", result -> {
+            if(!result.present())
+                return;
+            section.setVisible(true);
+            if(result.image() != null) {
+                maskView.setImage(result.image());
+                maskState.setText(result.image().getWidth() + " \u00d7 "
+                        + result.image().getHeight() + " pixels (" + result.format() + ")");
+            } else {
+                maskView.setPlaceholder("(" + (result.failure() != null
+                        ? result.failure() : "mask could not be decoded") + ")");
+                maskState.setText("Mask preview unavailable");
+            }
+            content.revalidate();
+            content.repaint();
+        });
     }
 
     /** Editable header fields (id, offset, declared size) for a tex layer. */
@@ -256,59 +278,53 @@ final class LayerEditors {
             return;
         }
         int delay = ((Number) m.get("delay")).intValue();
-        java.util.List<?> ids = (java.util.List<?>) m.get("frames");
-        java.util.List<AnimView.Frame> frames = new java.util.ArrayList<>();
-        for(Object o : ids) {
-            AnimView.Frame fr = frameById(((Number) o).intValue());
-            if(fr != null)
-                frames.add(fr);
-        }
-        if(frames.isEmpty()) {
-            content.add(labeled("(no matching image frames in this resource to preview)"));
-            content.add(Box.createVerticalStrut(8));
-            return;
-        }
-        content.add(labeled("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
-                + " (true relative size & offset)"));
+        java.util.List<?> rawIds = (java.util.List<?>) m.get("frames");
+        java.util.List<Integer> ids = new java.util.ArrayList<>(rawIds.size());
+        for(Object id : rawIds)
+            ids.add(((Number) id).intValue());
+        JLabel state = labeled("Loading animation preview\u2026");
+        content.add(state);
         AnimView view = new AnimView();
         Dimension d = UiScaling.scale(220, 180);
         view.setPreferredSize(d);
         view.setMaximumSize(d);
         view.setAlignmentX(Component.LEFT_ALIGNMENT);
-        view.setFrames(frames);
         content.add(view);
         content.add(Box.createVerticalStrut(8));
-        int[] fi = {0};
-        javax.swing.Timer timer = new javax.swing.Timer(Math.max(20, delay), ev -> {
-            fi[0] = (fi[0] + 1) % frames.size();
-            view.setCurrent(fi[0]);
+        java.util.List<Layer> snapshot = host.res() == null
+                ? java.util.List.of() : java.util.List.copyOf(host.res().layers);
+        animationLoader.load(snapshot, ids, (result, failure) -> {
+            if(failure != null) {
+                state.setText("Preview unavailable: " + failure);
+                return;
+            }
+            java.util.List<AnimView.Frame> frames = result.frames();
+            if(frames.isEmpty()) {
+                state.setText("(no matching image frames in this resource to preview)");
+                return;
+            }
+            state.setText("Preview \u2014 " + frames.size() + " frames @ " + delay + "ms"
+                    + " (true relative size & offset)");
+            view.setFrames(frames);
+            int[] fi = {0};
+            javax.swing.Timer timer = new javax.swing.Timer(Math.max(20, delay), ev -> {
+                fi[0] = (fi[0] + 1) % frames.size();
+                view.setCurrent(fi[0]);
+            });
+            timer.setInitialDelay(Math.max(20, delay));
+            timer.start();
+            host.setAnimTimer(timer);
         });
-        timer.setInitialDelay(Math.max(20, delay));
-        timer.start();
-        host.setAnimTimer(timer);
     }
 
-    /** Resolves an animation frame id to its image + draw offset (first matching image layer), else null. */
-    private AnimView.Frame frameById(int id) {
-        if(host.res() == null)
-            return null;
-        for(Layer ly : host.res().layers) {
-            if(!ly.name.equals("image"))
-                continue;
-            try {
-                resforge.layers.ImageInfo ii = resforge.layers.ImageInfo.parse(ly.data);
-                if(ii.recognized && ii.id == id) {
-                    java.awt.image.BufferedImage bi = GuiSupport.preview(ly);
-                    if(bi != null) {
-                        int ox = ii.nooff ? 0 : ii.offX;
-                        int oy = ii.nooff ? 0 : ii.offY;
-                        return new AnimView.Frame(bi, ox, oy);
-                    }
-                }
-            } catch(RuntimeException ignored) {
-            }
-        }
-        return null;
+    void invalidateAnimationPreview() {
+        animationLoader.invalidate();
+        imageLoader.invalidate();
+    }
+
+    void dispose() {
+        animationLoader.close();
+        imageLoader.close();
     }
 
     void buildMediaPanel(JPanel content, int idx, Layer l) {
@@ -465,7 +481,7 @@ final class LayerEditors {
         return row;
     }
 
-    private JComponent labeled(String text) {
+    private JLabel labeled(String text) {
         JLabel lab = new JLabel(text);
         lab.setAlignmentX(Component.LEFT_ALIGNMENT);
         return lab;

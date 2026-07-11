@@ -53,7 +53,7 @@ import java.awt.Dimension;
 import java.awt.FileDialog;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
@@ -92,6 +92,8 @@ public class ResForgeFrame extends JFrame {
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final ThumbnailCache thumbCache = new ThumbnailCache();
+    private final ThumbnailLoader thumbnailLoader =
+            new ThumbnailLoader(ResForgeFrame::makeThumbnail);
     private final JTextField pathField = new JTextField("(no file open)");
 
     /** Builds the per-layer detail/editor panels; calls back through {@link EditorHost}. */
@@ -213,8 +215,12 @@ public class ResForgeFrame extends JFrame {
     @Override
     public void dispose() {
         documentRevision.invalidateOperations();
+        editors.dispose();
+        thumbnailLoader.close();
         if(currentPlayer != null)
             currentPlayer.dispose();
+        if(animTimer != null)
+            animTimer.stop();
         super.dispose();
     }
 
@@ -290,6 +296,7 @@ public class ResForgeFrame extends JFrame {
         res.version = s.version;
         res.layers.clear();
         res.layers.addAll(s.layers);
+        thumbnailLoader.invalidate();
         thumbCache.retainOnly(res.layers);
         dirty = s.dirty;
         documentRevision.modified();
@@ -587,6 +594,7 @@ public class ResForgeFrame extends JFrame {
         this.file = f;
         this.suggestedName = null;
         this.dirty = false;
+        thumbnailLoader.invalidate();
         thumbCache.clear();
         updatingVersion = true;
         versionSpinner.setValue(res.version);
@@ -826,35 +834,41 @@ public class ResForgeFrame extends JFrame {
         setStatus("Building 3D model \u2026");
         Thread t = new Thread(() -> {
             ModelGeometry g = null;
+            Model3DView.DecodedPalette palette = null;
             boolean hasExt = false;
             String err = null;
             try {
                 ResContainer parsed = ResContainer.parse(snapshot);
-                g = ModelGeometry.from(parsed);
+                g = ModelGeometry.from(parsed, null, PreviewBudget.MAX_RENDER_TRIANGLES);
+                if(g != null)
+                    palette = Model3DView.preparePalette(g);
                 hasExt = ExternalTextures.hasExternalStatic(parsed);
             } catch(Exception e) {
                 err = e.getMessage();
             }
             final ModelGeometry geo = g;
+            final Model3DView.DecodedPalette decodedPalette = palette;
             final boolean hasExternal = hasExt;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 setStatus("Ready");
-                if(geo == null) {
+                if(geo == null || decodedPalette == null) {
                     info(error != null ? "Could not build the 3D model: " + error
                             : "This resource has no 3D geometry (vbuf2/mesh) to view.");
                     return;
                 }
-                show3DDialog(title, snapshot, geo, hasExternal);
+                show3DDialog(title, snapshot, geo, decodedPalette, hasExternal);
             });
         }, "model-3d");
         t.setDaemon(true);
         t.start();
     }
 
-    private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain, boolean hasExternal) {
+    private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain,
+                              Model3DView.DecodedPalette palettePlain, boolean hasExternal) {
         JDialog dlg = new JDialog(this, "3D view \u2014 " + title, false);
         dlg.setLayout(new BorderLayout());
+        dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
                 + " \u2014 shown in bind pose (no skinning/animation)");
@@ -870,31 +884,58 @@ public class ResForgeFrame extends JFrame {
                 : null;
 
         final ModelGeometry[] resolvedCache = {null};
+        final Model3DView.DecodedPalette[] resolvedPalette = {null};
         final Component[] installed = {null, null};   // current NORTH, CENTER
+        final Model3DView[] installedView = {null};
+        final boolean[] closed = {false};
+        final long[] resolveGeneration = {0};
 
-        java.util.function.Consumer<ModelGeometry> install = geo -> {
+        java.util.function.BiConsumer<ModelGeometry, Model3DView.DecodedPalette> install = (geo, palette) -> {
+            if(closed[0])
+                return;
+            if(installedView[0] != null)
+                installedView[0].dispose();
             if(installed[0] != null)
                 dlg.remove(installed[0]);
             if(installed[1] != null)
                 dlg.remove(installed[1]);
-            Model3DView view = new Model3DView(geo);
+            Model3DView view;
+            try {
+                view = new Model3DView(geo, palette);
+            } catch(PreviewFailure e) {
+                info("Could not preview the 3D model: " + e.getMessage());
+                return;
+            }
             JPanel north = build3DControls(geo, view, resolveExt);
             dlg.add(north, BorderLayout.NORTH);
             dlg.add(view, BorderLayout.CENTER);
             installed[0] = north;
             installed[1] = view;
+            installedView[0] = view;
             dlg.revalidate();
             dlg.repaint();
         };
 
+        dlg.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                closed[0] = true;
+                resolveGeneration[0]++;
+                if(installedView[0] != null) {
+                    installedView[0].dispose();
+                    installedView[0] = null;
+                }
+            }
+        });
+
         if(resolveExt != null)
             resolveExt.addActionListener(e -> {
+                long request = ++resolveGeneration[0];
                 if(!resolveExt.isSelected()) {
-                    install.accept(geoPlain);
+                    install.accept(geoPlain, palettePlain);
                     return;
                 }
                 if(resolvedCache[0] != null) {
-                    install.accept(resolvedCache[0]);
+                    install.accept(resolvedCache[0], resolvedPalette[0]);
                     return;
                 }
                 resolveExt.setEnabled(false);
@@ -903,6 +944,8 @@ public class ResForgeFrame extends JFrame {
                 String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
                 Thread t = new Thread(() -> {
                     ModelGeometry g = null;
+                    Model3DView.DecodedPalette palette = null;
+                    String err = null;
                     try {
                         ExternalTextures.Fetcher fetcher = path -> {
                             try {
@@ -911,21 +954,31 @@ public class ResForgeFrame extends JFrame {
                                 return null;
                             }
                         };
-                        g = ModelGeometry.from(ResContainer.parse(snapshot), fetcher);
+                        g = ModelGeometry.from(ResContainer.parse(snapshot), fetcher,
+                                PreviewBudget.MAX_RENDER_TRIANGLES);
+                        if(g != null)
+                            palette = Model3DView.preparePalette(g);
                     } catch(Exception ex) {
-                        /* leave g null */
+                        err = ex.getMessage();
                     }
                     final ModelGeometry geo = g;
+                    final Model3DView.DecodedPalette decoded = palette;
+                    final String failure = err;
                     SwingUtilities.invokeLater(() -> {
+                        if(closed[0] || request != resolveGeneration[0])
+                            return;
                         resolveExt.setEnabled(true);
-                        if(geo == null) {
+                        if(geo == null || decoded == null) {
                             resolveExt.setSelected(false);
                             setStatus("Ready");
-                            info("Could not resolve external textures.");
+                            info(failure != null
+                                    ? "Could not resolve external textures: " + failure
+                                    : "Could not resolve external textures.");
                             return;
                         }
                         resolvedCache[0] = geo;
-                        install.accept(geo);
+                        resolvedPalette[0] = decoded;
+                        install.accept(geo, decoded);
                         setStatus(geo.externalTextures.isEmpty()
                                 ? "No external textures resolved (offline or none present)"
                                 : "Ready");
@@ -935,7 +988,7 @@ public class ResForgeFrame extends JFrame {
                 t.start();
             });
 
-        install.accept(geoPlain);
+        install.accept(geoPlain, palettePlain);
         dlg.pack();
         dlg.setLocationRelativeTo(this);
         dlg.setVisible(true);
@@ -1145,6 +1198,7 @@ public class ResForgeFrame extends JFrame {
     /* ----------------------------------------------------------- detail panel */
 
     private void showSelected() {
+        editors.invalidateAnimationPreview();
         if(currentPlayer != null) {
             currentPlayer.dispose();
             currentPlayer = null;
@@ -1609,23 +1663,45 @@ public class ResForgeFrame extends JFrame {
         String kind = GuiSupport.kind(l.name);
         if(!kind.equals("icon") && !kind.equals("texture"))
             return null;
-        return thumbCache.get(l, ResForgeFrame::makeThumbnail);
+        if(thumbCache.contains(l))
+            return thumbCache.get(l);
+        thumbnailLoader.load(l, (layer, icon) -> {
+            if(res == null)
+                return;
+            int row = res.layers.indexOf(layer);
+            if(row < 0)
+                return;
+            thumbCache.put(layer, icon);
+            model.fireTableCellUpdated(row, 1);
+        });
+        return null;
     }
 
     private static Icon makeThumbnail(Layer l) {
         String kind = GuiSupport.kind(l.name);
         if(!kind.equals("icon") && !kind.equals("texture"))
             return null;
-        java.awt.image.BufferedImage img = GuiSupport.preview(l);
-        if(img == null)
+        ImagePreviewLoader.Range source = ImagePreviewLoader.embedded(l).locate();
+        if(source == null)
             return null;
+        PreviewBudget.encodedImageBytes(source.length(), l.name + " thumbnail");
+        byte[] encoded = java.util.Arrays.copyOfRange(source.payload(), source.offset(),
+                source.offset() + source.length());
+        java.awt.image.BufferedImage img =
+                PreviewBudget.decode(encoded, l.name + " thumbnail");
         int max = UiScaling.scale(30);
         int w = img.getWidth(), h = img.getHeight();
         double s = Math.min((double) max / w, (double) max / h);
         if(s > 1)
             s = 1;
         int dw = Math.max(1, (int) Math.round(w * s)), dh = Math.max(1, (int) Math.round(h * s));
-        Image scaled = img.getScaledInstance(dw, dh, Image.SCALE_SMOOTH);
+        java.awt.image.BufferedImage scaled =
+                new java.awt.image.BufferedImage(dw, dh, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D graphics = scaled.createGraphics();
+        graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        graphics.drawImage(img, 0, 0, dw, dh, null);
+        graphics.dispose();
         return new ImageIcon(scaled);
     }
 

@@ -124,7 +124,7 @@ public final class ModelGeometry {
      *  has no geometry. Equivalent to {@link #from(ResContainer, ExternalTextures.Fetcher)}
      *  with no fetcher (so external static materials stay unresolved/shaded). */
     public static ModelGeometry from(ResContainer res) {
-        return from(res, null);
+        return from(res, null, Integer.MAX_VALUE);
     }
 
     /** Build the geometry for a resource, or {@code null} if it has no geometry. When a
@@ -133,6 +133,15 @@ public final class ModelGeometry {
      *  resolved by fetching that resource (see {@link ExternalTextures}) and textured from
      *  the appended external palette; a {@code null} fetcher leaves them shaded. */
     public static ModelGeometry from(ResContainer res, ExternalTextures.Fetcher fetcher) {
+        return from(res, fetcher, Integer.MAX_VALUE);
+    }
+
+    /** Build geometry while rejecting a triangle count above {@code maxTriangles}
+     * before allocating the triangle soup. Used by bounded GUI previews. */
+    public static ModelGeometry from(ResContainer res, ExternalTextures.Fetcher fetcher,
+                                     int maxTriangles) {
+        if(maxTriangles < 0)
+            throw new IllegalArgumentException("maxTriangles must be non-negative");
         Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
         for(Layer l : res.layers)
             if(l.name.equals("vbuf2")) {
@@ -147,8 +156,12 @@ public final class ModelGeometry {
                 MeshInfo mi = MeshInfo.parse(l.data);
                 if(mi.recognized && mi.indices != null && vbufs.containsKey(mi.vbufid)
                         && vbufs.get(mi.vbufid).get("pos") != null) {
+                    int added = mi.indices.length / 3;
+                    if(added > maxTriangles - tris)
+                        throw new IllegalArgumentException("3D preview exceeds the triangle limit of "
+                                + maxTriangles);
                     meshes.add(mi);
-                    tris += mi.indices.length / 3;
+                    tris += added;
                 }
             }
         if(tris == 0)

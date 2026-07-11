@@ -321,6 +321,18 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
   layer immediately (even ones we don't understand), while still exposing the
   high-value layers (images, text) for editing. Typed editors can be added later
   without changing the pack path (it just concatenates parts).
+- **Preview work is bounded and disposable, not part of document semantics.** Encoded
+  image byte lengths are capped before worker-side range copying, and dimensions are
+  read through `ImageReader` before full decode; per-image and aggregate
+  animation/texture limits reject only the preview, never editing or export. Animation
+  frames are first-wins range-indexed without copying, then requested unique IDs are
+  copied and decoded on one daemon worker. Table thumbnails use a separate coalescing,
+  generation-gated worker and publish only while their layer remains in the document.
+  The 3D viewer receives a worker-decoded immutable palette and publishes only the
+  newest generation of a worker-rasterised, framebuffer-capped image; Swing paint
+  merely draws that cache. Triangle/pixel loops check cancellation and a cumulative
+  raster-work budget; budget failures publish an explicit preview error. Selection/dialog
+  disposal invalidates workers and timers.
 - **Minimal third-party deps**: three runtime components. **JOrbis**
   (`org.jcraft:jorbis`, ~97 KB, LGPL) — a pure-Java Ogg Vorbis decoder used by the
   GUI's in-app sound player; **JNA** (`net.java.dev.jna:jna` + `:jna-platform`,

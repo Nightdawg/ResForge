@@ -28,6 +28,14 @@ final class ThumbnailCache {
         return icon;
     }
 
+    Icon get(Layer layer) {
+        return entries.get(layer);
+    }
+
+    void put(Layer layer, Icon icon) {
+        entries.put(layer, icon);
+    }
+
     void remove(Layer layer) {
         entries.remove(layer);
     }

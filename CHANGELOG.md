@@ -8,6 +8,12 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Large or rapidly changing previews no longer block or exhaust the Swing UI.**
+  Encoded image size and dimensions are checked before copy/decode; image, animation,
+  texture-palette, triangle, framebuffer, and cumulative raster work have explicit
+  budgets. Image/thumbnail/animation decode and 3D texture/raster work now run on
+  daemon workers with generation-gated EDT publication, cached 3D frames, cancellable
+  rasterization, explicit preview failures, and deterministic disposal.
 - **Audio decode/playback callbacks are now generation-safe.** Rapid pause/play,
   selection changes, and frame disposal invalidate stale threads; each playback
   generation owns its `SourceDataLine`, which is closed deterministically.
@@ -44,7 +50,8 @@ All notable changes to ResForge are documented here. The format is based on
   translation, before conversion back to Haven coordinates.
 - **Repeated image edits no longer retain obsolete layer payloads indefinitely.**
   The layer-table thumbnail cache now stores only thumbnail-capable layers, uses a
-  256-entry LRU bound, and evicts replaced/deleted or non-restored undo/redo layers.
+  256-entry LRU bound, decodes asynchronously without duplicate pending work, and
+  evicts replaced/deleted or non-restored undo/redo layers.
 - **Failed Save As attempts no longer change the active file path.** ResForge now
   updates the window title/path and clears dirty state only after serialization
   and atomic persistence succeed; write failures leave the current document and

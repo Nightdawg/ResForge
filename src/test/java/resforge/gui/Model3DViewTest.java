@@ -11,8 +11,16 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayDeque;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -73,15 +81,26 @@ class Model3DViewTest {
         return w.toByteArray();
     }
 
-    /** Render a model into a w×h ARGB array via the real paint path. */
+    private static ResContainer texturedResource() throws Exception {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(1, solidPng(new Color(220, 20, 20)))));
+        res.layers.add(new Layer("tex", tex(3, solidPng(new Color(20, 20, 220)))));
+        res.layers.add(new Layer("mat2", mat2Local(9, 1)));
+        res.layers.add(new Layer("vbuf2", vbufTex()));
+        res.layers.add(new Layer("mesh", meshMat(9)));
+        return res;
+    }
+
+    private static ModelGeometry texturedGeometry() throws Exception {
+        return ModelGeometry.from(texturedResource());
+    }
+
+    /** Render through the synchronous renderer seam, independent of worker timing. */
     private static int[] render(ModelGeometry geo, int w, int h, java.util.function.Consumer<Model3DView> cfg) {
-        Model3DView view = new Model3DView(geo);
-        view.setSize(w, h);
+        Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
         cfg.accept(view);
-        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = out.createGraphics();
-        view.paintComponent(g);
-        g.dispose();
+        BufferedImage out = view.renderForTest(w, h);
+        view.dispose();
         return out.getRGB(0, 0, w, h, null, 0, w);
     }
 
@@ -99,14 +118,7 @@ class Model3DViewTest {
 
     @Test
     void perMaterialTexturePickerChangesTheRenderedTexture() throws Exception {
-        ResContainer res = new ResContainer(7);
-        res.layers.add(new Layer("tex", tex(1, solidPng(new Color(220, 20, 20)))));   // ordinal 0: red (default)
-        res.layers.add(new Layer("tex", tex(3, solidPng(new Color(20, 20, 220)))));   // ordinal 1: blue (alternate)
-        res.layers.add(new Layer("mat2", mat2Local(9, 1)));   // matid 9 -> tex id 1 (red)
-        res.layers.add(new Layer("vbuf2", vbufTex()));
-        res.layers.add(new Layer("mesh", meshMat(9)));
-
-        ModelGeometry geo = ModelGeometry.from(res);
+        ModelGeometry geo = texturedGeometry();
         assertEquals(1, geo.materials.size());
 
         // Default selection (authored): the red texture is visible, no blue.
@@ -118,6 +130,115 @@ class Model3DViewTest {
         int[] swapped = render(geo, 120, 120, v -> v.setMaterialTexture(0, 1));
         assertTrue(bluish(swapped) > 0, "after picking the alternate, the blue texture is drawn");
         assertEquals(0, reddish(swapped), "the red texture is gone once switched");
+    }
+
+    @Test
+    void workerPublishesCachedFrameAndPaintOnlyDrawsIt() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        ManualExecutor worker = new ManualExecutor();
+        ManualExecutor edt = new ManualExecutor();
+        Model3DView view = new Model3DView(
+                geo, Model3DView.preparePalette(geo), worker, edt);
+
+        view.requestRender(120, 120);
+        assertNull(view.cachedImageForTest());
+        worker.runNext();
+        assertNull(view.cachedImageForTest(), "worker result is not installed before the EDT callback");
+        edt.runNext();
+        BufferedImage cached = view.cachedImageForTest();
+        assertEquals(120, cached.getWidth());
+
+        long generation = view.generationForTest();
+        BufferedImage painted = new BufferedImage(120, 120, BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = painted.createGraphics();
+        view.paintCached(graphics, 120, 120);
+        view.paintCached(graphics, 120, 120);
+        graphics.dispose();
+        assertSame(cached, view.cachedImageForTest());
+        assertEquals(generation, view.generationForTest());
+        assertTrue(reddish(painted.getRGB(0, 0, 120, 120, null, 0, 120)) > 0);
+        assertTrue(worker.isEmpty(), "painting must not enqueue raster work");
+        view.dispose();
+    }
+
+    @Test
+    void staleRenderGenerationCannotPublish() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        ManualExecutor worker = new ManualExecutor();
+        ManualExecutor edt = new ManualExecutor();
+        Model3DView view = new Model3DView(
+                geo, Model3DView.preparePalette(geo), worker, edt);
+
+        view.requestRender(80, 80);
+        view.requestRender(100, 90);
+        worker.runNext();
+        assertTrue(edt.isEmpty(), "superseded render must not enqueue publication");
+        worker.runNext();
+        edt.runNext();
+        assertEquals(100, view.cachedImageForTest().getWidth());
+        assertEquals(90, view.cachedImageForTest().getHeight());
+
+        view.requestRender(60, 60);
+        view.dispose();
+        worker.runNext();
+        assertTrue(edt.isEmpty(), "disposed views ignore late render completion");
+    }
+
+    @Test
+    void rendererCancelsDeterministicallyDuringRasterization() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
+        AtomicInteger checks = new AtomicInteger();
+
+        assertThrows(CancellationException.class, () -> view.renderForTest(
+                120, 120, () -> checks.incrementAndGet() > 20,
+                PreviewBudget.MAX_RASTER_WORK));
+
+        assertTrue(checks.get() > 20);
+        view.dispose();
+    }
+
+    @Test
+    void rasterWorkFailurePublishesExplicitStateAndWorkerRemainsUsable() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        ManualExecutor worker = new ManualExecutor();
+        ManualExecutor edt = new ManualExecutor();
+        Model3DView view = new Model3DView(
+                geo, Model3DView.preparePalette(geo), worker, edt, 1);
+
+        view.requestRender(120, 120);
+        worker.runNext();
+        edt.runNext();
+        assertNull(view.cachedImageForTest());
+        assertTrue(view.cachedFailureForTest().contains("raster-work limit"));
+
+        view.requestRender(120, 120);
+        worker.runNext();
+        edt.runNext();
+        assertTrue(view.cachedFailureForTest().contains("raster-work limit"),
+                "a budget failure must not terminate subsequent worker tasks");
+        view.dispose();
+    }
+
+    @Test
+    void synchronousRendererEnforcesWorkBudgetWithoutPartialImage() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
+
+        PreviewFailure failure = assertThrows(PreviewFailure.class,
+                () -> view.renderForTest(120, 120, () -> false, 1));
+
+        assertTrue(failure.getMessage().contains("raster-work limit"));
+        view.dispose();
+    }
+
+    @Test
+    void geometryTriangleLimitIsCheckedBeforeSoupAllocation() throws Exception {
+        ResContainer resource = texturedResource();
+        assertNotNull(ModelGeometry.from(resource, null, 1));
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
+                () -> ModelGeometry.from(resource, null, 0));
+        assertTrue(failure.getMessage().contains("triangle limit"));
     }
 
     @Test
@@ -138,5 +259,22 @@ class Model3DViewTest {
         assertEquals(3.0f, flatDepth, 1e-6f);
         assertTrue(obliqueDepth < flatDepth,
                 "reciprocal depth correctly puts the oblique triangle in front");
+    }
+
+    private static final class ManualExecutor implements Executor {
+        private final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
+
+        public void execute(Runnable command) {
+            tasks.add(command);
+        }
+
+        void runNext() {
+            tasks.remove().run();
+        }
+
+        boolean isEmpty() {
+            return tasks.isEmpty();
+        }
+
     }
 }

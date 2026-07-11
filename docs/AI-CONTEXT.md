@@ -207,9 +207,13 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   open/save dialog with the address bar via COM `IFileOpenDialog`/`IFileSaveDialog`;
   `ResForgeFrame` prefers it and falls back to `FileDialog` off-Windows or on failure),
   `GuiSupport` (per-layer preview/text/export, reuses
-  decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
+  decoders), `PreviewBudget` (encoded-byte + metadata-first bounded image decode and
+  aggregate animation/palette/render limits), `ImageView`, `AudioPlayerPanel`, `AnimView`
+  (offset-aware sprite playback; sibling images are indexed once and unique requested
+  frames decode on a generation-gated daemon worker),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),
-  `ThumbnailCache` (EDT-confined 256-entry LRU for image/texture table thumbnails;
+  `ThumbnailCache` + `ThumbnailLoader` (EDT-confined 256-entry LRU for image/texture
+  table thumbnails; generation-gated worker decode coalesces pending layers, and
   obsolete layer keys are removed on replace/delete and pruned on undo/redo),
   `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle
   rasteriser into a `BufferedImage`, two-sided Lambert head-light shading,
@@ -222,7 +226,13 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   (non-local bases — external-static `mlink`/varmat/`otex`-only — get none) — split over **two
   balanced rows** (testable `ResForgeFrame.buildTexturePickerRows`) so many-material
   models stay compact; so a model's alternate `tex` layers, e.g. mulberry's seasonal
-  leaves, can be selected live, while knarr shows one picker not ten).
+  leaves, can be selected live, while knarr shows one picker not ten). Texture/mask
+  palettes decode on the model workers; each view rasterises immutable render-state
+  snapshots on its own coalescing daemon worker, while Swing paint only scales the
+  latest cached frame. Triangle, internal-framebuffer, and cumulative raster-work
+  budgets bound that work; generation/disposal cancellation is checked inside the
+  raster loops, and budget failures become visible preview errors instead of partial
+  frames. Closing/replacing a view invalidates late renders and external-resolution callbacks.
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT. Document-replacing open/fetch/rebuild workers capture one

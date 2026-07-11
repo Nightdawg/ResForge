@@ -95,7 +95,8 @@ class TexturePickerLayoutTest {
         ModelGeometry g = geo(4, 2);
         assertEquals(4, g.materials.size());
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
 
         assertEquals(2, rows.size(), "four pickers should split across two rows");
         assertEquals(4, combos.size());
@@ -111,7 +112,8 @@ class TexturePickerLayoutTest {
     void oddCountPutsTheExtraPickerOnTheFirstRow() {
         ModelGeometry g = geo(5, 2);
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
         assertEquals(2, rows.size());
         assertEquals(3, combosIn(rows.get(0)), "ceil(5/2)=3 on the first row");
         assertEquals(2, combosIn(rows.get(1)));
@@ -121,7 +123,8 @@ class TexturePickerLayoutTest {
     void singleMaterialStaysOnOneRow() {
         ModelGeometry g = geo(1, 2);
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
         assertEquals(1, rows.size());
         assertEquals(1, combos.size());
     }
@@ -130,7 +133,8 @@ class TexturePickerLayoutTest {
     void noChoiceMeansNoRows() {
         ModelGeometry g = geo(3, 1);   // 3 materials but only one local texture -> nothing to pick
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
         assertTrue(rows.isEmpty());
         assertTrue(combos.isEmpty());
     }
@@ -152,7 +156,8 @@ class TexturePickerLayoutTest {
         assertEquals(4, g.materials.size(), "all four render (all resolve to some local texture)");
 
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
         assertEquals(2, combos.size(), "only the two local-base materials get a picker");
         assertEquals(2, rows.size(), "two pickers split one per balanced row");
     }
@@ -171,7 +176,8 @@ class TexturePickerLayoutTest {
         assertTrue(g.hasTextures(), "they still render (via the local otex overlay)");
 
         List<JComboBox<Integer>> combos = new ArrayList<>();
-        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g, new Model3DView(g), combos);
+        List<JPanel> rows = ResForgeFrame.buildTexturePickerRows(g,
+                new Model3DView(g, Model3DView.DecodedPalette.empty()), combos);
         assertTrue(rows.isEmpty(), "no local-base material -> no pickers");
         assertTrue(combos.isEmpty());
     }
