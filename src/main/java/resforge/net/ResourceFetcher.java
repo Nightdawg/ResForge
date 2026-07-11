@@ -6,9 +6,14 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -49,14 +54,78 @@ public final class ResourceFetcher {
         if(base == null || base.isBlank())
             base = DEFAULT_BASE;
         base = base.strip();
+        URI baseUri;
+        try {
+            baseUri = URI.create(base);
+        } catch(IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid resource base URL: " + base, e);
+        }
+        String scheme = baseUri.getScheme();
+        if(scheme == null || (!scheme.equalsIgnoreCase("http") && !scheme.equalsIgnoreCase("https"))
+                || baseUri.getHost() == null)
+            throw new IllegalArgumentException("Resource base must be an HTTP(S) URL: " + base);
+        if(baseUri.getRawQuery() != null || baseUri.getRawFragment() != null)
+            throw new IllegalArgumentException("Resource base must not contain a query or fragment");
+        base = baseUri.toASCIIString();
         if(!base.endsWith("/"))
             base += "/";
+        if(path == null)
+            throw new IllegalArgumentException("Resource path is required");
         String p = path.strip().replace('\\', '/');
         while(p.startsWith("/"))
             p = p.substring(1);
-        if(p.toLowerCase().endsWith(".res"))
+        if(p.toLowerCase(Locale.ROOT).endsWith(".res"))
             p = p.substring(0, p.length() - 4);
-        return base + p + ".res";
+        if(p.isEmpty())
+            throw new IllegalArgumentException("Resource path is empty");
+
+        String[] segments = p.split("/", -1);
+        StringBuilder encoded = new StringBuilder();
+        for(String segment : segments) {
+            if(segment.isEmpty())
+                throw new IllegalArgumentException("Resource path contains an empty segment");
+            if(segment.equals(".") || segment.equals(".."))
+                throw new IllegalArgumentException("Resource path contains a dot segment");
+            if(!encoded.isEmpty())
+                encoded.append('/');
+            encoded.append(encodeSegment(segment));
+        }
+        return base + encoded + ".res";
+    }
+
+    private static String encodeSegment(String segment) {
+        for(int i = 0; i < segment.length(); i++) {
+            char c = segment.charAt(i);
+            if(c == '?' || c == '#' || c == '%')
+                throw new IllegalArgumentException(
+                        "Resource path must not contain '?', '#', or '%'");
+            if(Character.isISOControl(c))
+                throw new IllegalArgumentException("Resource path must not contain control characters");
+        }
+
+        ByteBuffer bytes;
+        try {
+            bytes = StandardCharsets.UTF_8.newEncoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .encode(CharBuffer.wrap(segment));
+        } catch(CharacterCodingException e) {
+            throw new IllegalArgumentException("Resource path contains invalid Unicode", e);
+        }
+        StringBuilder out = new StringBuilder();
+        while(bytes.hasRemaining()) {
+            int value = bytes.get() & 0xff;
+            if((value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z')
+                    || (value >= '0' && value <= '9') || value == '-'
+                    || value == '.' || value == '_' || value == '~') {
+                out.append((char) value);
+            } else {
+                out.append('%');
+                out.append(Character.toUpperCase(Character.forDigit(value >>> 4, 16)));
+                out.append(Character.toUpperCase(Character.forDigit(value & 0xf, 16)));
+            }
+        }
+        return out.toString();
     }
 
     /** Downloads {@code <base>/<path>.res} and returns its bytes. */

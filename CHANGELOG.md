@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Resource fetch paths are now encoded safely as URI path segments.** Spaces and
+  non-ASCII names are UTF-8 percent-encoded, while query/fragment markers, existing
+  percent escapes, controls, empty segments, and dot segments are rejected.
 - **VBUF2 attribute metadata now has one source of truth.** Fixed element counts
   are shared by the inspector, decoder, and editor; the structure-preserving codec
   moved to neutral `resforge.vbuf`, removing the `res → model` verifier dependency.

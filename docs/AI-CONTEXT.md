@@ -185,6 +185,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 - `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, one shared lazily-created JDK
   HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads;
+  resource names are strict UTF-8 URI path segments (spaces/non-ASCII encoded;
+  query/fragment/percent/control/dot-segment ambiguity rejected);
   response bodies cap at 64 MiB via a bounded streaming subscriber, rejecting an
   excessive `Content-Length` before allocation and cancelling chunked/unknown-length
   responses at the same boundary),
@@ -268,7 +270,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 - `mesh`: `uint8 fl`; old form (`fl&0x80`==0) num/matid/…/indices; indices raw
   `uint16×3` or **delta-stripped** (`unstrip`/`decdelta`).
 - Server fetch: `<base>/<path>.res`, base default
-  `http://game.havenandhearth.com/res/` (the official server; same as the client).
+  `http://game.havenandhearth.com/res/` (the official server; same as the client);
+  each resource-name segment is URI-encoded rather than concatenated raw.
 - From CarryGun's tool (knowledge only, no code taken): `neg`'s 12 "skipped" bytes
   are tl/br/oc offsets (coord16); `mat2` = id + map of key→tto-value-list.
 

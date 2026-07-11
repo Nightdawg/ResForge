@@ -475,6 +475,9 @@ codeentry; tags 1/2/3 seen, each parses to the exact end).
 The game client (and our `fetch`) downloads `<base>/<path>.res`. Base default is
 `http://game.havenandhearth.com/res/` (the official server). Example path:
 `gfx/borka/male` -> `http://game.havenandhearth.com/res/gfx/borka/male.res`.
+`ResourceFetcher` encodes each slash-delimited resource-name segment as strict UTF-8
+URI path data. It rejects query/fragment markers, percent escapes, controls, empty
+segments and `.`/`..` segments so names cannot be reinterpreted by URI parsing.
 
 ## Local resource cache (HashDirCache)
 The client caches downloaded resources under `<localdir>/data`, where `localdir`

@@ -9,8 +9,10 @@ import org.junit.jupiter.api.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -89,6 +91,20 @@ class ResourceFetcherNetworkTest {
         IOException error = assertThrows(IOException.class,
                 () -> ResourceFetcher.fetch(base, "test", LIMIT));
         assertTrue(error.getMessage().contains("Resource not found (404)"));
+    }
+
+    @Test
+    void sendsEncodedSegmentsWithoutQueryOrFragmentInterpretation() throws Exception {
+        AtomicReference<String> rawPath = new AtomicReference<>();
+        byte[] body = {1};
+        server.createContext("/", exchange -> {
+            rawPath.set(exchange.getRequestURI().getRawPath());
+            respond(exchange, body, false);
+        });
+
+        assertArrayEquals(body,
+                ResourceFetcher.fetch(base, "folder/na me/caf\u00e9", LIMIT));
+        assertEquals("/folder/na%20me/caf%C3%A9.res", rawPath.get());
     }
 
     private static void respond(HttpExchange exchange, byte[] body, boolean chunked)
