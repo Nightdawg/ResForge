@@ -91,7 +91,7 @@ public class ResForgeFrame extends JFrame {
     private JButton addBtn, delBtn, upBtn, downBtn;
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
-    private final java.util.Map<Layer, Icon> thumbCache = new java.util.HashMap<>();
+    private final ThumbnailCache thumbCache = new ThumbnailCache();
     private final JTextField pathField = new JTextField("(no file open)");
 
     /** Builds the per-layer detail/editor panels; calls back through {@link EditorHost}. */
@@ -290,6 +290,7 @@ public class ResForgeFrame extends JFrame {
         res.version = s.version;
         res.layers.clear();
         res.layers.addAll(s.layers);
+        thumbCache.retainOnly(res.layers);
         dirty = s.dirty;
         documentRevision.modified();
         updatingVersion = true;
@@ -364,6 +365,7 @@ public class ResForgeFrame extends JFrame {
             return;
         pushUndo();
         res.layers.remove(sel);
+        thumbCache.remove(l);
         model.fireTableDataChanged();
         if(res.layers.isEmpty()) {
             showPlaceholder("This file has no layers.");
@@ -1274,6 +1276,7 @@ public class ResForgeFrame extends JFrame {
         Snapshot before = snapshot();
         Layer old = res.layers.get(idx);
         res.layers.set(idx, new Layer(old.name, payload));
+        thumbCache.remove(old);
         commit(before);
         markDirty();
         int sel = table.getSelectedRow();
@@ -1302,12 +1305,14 @@ public class ResForgeFrame extends JFrame {
         if(res == null)
             return false;
         Snapshot before = snapshot();
+        Layer old = res.layers.get(idx);
         try {
             Replacer.replace(res, "#" + idx, bytes);
         } catch(Replacer.ReplaceException e) {
             error(e.getMessage());
             return false;
         }
+        thumbCache.remove(old);
         commit(before);
         markDirty();
         int sel = table.getSelectedRow();
@@ -1598,11 +1603,10 @@ public class ResForgeFrame extends JFrame {
 
     /** A cached, scaled thumbnail for icon/texture layers, else null. */
     private Icon thumbnail(Layer l) {
-        if(thumbCache.containsKey(l))
-            return thumbCache.get(l);
-        Icon icon = makeThumbnail(l);
-        thumbCache.put(l, icon);
-        return icon;
+        String kind = GuiSupport.kind(l.name);
+        if(!kind.equals("icon") && !kind.equals("texture"))
+            return null;
+        return thumbCache.get(l, ResForgeFrame::makeThumbnail);
     }
 
     private static Icon makeThumbnail(Layer l) {

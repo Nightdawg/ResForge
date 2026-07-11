@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Repeated image edits no longer retain obsolete layer payloads indefinitely.**
+  The layer-table thumbnail cache now stores only thumbnail-capable layers, uses a
+  256-entry LRU bound, and evicts replaced/deleted or non-restored undo/redo layers.
 - **Failed Save As attempts no longer change the active file path.** ResForge now
   updates the window title/path and clears dirty state only after serialization
   and atomic persistence succeed; write failures leave the current document and

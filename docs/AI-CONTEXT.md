@@ -196,6 +196,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `GuiSupport` (per-layer preview/text/export, reuses
   decoders), `ImageView`, `AudioPlayerPanel`, `AnimView` (offset-aware sprite playback),
   `FetchHistory` (remembered fetch-path suggestions — pure logic, unit-tested),
+  `ThumbnailCache` (EDT-confined 256-entry LRU for image/texture table thumbnails;
+  obsolete layer keys are removed on replace/delete and pruned on undo/redo),
   `Model3DView` (the **View 3D** software renderer: a hand-written z-buffered triangle
   rasteriser into a `BufferedImage`, two-sided Lambert head-light shading,
   **perspective-correct texture mapping** (local textures, alpha-mask cutout) + optional
