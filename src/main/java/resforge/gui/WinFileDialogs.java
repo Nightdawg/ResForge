@@ -127,6 +127,12 @@ final class WinFileDialogs {
 
     private static final int S_OK = 0;
     private static final int S_FALSE = 1;
+    /** HRESULT_FROM_WIN32(ERROR_CANCELLED), returned by IFileDialog.Show on Cancel. */
+    private static final int HRESULT_CANCELLED = 0x800704C7;
+
+    enum ShowOutcome {
+        SUCCESS, CANCELLED, FAILED
+    }
 
     private static final GUID.ByReference CLSID_FileOpenDialog =
             ref("{DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7}");
@@ -197,11 +203,14 @@ final class WinFileDialogs {
             configure(dialog, save, title, initialDir, fileName, filters);
 
             hr = call(dialog, VT_SHOW, ptr(ownerHwnd));
-            if(hr != S_OK) // includes the user-cancelled HRESULT
+            ShowOutcome outcome = classifyShowResult(hr);
+            if(outcome == ShowOutcome.CANCELLED)
                 return Result.cancelled();
+            if(outcome == ShowOutcome.FAILED)
+                return Result.unavailable();
 
             Path chosen = readResult(dialog);
-            return chosen != null ? Result.chosen(chosen) : Result.cancelled();
+            return chosen != null ? Result.chosen(chosen) : Result.unavailable();
         } catch(Throwable ignore) {
             return Result.unavailable();
         } finally {
@@ -213,6 +222,14 @@ final class WinFileDialogs {
                     // best-effort teardown
                 }
         }
+    }
+
+    static ShowOutcome classifyShowResult(int hr) {
+        if(hr == S_OK)
+            return ShowOutcome.SUCCESS;
+        if(hr == HRESULT_CANCELLED)
+            return ShowOutcome.CANCELLED;
+        return ShowOutcome.FAILED;
     }
 
     private static void configure(Pointer dialog, boolean save, String title,

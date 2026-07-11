@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Windows file-dialog COM errors now trigger the fallback picker.** Only the
+  documented `ERROR_CANCELLED` HRESULT is treated as user cancellation; failures
+  such as access denied or `E_FAIL` mark the native dialog unavailable.
 - **The custom JSON reader now enforces RFC 8259 syntax.** Leading plus signs,
   leading-zero integers, malformed fractions/exponents, unescaped controls, and
   lone Unicode surrogates are rejected; valid surrogate pairs remain supported.
