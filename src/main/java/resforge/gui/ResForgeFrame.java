@@ -711,10 +711,11 @@ public class ResForgeFrame extends JFrame {
         Path chosen = saveDialog("Save resource as", defName);
         if(chosen != null) {
             Path p = ensureResExtension(chosen);
-            writeRes(p);
-            this.file = p;
-            updateTitle();
-            updatePath();
+            if(writeRes(p)) {
+                this.file = p;
+                updateTitle();
+                updatePath();
+            }
         }
     }
 
@@ -727,14 +728,29 @@ public class ResForgeFrame extends JFrame {
         return p;
     }
 
-    private void writeRes(Path p) {
+    private boolean writeRes(Path p) {
+        byte[] data;
         try {
-            SafeFiles.write(p, res.serialize());
-            dirty = false;
-            updateTitle();
-            setStatus("Saved " + p.getFileName());
+            data = res.serialize();
         } catch(Exception e) {
             error("Could not save: " + e.getMessage());
+            return false;
+        }
+        if(!writeRes(p, data, message -> error(message)))
+            return false;
+        dirty = false;
+        updateTitle();
+        setStatus("Saved " + p.getFileName());
+        return true;
+    }
+
+    static boolean writeRes(Path p, byte[] data, java.util.function.Consumer<String> onError) {
+        try {
+            SafeFiles.write(p, data);
+            return true;
+        } catch(Exception e) {
+            onError.accept("Could not save: " + e.getMessage());
+            return false;
         }
     }
 

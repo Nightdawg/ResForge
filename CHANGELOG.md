@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Failed Save As attempts no longer change the active file path.** ResForge now
+  updates the window title/path and clears dirty state only after serialization
+  and atomic persistence succeed; write failures leave the current document and
+  destination unchanged.
 - **glTF export no longer assigns unrelated textures to unmapped materials.**
   Materials without an explicit local `matid → mat2 → tex` mapping—including
   `matid=-1` and external-only materials—now omit `baseColorTexture` instead of
