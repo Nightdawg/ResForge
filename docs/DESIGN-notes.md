@@ -605,6 +605,15 @@ bone and sampled identity `scale` channels. Import accepts those only when all v
 are constant/identity (interpolation is then mathematically irrelevant); nonconstant
 STEP translation/rotation and non-identity scale remain hard errors rather than being
 silently approximated.
+Clip duration is inferred from the edited action's latest sampler key. It changes
+only when that range differs from the original track range, which preserves an
+untouched clip's intentional trailing duration and byte-identical no-op behavior.
+Differences up to 20 ms are treated as Blender frame-grid rounding (observed when
+`wave` 1.2667 s re-exported as 1.25 s), not an intentional duration edit.
+Both fmt 0 (absolute cpfloat times) and fmt 1 (times normalized by `len`) re-encode
+the new duration. A duration change is rejected when the layer has `{ctl}` tracks:
+fmt-1 event times are normalized by `len`, while fmt-0 event times are absolute, so
+silently retaining the raw payload would impose inconsistent retiming semantics.
 
 The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh
@@ -612,10 +621,10 @@ quantization/stripping choices — no dev code needed.
 
 ### Open or deferred
 
-- `skan` clip duration, playback mode, bone scale and control/effect events are not
-  edited through glTF; keyframes can change within the original duration. `manim`
-  morph shapes rebuild, but frame count and timing remain those of the original
-  resource.
+- `skan` playback mode, bone scale and control/effect events are not edited through
+  glTF; effect-free clip duration follows the latest key, while duration changes on
+  clips with effect tracks are rejected. `manim` morph shapes rebuild, but frame
+  count and timing remain those of the original resource.
 - Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are deferred.
   Geometry, skin weights, skeleton poses, skeletal actions, and fixed-timeline morph
   shapes are edited through glTF instead.

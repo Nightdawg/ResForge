@@ -37,6 +37,8 @@ import java.util.Map;
  * not byte-lossless, so edits are validated in-game.
  */
 public final class GltfImport {
+    private static final float DURATION_EDIT_TOLERANCE = 0.02f;
+
     private GltfImport() {
     }
 
@@ -117,8 +119,12 @@ public final class GltfImport {
                 unchanged++;
                 continue;
             }
-            List<SkanInfo.Track> tracks = readSkanTracks(g, animation, original);
-            if(sameTracks(original.tracks, tracks)) {
+            SkanEdit edit = readSkanTracks(g, animation, original);
+            boolean lengthChanged = Math.abs(edit.length - original.len) > 1e-4f;
+            if(lengthChanged && !original.fxTracks.isEmpty())
+                throw new IllegalArgumentException("cannot change skan_" + original.id
+                        + " duration while it has control/effect tracks");
+            if(!lengthChanged && sameTracks(original.tracks, edit.tracks)) {
                 unchanged++;
                 continue;
             }
@@ -126,9 +132,9 @@ public final class GltfImport {
             edited.id = original.id;
             edited.fmt = original.fmt;
             edited.mode = original.mode;
-            edited.len = original.len;
+            edited.len = edit.length;
             edited.nspeed = original.nspeed;
-            edited.tracks.addAll(tracks);
+            edited.tracks.addAll(edit.tracks);
             edited.fxTracks.addAll(original.fxTracks);
             res.layers.set(i, new Layer("skan", SkanInfo.encode(edited)));
             changed++;
@@ -179,9 +185,19 @@ public final class GltfImport {
         }
     }
 
+    private static final class SkanEdit {
+        final List<SkanInfo.Track> tracks;
+        final float length;
+
+        SkanEdit(List<SkanInfo.Track> tracks, float length) {
+            this.tracks = tracks;
+            this.length = length;
+        }
+    }
+
     @SuppressWarnings("unchecked")
-    private static List<SkanInfo.Track> readSkanTracks(Glb g, Map<String, Object> animation,
-                                                       SkanInfo original) {
+    private static SkanEdit readSkanTracks(Glb g, Map<String, Object> animation,
+                                           SkanInfo original) {
         List<Object> nodes = (List<Object>) g.root.get("nodes");
         List<Object> samplers = (List<Object>) animation.get("samplers");
         List<Object> channels = (List<Object>) animation.get("channels");
@@ -189,6 +205,7 @@ public final class GltfImport {
             throw new IllegalArgumentException("skan action is missing nodes, samplers, or channels");
 
         Map<String, BoneChannels> byBone = new LinkedHashMap<>();
+        float editedMax = 0;
         for(Object value : channels) {
             Map<String, Object> channel = (Map<String, Object>) value;
             Map<String, Object> target = (Map<String, Object>) channel.get("target");
@@ -215,13 +232,14 @@ public final class GltfImport {
             int components = path.equals("rotation") ? 4 : 3;
             float[] times = readAccessor(g, idx(sampler.get("input")), 1);
             float[] values = readAccessor(g, idx(sampler.get("output")), components);
-            validateKeyframes(times, values, components, original.len, (String) nameValue);
+            validateKeyframes(times, values, components, Float.POSITIVE_INFINITY, (String) nameValue);
             if(path.equals("scale")) {
                 if(!identityScale(values))
                     throw new IllegalArgumentException("skan does not support bone scale edits ("
                             + nameValue + ")");
                 continue;
             }
+            editedMax = Math.max(editedMax, times[times.length - 1]);
             if(interpolation.equals("STEP") && !constantChannel(values, components,
                     path.equals("rotation")))
                 throw new IllegalArgumentException("skan cannot represent nonconstant STEP "
@@ -242,9 +260,7 @@ public final class GltfImport {
             }
         }
 
-        Map<String, SkanInfo.Track> originalByBone = new LinkedHashMap<>();
-        for(SkanInfo.Track track : original.tracks)
-            originalByBone.put(track.bone, track);
+        java.util.Set<String> editedBones = new java.util.HashSet<>(byBone.keySet());
         List<SkanInfo.Track> out = new ArrayList<>();
         for(SkanInfo.Track track : original.tracks) {
             BoneChannels pair = byBone.remove(track.bone);
@@ -255,7 +271,14 @@ public final class GltfImport {
             if(!identityTrack(added))
                 out.add(added);
         }
-        return out;
+        float originalMax = 0;
+        for(SkanInfo.Track track : original.tracks)
+            if(editedBones.contains(track.bone) && track.frames > 0)
+                originalMax = Math.max(originalMax, track.times[track.frames - 1]);
+        float length = (editedMax > 1e-6f
+                && Math.abs(editedMax - originalMax) > DURATION_EDIT_TOLERANCE)
+                ? editedMax : original.len;
+        return new SkanEdit(out, length);
     }
 
     private static boolean identityScale(float[] values) {

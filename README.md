@@ -192,8 +192,12 @@ Standalone skeletal animations also round-trip: open the animation resource, cho
 its bind-skeleton resource and a compatible skinned preview model in the companion
 resource dialog, then edit the named `skan_<id>` actions in Blender.
 Translation/rotation keyframes can be added,
-removed, moved and re-timed within the original clip duration. Clip duration,
-playback mode, bone scale and control/effect events are preserved rather than edited.
+removed and re-timed. The latest keyframe becomes the new clip duration, allowing
+clips without control/effect tracks to be shortened or extended; unchanged key
+ranges preserve any original trailing duration. Playback mode, bone scale and
+control/effect events are preserved rather than edited, and duration changes are
+rejected when effect timing would become ambiguous. Sub-20 ms end-time drift is
+treated as Blender frame-grid rounding rather than an intentional duration edit.
 Adding/removing morph (`manim`) frames remains unsupported.
 
 ## Building / testing
@@ -351,9 +355,9 @@ direction) are editable as JSON.
 These are deliberately out of scope for 1.0 — nothing here risks corrupting a file
 (everything not editable stays lossless raw/read-only):
 
-- **Animation metadata and morph timelines.** `skan` keyframes round-trip, but clip
-  duration, playback mode, bone scale and control/effect events are preserved rather
-  than edited. Adding/removing `manim` frames remains unsupported.
+- **Animation metadata and morph timelines.** `skan` keyframes and effect-free clip
+  duration round-trip, but playback mode, bone scale and control/effect events are
+  preserved rather than edited. Adding/removing `manim` frames remains unsupported.
 - **`code`/`codeentry` are read-only.** Class names and the entrypoint/classpath
   manifest are shown and the embedded `.class` can be exported, but client code
   isn't editable in-tool.

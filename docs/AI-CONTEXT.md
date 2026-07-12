@@ -349,10 +349,11 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 Completed feature history belongs in `CHANGELOG.md` and `DESIGN-notes.md`; this
 section lists only current limitations or intentionally deferred work.
 
-- **Animation follow-ons:** `skan` translation/rotation keyframes round-trip, but
-  clip duration, playback mode, bone scale and control/effect events are preserved
-  rather than edited. `manim` morph shapes rebuild with the original frame count
-  and timing; Blender's shape-key animation is not read.
+- **Animation follow-ons:** `skan` translation/rotation keyframes and effect-free
+  clip duration round-trip, but playback mode, bone scale and control/effect events
+  are preserved rather than edited. Duration changes are rejected for clips with
+  effect tracks. `manim` morph shapes rebuild with the original frame count and
+  timing; Blender's shape-key animation is not read.
 - **Typed coverage:** unusual `mat2`/`props` values using float8/float16 or
   snorm/unorm/mnorm still stay raw until exact decode→encode behavior is proven.
   The new-style typed (`tto`) `image` header parser is implemented exactly but

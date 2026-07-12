@@ -259,9 +259,15 @@ sampler input (with the required min/max). `SkanInfo` captures per-frame
 time/translation/rotation (fmt0 cpfloat, fmt1 quantised). A normal model export uses
 its local `skel`; `gltf-skan` instead accepts separate model, skeleton and animation
 resources, matching the game's runtime composition. `rebuild-skan` inverts the bind
-composition, supports LINEAR translation/rotation keyframe edits within the original
-clip duration, and writes the original skan wire format. Unchanged actions keep their
-original bytes, while raw `{ctl}` payloads remain exact when other tracks change.
+composition, supports LINEAR translation/rotation keyframe edits, and writes the
+original skan wire format. If the edited latest key differs from
+the original track range, it becomes the new effect-free clip duration; an unchanged
+range preserves the original `len` (including trailing time) and bytes. A <=20 ms
+difference is ignored as Blender frame-grid rounding (`wave` 1.2667 s -> 1.25 s).
+Duration
+changes are rejected when `{ctl}` tracks exist because fmt-1 event times scale with
+`len` while fmt-0 event times are absolute. Raw `{ctl}` payloads remain exact when
+other tracks change.
 Blender re-export can add constant two-key `STEP` T/R channels and identity-scale
 channels for otherwise static bones (observed on an edited `gfx/borka/wave` GLB:
 up to 98 STEP channels/action). These are safe to accept only when every T/R sample

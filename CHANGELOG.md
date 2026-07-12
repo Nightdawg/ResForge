@@ -11,8 +11,9 @@ All notable changes to ResForge are documented here. The format is based on
 - **Skeletal animations can now round-trip through Blender.** Standalone `skan`
   resources export with a separately selected bind skeleton and skinned preview
   model, then import edited translation/rotation actions while preserving unchanged
-  layers and control/effect tracks. New `gltf-skan` and `rebuild-skan` CLI commands
-  mirror the GUI workflow.
+  layers and control/effect tracks. The latest Blender key can shorten or extend a
+  clip when it has no control/effect track. New `gltf-skan` and `rebuild-skan` CLI
+  commands mirror the GUI workflow.
 
 ### Changed
 
