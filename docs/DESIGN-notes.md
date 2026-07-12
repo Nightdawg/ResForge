@@ -629,6 +629,10 @@ Each companion row accepts either a local `.res` or an in-memory download throug
 the existing bounded `ResourceFetcher` + fetch-history dialog; fetched skeletons
 must contain `skel`, fetched preview models must contain `vbuf2` + `mesh`, and the
 same immutable bytes feed playback or export without temporary files.
+The last chosen pair persists globally via Preferences. Local presets store absolute
+paths and are ignored if the file disappears; server presets store resource path +
+base URL, fetch on first use after restart through the bounded fetcher, then cache
+the validated bytes for that ResForge session.
 
 The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh

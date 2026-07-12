@@ -206,7 +206,9 @@ fetched directly from the resource server and retained in memory, then ResForge
 CPU-skins the model with controls for
 play/pause, stop, speed and timeline scrubbing. Multi-layer resources default to
 **All clips**, matching the game's combined body-part pose; individual numbered
-components remain selectable for diagnosis.
+components remain selectable for diagnosis. The selected local files or server
+paths are remembered across restarts; remembered server companions download lazily
+and remain cached for the current session.
 
 ## Building / testing
 

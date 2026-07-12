@@ -21,7 +21,8 @@ All notable changes to ResForge are documented here. The format is based on
 - **Animation companions can be fetched directly from the resource server.** Each
   bind-skeleton/model row now offers **Fetch from server…** alongside **Browse**;
   validated resources stay in memory and work for both View 3D and glTF export
-  without requiring local `.res` files.
+  without requiring local `.res` files. The selected local paths or server path/base
+  pair persist across restarts; server resources re-fetch lazily and cache per session.
 
 ### Changed
 

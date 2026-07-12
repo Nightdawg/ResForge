@@ -150,25 +150,43 @@ public class ResForgeFrame extends JFrame {
 
     private static final class CompanionResource {
         final Path file;
-        final byte[] fetched;
+        final String serverPath, serverBase;
+        volatile byte[] fetched;
         final String display;
 
-        private CompanionResource(Path file, byte[] fetched, String display) {
+        private CompanionResource(Path file, String serverPath, String serverBase,
+                                  byte[] fetched, String display) {
             this.file = file;
+            this.serverPath = serverPath;
+            this.serverBase = serverBase;
             this.fetched = fetched;
             this.display = display;
         }
 
         static CompanionResource local(Path file) {
-            return new CompanionResource(file, null, file.toString());
+            Path absolute = file.toAbsolutePath().normalize();
+            return new CompanionResource(absolute, null, null, null, absolute.toString());
         }
 
-        static CompanionResource fetched(String path, byte[] data) {
-            return new CompanionResource(null, data, "Server: " + path);
+        static CompanionResource server(String path, String base, byte[] data) {
+            return new CompanionResource(null, path, base, data, "Server: " + path);
         }
 
-        byte[] bytes() throws IOException {
-            return fetched != null ? fetched : Files.readAllBytes(file);
+        synchronized byte[] bytes() throws IOException {
+            if(file != null)
+                return Files.readAllBytes(file);
+            if(fetched == null) {
+                byte[] downloaded;
+                try {
+                    downloaded = resforge.net.ResourceFetcher.fetch(serverBase, serverPath);
+                } catch(InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IOException("Companion resource fetch interrupted.", e);
+                }
+                ResContainer.parse(downloaded);
+                fetched = downloaded;
+            }
+            return fetched;
         }
     }
 
@@ -217,6 +235,13 @@ public class ResForgeFrame extends JFrame {
 
     public ResForgeFrame() {
         super("ResForge");
+        try {
+            java.util.prefs.Preferences prefs =
+                    java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+            lastAnimationSkeleton = loadCompanionPreset(prefs, "companionSkeleton");
+            lastAnimationModel = loadCompanionPreset(prefs, "companionModel");
+        } catch(SecurityException ignored) {
+        }
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             public void windowClosing(WindowEvent e) {
@@ -1394,6 +1419,8 @@ public class ResForgeFrame extends JFrame {
                 continue;
             lastAnimationSkeleton = selectedSkeleton;
             lastAnimationModel = selectedModel;
+            saveCompanionPreset("companionSkeleton", selectedSkeleton);
+            saveCompanionPreset("companionModel", selectedModel);
             return new AnimationExportFiles(selectedSkeleton, selectedModel);
         }
     }
@@ -1437,7 +1464,7 @@ public class ResForgeFrame extends JFrame {
                                 && parsed.layers.stream().anyMatch(layer -> layer.name.equals("mesh"));
                 if(!valid)
                     throw new IllegalArgumentException("Fetched resource is not a compatible " + role + ".");
-                result[0] = CompanionResource.fetched(selection.path, data);
+                result[0] = CompanionResource.server(selection.path, selection.base, data);
             } catch(InterruptedException e) {
                 Thread.currentThread().interrupt();
                 failure[0] = "Fetch interrupted.";
@@ -1495,6 +1522,45 @@ public class ResForgeFrame extends JFrame {
                 return CompanionResource.local(sibling);
         }
         return null;
+    }
+
+    private static CompanionResource loadCompanionPreset(java.util.prefs.Preferences prefs,
+                                                         String key) {
+        try {
+            String kind = prefs.get(key + ".kind", "");
+            String value = prefs.get(key + ".value", "");
+            if(kind.equals("local")) {
+                if(value.isEmpty())
+                    return null;
+                Path path = Path.of(value);
+                return Files.isRegularFile(path) ? CompanionResource.local(path) : null;
+            }
+            if(kind.equals("server")) {
+                String base = prefs.get(key + ".base", resforge.net.ResourceFetcher.DEFAULT_BASE);
+                resforge.net.ResourceFetcher.urlFor(base, value);
+                return CompanionResource.server(value, base, null);
+            }
+        } catch(IllegalArgumentException | SecurityException ignored) {
+        }
+        return null;
+    }
+
+    private void saveCompanionPreset(String key, CompanionResource resource) {
+        try {
+            java.util.prefs.Preferences prefs =
+                    java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+            if(resource.file != null) {
+                prefs.put(key + ".kind", "local");
+                prefs.put(key + ".value", resource.file.toString());
+                prefs.remove(key + ".base");
+            } else {
+                prefs.put(key + ".kind", "server");
+                prefs.put(key + ".value", resource.serverPath);
+                prefs.put(key + ".base", resource.serverBase == null ? "" : resource.serverBase);
+            }
+        } catch(IllegalArgumentException | SecurityException e) {
+            setStatus("Ready \u2014 companion preset not saved: " + e.getMessage());
+        }
     }
 
     private void doShowReferences() {

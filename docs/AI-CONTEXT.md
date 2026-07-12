@@ -108,7 +108,9 @@ For standalone `skan` export, one companion-resource dialog shows both required
 sources (bind skeleton and visible preview model), with **Browse** and **Fetch from
 server…** per row, validation, session memory, and sibling `body.res`/`male.res`
 defaults. Server companions are parsed and retained in memory (not saved to disk)
-and feed both View 3D and glTF export.
+and feed both View 3D and glTF export. One global skeleton/model pair persists in
+Preferences across restarts: local files must still exist, while server path/base
+presets re-fetch lazily and cache bytes for the current frame session.
 Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
 Cache (AppData)**; row 2 **View 3D · Export to glTF · Rebuild from glTF · References…**; the
 **resource-version spinner** (uint16) sits on the file-path bar below. Menu accelerators:
