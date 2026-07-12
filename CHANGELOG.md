@@ -6,6 +6,8 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-07-12
+
 ### Added
 
 - **Skeletal animations can now round-trip through Blender.** Standalone `skan`
@@ -313,17 +315,19 @@ Every operation is scriptable: `gui`, `info`, `catalog`, `refs`, `fetch`,
   strict UTF-8, recursion-depth caps, range-checked typed edits, and validated glTF
   input, so a crafted or truncated file fails cleanly rather than hanging, OOM-ing, or
   corrupting output.
-- **~190 JUnit 5 tests** and a batch round-trip oracle (`verify`); three equivalent
-  builds (Gradle, Maven, Ant) producing the same runnable fat jar.
+- **371 JUnit 5 tests** and a batch round-trip oracle (`verify`); the release corpus
+  passes 8,805 / 8,805 resources, and three equivalent builds (Gradle, Maven, Ant)
+  produce the same runnable fat-jar entry layout.
 
 ### Known limitations
 
 See [README → Status / scope → Known limitations](README.md#known-limitations-10).
-In short: animation **keyframe** editing (`skan` timing, adding/removing `manim` frames)
-is read-only; `code`/`codeentry` are read-only; the glTF rebuild is not byte-lossless
-(verify in-game); the 3D viewer shows `varmat`-textured parts shaded; and a few unusual
-typed instances stay raw by design (lossless-or-raw).
+In short: `skan` playback mode, bone scale, control/effect events, and adding/removing
+`manim` frames remain read-only; `code`/`codeentry` are read-only; the glTF rebuild is
+not byte-lossless (verify in-game); the 3D viewer shows `varmat`-textured parts shaded;
+and a few unusual typed instances stay raw by design (lossless-or-raw).
 
-[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/Nightdawg/ResForge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Nightdawg/ResForge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nightdawg/ResForge/releases/tag/v1.0.0

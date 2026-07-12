@@ -8,7 +8,7 @@
   target/) so it never clashes with build-gradle/ or build-ant/.
 
   Common commands (Maven fetches its plugins + dependencies from Maven Central):
-    mvn package         compile + run tests + build the jar -> build-maven/resforge-1.1.0.jar
+    mvn package         compile + run tests + build the jar -> build-maven/resforge-1.2.0.jar
     mvn test            compile and run the JUnit 5 tests
     mvn compile         compile main sources only
     mvn clean           remove build-maven/
@@ -23,7 +23,7 @@
 
     <groupId>resforge</groupId>
     <artifactId>resforge</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
     <packaging>jar</packaging>
 
     <properties>
