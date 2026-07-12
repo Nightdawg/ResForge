@@ -328,6 +328,16 @@ java -jar build-gradle/libs/resforge-1.1.0.jar info horse.res
 
 ## 7. Verification performed
 
+- **Ogg Vorbis decode fixture (2026-07-12):** a contributor-supplied 48,608-byte
+  stream declared under CC0 1.0 was added under `src/test/resources/resforge/audio/`.
+  Its comment header has encoder metadata only (no artist/title/copyright claim),
+  and JOrbis decodes it completely as 44.1 kHz stereo: 104,370 frames
+  (2.3666666667 seconds), 417,480 bytes of interleaved signed 16-bit little-endian
+  PCM. `OggVorbisTest` pins those values and the decoded PCM SHA-256
+  (`2dc1485746453333318fece0c3192648c7d6a1347c5b57c717945cab02c6cb71`);
+  the adjacent license notice records the CC0 declaration and encoded-file hash.
+  Ant now copies `src/test/resources` into its test classpath, matching Gradle
+  and Maven.
 - **Strict text editing (2026-07-10):** GUI editing for `tooltip`/`pagina` uses a
   reporting UTF-8 decoder and requires byte-identical re-encoding before showing the
   text box. Overlong, truncated, and lone-continuation payloads stay raw with

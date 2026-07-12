@@ -27,6 +27,7 @@
     <property name="src.dir"         value="src/main/java"/>
     <property name="resources.dir"   value="src/main/resources"/>
     <property name="test.src.dir"    value="src/test/java"/>
+    <property name="test.resources.dir" value="src/test/resources"/>
     <property name="lib.dir"         value="lib"/>
     <property name="jorbis.jar"      value="${lib.dir}/jorbis-0.0.17.jar"/>
     <property name="jna.jar"         value="${lib.dir}/jna-5.15.0.jar"/>
@@ -109,6 +110,9 @@
                 <path refid="junit.classpath"/>
             </classpath>
         </javac>
+        <copy todir="${test.classes.dir}">
+            <fileset dir="${test.resources.dir}"/>
+        </copy>
     </target>
 
     <target name="test" depends="compile-tests" description="Run the JUnit 5 tests">

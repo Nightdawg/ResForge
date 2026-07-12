@@ -147,11 +147,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
-- **Deterministic synthetic M15 regression coverage** now exercises CLI dispatch,
+- **Deterministic redistributable regression coverage** now exercises CLI dispatch,
   verifier ordering/histograms, font and skeletal-animation inspection, layer moves,
-  and matrix math without copyrighted assets. `OggVorbis.decode` remains blocked on
-  a redistributable Vorbis fixture; real game fixtures remain local-only and are not
-  covered by these synthetic tests.
+  matrix math, and `OggVorbis.decode` without copyrighted game assets. The decoder
+  fixture is CC0 and pins its audio metadata and decoded PCM output.
 
 - **Dark mode.** A new **Options → Dark mode** toggle switches the whole editor
   between a light and a dark theme, applied live (no restart) and remembered

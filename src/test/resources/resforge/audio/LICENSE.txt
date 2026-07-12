@@ -1,0 +1,13 @@
+vorbis-sample.ogg
+=================
+
+License: CC0 1.0 Universal (SPDX: CC0-1.0)
+License text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+
+The contributor who supplied this fixture on 2026-07-12 explicitly declared it
+freely redistributable under CC0. CC0 requires no attribution. The Vorbis
+comment header contains only encoder metadata and no artist, title, or copyright
+claim.
+
+SHA-256:
+46a145dafc5b98d9b863f50adfe962b8aa79f94256615c402bc860da92877cef

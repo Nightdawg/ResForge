@@ -198,7 +198,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   a NaN/Inf coordinate is rejected because it would otherwise poison a quantised
   attribute's shared max factor and decode every vertex back to NaN) so a malformed
   `.glb` fails cleanly rather than corrupting a layer.
-- `audio/` — `OggVorbis` (Ogg → PCM via JOrbis).
+- `audio/` — `OggVorbis` (Ogg → interleaved signed 16-bit little-endian PCM via
+  JOrbis). `OggVorbisTest` exercises a contributor-supplied CC0 stereo fixture
+  and pins its sample rate, frame count, duration, and decoded PCM SHA-256.
 - `net/` — `ResourceFetcher` (`<base>/<path>.res` GET, one shared lazily-created JDK
   HttpClient — holder idiom, so the pure `urlFor`/`baseName` helpers start no threads;
   resource names are strict UTF-8 URI path segments (spaces/non-ASCII encoded;
@@ -373,8 +375,6 @@ section lists only current limitations or intentionally deferred work.
   and it does not composite a local `otex` overlay over a fetched external base.
   Runtime-selected varmat textures and `Dyntex` sprite additions remain out of
   scope because their final pixels are not stored in the model resource.
-- **Test fixture gap:** `OggVorbis.decode` still lacks a redistributable Vorbis
-  fixture. Copyrighted game assets remain local-only and must not be committed.
 - GUI niceties are otherwise considered complete. Folder-wide re-skinning and
   layer search/filter were explicitly declined; use CLI `catalog` + `replace`
   for scripted batch work.
