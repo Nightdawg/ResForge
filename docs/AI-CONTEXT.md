@@ -246,11 +246,12 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   models stay compact; so a model's alternate `tex` layers, e.g. mulberry's seasonal
   leaves, can be selected live, while knarr shows one picker not ten). Texture/mask
   palettes decode on the model workers; each view rasterises immutable render-state
-  snapshots on its own coalescing daemon worker, while Swing paint only scales the
-  latest cached frame. Triangle, internal-framebuffer, and cumulative raster-work
-  budgets bound that work; generation/disposal cancellation is checked inside the
-  raster loops, and budget failures become visible preview errors instead of partial
-  frames. `model/SkanPlayback` retains soup-aligned top-four influences only for
+  snapshots on its own daemon worker, completing the active frame while coalescing
+  rapid input to one latest pending state, while Swing paint only scales the latest
+  cached frame. Triangle, internal-framebuffer, and cumulative raster-work budgets
+  bound that work; disposal cancellation is checked inside the raster loops, and
+  budget failures become visible preview errors instead of partial frames.
+  `model/SkanPlayback` retains soup-aligned top-four influences only for
   animation views, evaluates client-equivalent bind+delta poses and wrap modes, and
   CPU-skins positions/normals on a generation-gated daemon worker. Multi-layer player
   poses default to an **All clips** composite (the game applies those body-part mods

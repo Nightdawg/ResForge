@@ -32,6 +32,9 @@ final class Model3DView extends JPanel {
     private final ExecutorService ownedWorker;
     private final long rasterWorkBudget;
     private final AtomicLong renderGeneration = new AtomicLong();
+    private final Object renderLock = new Object();
+    private RenderRequest pendingRender;
+    private boolean renderScheduled;
 
     private double yaw = Math.toRadians(35);
     private double pitch = Math.toRadians(20);
@@ -253,44 +256,60 @@ final class Model3DView extends JPanel {
         long generation = renderGeneration.incrementAndGet();
         if(disposed || displayWidth <= 0 || displayHeight <= 0)
             return generation;
-        RenderState state = snapshot(displayWidth, displayHeight);
-        renderWorker.execute(() -> {
-            if(!isCurrent(generation))
-                return;
+        synchronized(renderLock) {
+            pendingRender = new RenderRequest(snapshot(displayWidth, displayHeight));
+            if(renderScheduled)
+                return generation;
+            renderScheduled = true;
+        }
+        renderWorker.execute(this::renderPending);
+        return generation;
+    }
+
+    private void renderPending() {
+        while(true) {
+            RenderRequest request;
+            synchronized(renderLock) {
+                request = pendingRender;
+                pendingRender = null;
+                if(request == null) {
+                    renderScheduled = false;
+                    return;
+                }
+            }
             BufferedImage image;
             try {
-                image = new Renderer(geo, palette, state,
-                        () -> !isCurrent(generation) || Thread.currentThread().isInterrupted(),
+                image = new Renderer(geo, palette, request.state,
+                        () -> disposed || Thread.currentThread().isInterrupted(),
                         rasterWorkBudget).render();
             } catch(CancellationException ignored) {
                 return;
             } catch(RuntimeException failure) {
-                if(!isCurrent(generation))
-                    return;
                 String message = failure instanceof PreviewFailure
                         ? failure.getMessage()
                         : "3D preview rendering failed: " + (failure.getMessage() != null
                         ? failure.getMessage() : failure.getClass().getSimpleName());
-                edt.execute(() -> {
-                    if(isCurrent(generation)) {
-                        cachedImage = null;
-                        cachedFailure = message;
-                        repaint();
-                    }
-                });
-                return;
+                edt.execute(() -> publishFailure(message));
+                continue;
             }
-            if(!isCurrent(generation))
-                return;
-            edt.execute(() -> {
-                if(isCurrent(generation)) {
-                    cachedImage = image;
-                    cachedFailure = null;
-                    repaint();
-                }
-            });
-        });
-        return generation;
+            edt.execute(() -> publishFrame(image));
+        }
+    }
+
+    private void publishFrame(BufferedImage image) {
+        if(disposed)
+            return;
+        cachedImage = image;
+        cachedFailure = null;
+        repaint();
+    }
+
+    private void publishFailure(String message) {
+        if(disposed)
+            return;
+        cachedImage = null;
+        cachedFailure = message;
+        repaint();
     }
 
     private RenderState snapshot(int displayWidth, int displayHeight) {
@@ -300,10 +319,6 @@ final class Model3DView extends JPanel {
         return new RenderState(yaw, pitch, dist, panX, panY, shaded, wireframe, textured,
                 matOrd, positions != null ? positions : geo.positions,
                 normals != null ? normals : geo.normals, framebuffer[0], framebuffer[1]);
-    }
-
-    private boolean isCurrent(long generation) {
-        return !disposed && renderGeneration.get() == generation;
     }
 
     BufferedImage renderForTest(int width, int height) {
@@ -329,6 +344,9 @@ final class Model3DView extends JPanel {
     void dispose() {
         disposed = true;
         renderGeneration.incrementAndGet();
+        synchronized(renderLock) {
+            pendingRender = null;
+        }
         cachedImage = null;
         cachedFailure = null;
         animatedPositions = null;
@@ -352,8 +370,8 @@ final class Model3DView extends JPanel {
         }
     }
 
-    static float perspectiveDepth(double l0, double l1, double l2, double[] z) {
-        return (float) (1.0 / (l0 / z[0] + l1 / z[1] + l2 / z[2]));
+    static float perspectiveDepth(double inverseDepth) {
+        return (float) (1.0 / inverseDepth);
     }
 
     static final class DecodedPalette {
@@ -389,6 +407,9 @@ final class Model3DView extends JPanel {
         private RenderState {
             matOrd = matOrd.clone();
         }
+    }
+
+    private record RenderRequest(RenderState state) {
     }
 
     private static final class Renderer {
@@ -514,14 +535,14 @@ final class Model3DView extends JPanel {
                     double l2 = 1 - l0 - l1;
                     if(l0 < 0 || l1 < 0 || l2 < 0)
                         continue;
-                    float depth = perspectiveDepth(l0, l1, l2, z);
+                    double inverseDepth = l0 * iz0 + l1 * iz1 + l2 * iz2;
+                    float depth = perspectiveDepth(inverseDepth);
                     int index = py * state.width + px;
                     if(depth >= zbuf[index])
                         continue;
                     double brightness = l0 * intensity[0] + l1 * intensity[1] + l2 * intensity[2];
                     int red, green, blue;
                     if(texture != null) {
-                        double inverseDepth = l0 * iz0 + l1 * iz1 + l2 * iz2;
                         double uu = (l0 * uoz0 + l1 * uoz1 + l2 * uoz2) / inverseDepth;
                         double vv = (l0 * voz0 + l1 * voz1 + l2 * voz2) / inverseDepth;
                         uu -= Math.floor(uu);

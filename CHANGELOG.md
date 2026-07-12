@@ -6,6 +6,12 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 3D viewer remains responsive while models are rotated continuously.**
+  Render requests now retain only the latest pending camera state without repeatedly
+  cancelling the active frame, and reuse interpolated reciprocal depth during rasterisation.
+
 ## [1.2.0] — 2026-07-12
 
 ### Added

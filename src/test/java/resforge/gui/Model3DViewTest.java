@@ -162,21 +162,21 @@ class Model3DViewTest {
     }
 
     @Test
-    void staleRenderGenerationCannotPublish() throws Exception {
+    void rapidRenderRequestsCoalesceToTheLatestFrame() throws Exception {
         ModelGeometry geo = texturedGeometry();
         ManualExecutor worker = new ManualExecutor();
         ManualExecutor edt = new ManualExecutor();
         Model3DView view = new Model3DView(
                 geo, Model3DView.preparePalette(geo), worker, edt);
 
-        view.requestRender(80, 80);
-        view.requestRender(100, 90);
+        for(int size = 80; size <= 120; size++)
+            view.requestRender(size, size - 10);
+        assertEquals(1, worker.size(), "rapid input must schedule only one worker task");
         worker.runNext();
-        assertTrue(edt.isEmpty(), "superseded render must not enqueue publication");
-        worker.runNext();
+        assertTrue(worker.isEmpty());
         edt.runNext();
-        assertEquals(100, view.cachedImageForTest().getWidth());
-        assertEquals(90, view.cachedImageForTest().getHeight());
+        assertEquals(120, view.cachedImageForTest().getWidth());
+        assertEquals(110, view.cachedImageForTest().getHeight());
 
         view.requestRender(60, 60);
         view.dispose();
@@ -268,10 +268,12 @@ class Model3DViewTest {
         assertTrue(incorrectLinearOblique > 3.0,
                 "linear interpolation would incorrectly put the flat triangle in front");
 
-        float obliqueDepth =
-                Model3DView.perspectiveDepth(oneThird, oneThird, oneThird, oblique);
-        float flatDepth =
-                Model3DView.perspectiveDepth(oneThird, oneThird, oneThird, flat);
+        double obliqueInverseDepth =
+                oneThird / oblique[0] + oneThird / oblique[1] + oneThird / oblique[2];
+        double flatInverseDepth =
+                oneThird / flat[0] + oneThird / flat[1] + oneThird / flat[2];
+        float obliqueDepth = Model3DView.perspectiveDepth(obliqueInverseDepth);
+        float flatDepth = Model3DView.perspectiveDepth(flatInverseDepth);
         assertEquals(2.5f, obliqueDepth, 1e-6f);
         assertEquals(3.0f, flatDepth, 1e-6f);
         assertTrue(obliqueDepth < flatDepth,
@@ -291,6 +293,10 @@ class Model3DViewTest {
 
         boolean isEmpty() {
             return tasks.isEmpty();
+        }
+
+        int size() {
+            return tasks.size();
         }
 
     }
