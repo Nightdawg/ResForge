@@ -357,27 +357,11 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   and the per-layer table for user-visible behavior, and `kb/notes/` for durable
   format findings and decisions. A change isn't done until its docs match.
 
-## 10. Open / deferred work
-Completed feature history belongs in `CHANGELOG.md` and `DESIGN-notes.md`; this
-section lists only current limitations or intentionally deferred work.
-
-- **Animation follow-ons:** `skan` translation/rotation keyframes and effect-free
-  clip duration round-trip, but playback mode, bone scale and control/effect events
-  are preserved rather than edited. Duration changes are rejected for clips with
-  effect tracks. `manim` morph shapes rebuild with the original frame count and
-  timing; Blender's shape-key animation is not read.
-- **Typed coverage:** unusual `mat2`/`props` values using float8/float16 or
-  snorm/unorm/mnorm still stay raw until exact decode→encode behavior is proven.
-  The new-style typed (`tto`) `image` header parser is implemented exactly but
-  remains unverified on a real sample; none occurred among 669 images in the
-  recorded corpus, so validation is opportunistic if one is found.
-- **3D viewer follow-ons:** the viewport has skeletal playback but no morph playback,
-  and it does not composite a local `otex` overlay over a fetched external base.
-  Runtime-selected varmat textures and `Dyntex` sprite additions remain out of
-  scope because their final pixels are not stored in the model resource.
-- GUI niceties are otherwise considered complete. Folder-wide re-skinning and
-  layer search/filter were explicitly declined; use CLI `catalog` + `replace`
-  for scripted batch work.
+## 10. Project status
+No open or deferred work is currently tracked. Known unsupported cases and
+deliberate non-goals are documented where the affected feature is described;
+they are not roadmap items. Completed feature history belongs in `CHANGELOG.md`
+and `DESIGN-notes.md`.
 
 ## 11. The other tool (context)
 CarryGun's **HafenResourceTool** (GitLab, Qt/C++): broader typed coverage +

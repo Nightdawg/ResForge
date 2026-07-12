@@ -549,7 +549,7 @@ CLI `transform <file.res> <sx> <sy> <sz>` command exercised the encoder by scali
 a model's vertex positions, but was removed once the glTF round-trip — which also
 handles normals/tangents and is in-game validated — superseded it.)
 
-## 9. Current 3D status and open work
+## 9. Current 3D status and scope
 
 ### Completed glTF round-trip
 
@@ -648,19 +648,20 @@ The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh
 quantization/stripping choices — no dev code needed.
 
-### Open or deferred
+### Intentional scope boundaries
 
 - `skan` playback mode, bone scale and control/effect events are not edited through
   glTF; effect-free clip duration follows the latest key, while duration changes on
   clips with effect tracks are rejected. `manim` morph shapes rebuild, but frame
   count and timing remain those of the original resource.
 - The 3D viewer plays skeletal animation but not `manim` morph animation.
-- Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are deferred.
+- Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are not planned.
   Geometry, skin weights, skeleton poses, skeletal actions, and fixed-timeline morph
   shapes are edited through glTF instead.
 - The exact new-style typed (`tto`) `image` header parser has not been validated
-  against a real example. None appeared among 669 recorded images, so validate
-  opportunistically if a sample is found.
+  against a real example; none appeared among 669 recorded images.
+
+These are documented limitations, not roadmap or to-do items.
 
 ---
 

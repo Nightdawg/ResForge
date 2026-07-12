@@ -317,7 +317,7 @@ they stay raw. Run with no arguments to open the editor instead.
 
 New here (or an AI assistant resuming work)? Read **`docs/AI-CONTEXT.md`** first —
 a one-file primer on the architecture, builds, feature set, per-layer status and
-open work. **`docs/DESIGN-notes.md`** has the deep format/reverse-engineering log.
+scope boundaries. **`docs/DESIGN-notes.md`** has the deep format/reverse-engineering log.
 For quick lookups there's a tiny local knowledge-base retriever in **`kb/`**:
 `java kb/Rag.java "your question"` (BM25 over `kb/notes/` + `docs/` + the source,
 no build, no dependencies). Add **`-f`** to print whole chunks — ideal for an AI
