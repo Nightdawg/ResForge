@@ -90,6 +90,7 @@ public class ResForgeFrame extends JFrame {
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn;
+    private Path lastAnimationSkeleton, lastAnimationModel;
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final ThumbnailCache thumbCache = new ThumbnailCache();
@@ -133,6 +134,15 @@ public class ResForgeFrame extends JFrame {
             this.layers = layers;
             this.dirty = dirty;
             this.selectedRow = selectedRow;
+        }
+    }
+
+    private static final class AnimationExportFiles {
+        final Path skeleton, model;
+
+        AnimationExportFiles(Path skeleton, Path model) {
+            this.skeleton = skeleton;
+            this.model = model;
         }
     }
 
@@ -777,14 +787,19 @@ public class ResForgeFrame extends JFrame {
         if(res == null)
             return;
         boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
-        if(!hasGeom) {
-            info("This resource has no 3D geometry (vbuf2) to rebuild.");
+        boolean hasSkan = res.layers.stream().anyMatch(l -> l.name.equals("skan"));
+        boolean animationOnly = hasSkan && !hasGeom;
+        if(!hasGeom && !hasSkan) {
+            info("This resource has no 3D geometry or skeletal animation to rebuild.");
             return;
         }
         int ok = JOptionPane.showConfirmDialog(this,
-                "Rebuild regenerates the model's geometry from the glTF, allowing added or\n"
-                        + "removed vertices. It isn't byte-lossless, so verify the\n"
-                        + "result in-game. Continue?",
+                animationOnly
+                        ? "Import edited Blender actions into this resource's skan layers?\n"
+                                + "Unchanged actions and non-animation layers stay byte-identical."
+                        : "Rebuild regenerates the model's geometry from the glTF, allowing added or\n"
+                                + "removed vertices. It isn't byte-lossless, so verify the\n"
+                                + "result in-game. Continue?",
                 "Rebuild from glTF", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if(ok != JOptionPane.OK_OPTION)
             return;
@@ -799,29 +814,41 @@ public class ResForgeFrame extends JFrame {
         final RebuildProgress progress = new RebuildProgress(this, sel.getName());
         setStatus("Rebuilding from " + sel.getName() + " \u2026");
         Thread t = new Thread(() -> {
-            GltfImport.RebuildResult r = null;
+            byte[] rebuilt = null;
+            String summary = null;
             String err = null;
             try {
                 byte[] glb = Files.readAllBytes(sel.toPath());
-                r = GltfImport.rebuild(orig, glb);
+                if(animationOnly) {
+                    GltfImport.AnimationRebuildResult r = GltfImport.rebuildSkan(orig, glb);
+                    rebuilt = r.res;
+                    summary = "Rebuilt skeletal animations: " + r.changed + " changed, "
+                            + r.unchanged + " unchanged from " + sel.getName()
+                            + " \u2014 Save to keep changes";
+                } else {
+                    GltfImport.RebuildResult r = GltfImport.rebuild(orig, glb);
+                    rebuilt = r.res;
+                    summary = "Rebuilt " + r.vertices + " vertices, " + r.triangles + " triangles"
+                            + (r.skinned ? " (with skinning)" : "")
+                            + (r.skel ? " (skeleton re-posed)" : "")
+                            + " from " + sel.getName() + " \u2014 Save to keep changes";
+                }
             } catch(Exception e) {
                 err = e.getMessage();
             }
-            final GltfImport.RebuildResult rr = r;
+            final byte[] result = rebuilt;
+            final String resultSummary = summary;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 progress.close();
                 if(!finishOperation(operation, "Rebuild"))
                     return;
-                if(rr == null) {
+                if(result == null) {
                     error("glTF rebuild failed: " + error);
                     return;
                 }
                 try {
-                    applyRebuilt(ResContainer.parse(rr.res), curFile, curPath,
-                            "Rebuilt " + rr.vertices + " vertices, " + rr.triangles + " triangles"
-                                    + (rr.skinned ? " (with skinning)" : "") + (rr.skel ? " (skeleton re-posed)" : "")
-                                    + " from " + sel.getName() + " \u2014 Save to keep changes");
+                    applyRebuilt(ResContainer.parse(result), curFile, curPath, resultSummary);
                 } catch(Exception e) {
                     error("glTF rebuild failed: " + e.getMessage());
                 }
@@ -1119,14 +1146,34 @@ public class ResForgeFrame extends JFrame {
     private void doExportGltf() {
         if(res == null)
             return;
+        boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
+        boolean hasSkan = res.layers.stream().anyMatch(l -> l.name.equals("skan"));
+        boolean animationOnly = hasSkan && !hasGeom;
+        Path skeletonFile = null, modelFile = null;
+        if(animationOnly) {
+            AnimationExportFiles selected = chooseAnimationExportFiles();
+            if(selected == null)
+                return;
+            skeletonFile = selected.skeleton;
+            modelFile = selected.model;
+        }
         final String modelName = file != null ? file.getFileName().toString() : "model";
         final byte[] snapshot = res.serialize();
+        final Path selectedSkeleton = skeletonFile;
+        final Path selectedModel = modelFile;
         setStatus("Exporting glTF \u2026");
         Thread t = new Thread(() -> {
             GltfExport.Result r = null;
             String err = null;
             try {
-                r = GltfExport.toGlb(ResContainer.parse(snapshot), modelName);
+                ResContainer animation = ResContainer.parse(snapshot);
+                if(animationOnly) {
+                    ResContainer skeleton = ResContainer.parse(Files.readAllBytes(selectedSkeleton));
+                    ResContainer model = ResContainer.parse(Files.readAllBytes(selectedModel));
+                    r = GltfExport.toGlb(model, skeleton, animation, modelName);
+                } else {
+                    r = GltfExport.toGlb(animation, modelName);
+                }
             } catch(Exception e) {
                 err = e.getMessage();
             }
@@ -1142,7 +1189,8 @@ public class ResForgeFrame extends JFrame {
                     setStatus("Ready");
                     return;
                 }
-                Path chosen = saveDialog("Export glTF", baseName() + ".glb");
+                Path chosen = saveDialog("Export glTF", baseName() + ".glb",
+                        new FileNameExtensionFilter("Binary glTF (*.glb)", "glb"));
                 if(chosen != null) {
                     try {
                         SafeFiles.write(chosen, rr.glb);
@@ -1157,6 +1205,92 @@ public class ResForgeFrame extends JFrame {
         }, "gltf-export");
         t.setDaemon(true);
         t.start();
+    }
+
+    private AnimationExportFiles chooseAnimationExportFiles() {
+        JTextField skeletonPath = new JTextField(companionDefault(lastAnimationSkeleton, "body.res"), 42);
+        JTextField modelPath = new JTextField(companionDefault(lastAnimationModel, "male.res"), 42);
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("Haven resource (*.res)", "res");
+
+        JButton browseSkeleton = new JButton("Browse\u2026");
+        browseSkeleton.addActionListener(e -> {
+            Path selected = openDialog("Select bind-skeleton resource", filter);
+            if(selected != null)
+                skeletonPath.setText(selected.toString());
+        });
+        JButton browseModel = new JButton("Browse\u2026");
+        browseModel.addActionListener(e -> {
+            Path selected = openDialog("Select preview-model resource", filter);
+            if(selected != null)
+                modelPath.setText(selected.toString());
+        });
+
+        JPanel skeletonRow = new JPanel(new BorderLayout(6, 0));
+        skeletonRow.add(skeletonPath, BorderLayout.CENTER);
+        skeletonRow.add(browseSkeleton, BorderLayout.EAST);
+        JPanel modelRow = new JPanel(new BorderLayout(6, 0));
+        modelRow.add(modelPath, BorderLayout.CENTER);
+        modelRow.add(browseModel, BorderLayout.EAST);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JLabel help = new JLabel("<html>This animation resource has no rig or visible mesh. "
+                + "Select both companion resources used for the Blender preview.</html>");
+        help.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(help);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
+        JLabel skeletonLabel = new JLabel("Bind skeleton (.res) \u2014 bone hierarchy and rest pose:");
+        skeletonLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        skeletonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(skeletonLabel);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
+        panel.add(skeletonRow);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
+        JLabel modelLabel = new JLabel("Preview model (.res) \u2014 visible skinned mesh:");
+        modelLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        modelRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(modelLabel);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
+        panel.add(modelRow);
+
+        Object[] options = {"Export", "Cancel"};
+        while(true) {
+            int result = JOptionPane.showOptionDialog(this, panel,
+                    "Skeletal animation export resources", JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+            if(result != 0)
+                return null;
+            Path skeleton, model;
+            try {
+                skeleton = Path.of(skeletonPath.getText().trim());
+                model = Path.of(modelPath.getText().trim());
+            } catch(RuntimeException e) {
+                error("Enter valid paths for both companion resources.");
+                continue;
+            }
+            if(!Files.isRegularFile(skeleton)) {
+                error("Bind skeleton file not found: " + skeleton);
+                continue;
+            }
+            if(!Files.isRegularFile(model)) {
+                error("Preview model file not found: " + model);
+                continue;
+            }
+            lastAnimationSkeleton = skeleton;
+            lastAnimationModel = model;
+            return new AnimationExportFiles(skeleton, model);
+        }
+    }
+
+    private String companionDefault(Path remembered, String siblingName) {
+        if(remembered != null)
+            return remembered.toString();
+        if(file != null && file.getParent() != null) {
+            Path sibling = file.getParent().resolve(siblingName);
+            if(Files.isRegularFile(sibling))
+                return sibling.toString();
+        }
+        return "";
     }
 
     private void doShowReferences() {
@@ -1479,9 +1613,14 @@ public class ResForgeFrame extends JFrame {
      *  native dialog can't be used. Returns the chosen path, or {@code null} if
      *  cancelled. The native dialog handles overwrite confirmation itself. */
     private Path saveDialog(String title, String defaultName) {
+        return saveDialog(title, defaultName,
+                new FileNameExtensionFilter("Haven resource (*.res)", "res"));
+    }
+
+    private Path saveDialog(String title, String defaultName, FileNameExtensionFilter filter) {
         if(ON_WINDOWS) {
             WinFileDialogs.Result r = WinFileDialogs.save(ownerHwnd(), title, initialDirPath(),
-                    defaultName, toFilters(new FileNameExtensionFilter("Haven resource (*.res)", "res")));
+                    defaultName, toFilters(filter));
             if(r.available)
                 return r.path;
         }

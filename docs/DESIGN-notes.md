@@ -589,18 +589,36 @@ UV sets or skeleton bindings. `GltfExport` writes a static, textured binary glTF
   angle + snorm16 octahedral axis + float32 pos; the client reads both versions, so ver-0
   cpfloat needn't be reproduced).
 
+**Standalone `skan` editing is complete.** `gltf-skan` and the GUI combine three
+runtime-composed resources into one Blender file: a preview mesh, its bind `skel`,
+and the animation resource. Each `skan` layer becomes a named `skan_<id>` action.
+`rebuild-skan` reads LINEAR translation/rotation channels by bone name, unions
+independent channel times, inverts the bind composition (`frameRot = bindRot^-1 *
+animatedRot`, `frameTrans = animatedTrans - bindTrans`), and writes edited tracks in
+their original fmt-0/fmt-1 encoding. Unchanged actions retain the original layer
+bytes; `{ctl}` event payloads and every non-`skan` layer are copied exactly. Real
+validation used `gfx/borka/animaltease` (six clips), `gfx/borka/body` (41-bone
+skeleton), and `gfx/borka/male` (preview mesh): export produced a 221,104-byte GLB,
+and a no-edit rebuild kept all six layers and the complete resource SHA-256 identical.
+Blender may expand edited actions with two-key constant `STEP` channels for every
+bone and sampled identity `scale` channels. Import accepts those only when all values
+are constant/identity (interpolation is then mathematically irrelevant); nonconstant
+STEP translation/rotation and non-identity scale remain hard errors rather than being
+silently approximated.
+
 The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh
 quantization/stripping choices — no dev code needed.
 
 ### Open or deferred
 
-- `skan` keyframe edits are not imported from glTF. `manim` morph shapes are
-  rebuilt, but frame count and timing remain those of the original resource;
-  adding, removing, or retiming either animation format needs a write path.
+- `skan` clip duration, playback mode, bone scale and control/effect events are not
+  edited through glTF; keyframes can change within the original duration. `manim`
+  morph shapes rebuild, but frame count and timing remain those of the original
+  resource.
 - Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are deferred.
-  Geometry, skin weights, skeleton poses, and fixed-timeline morph shapes are
-  edited through glTF instead.
+  Geometry, skin weights, skeleton poses, skeletal actions, and fixed-timeline morph
+  shapes are edited through glTF instead.
 - The exact new-style typed (`tto`) `image` header parser has not been validated
   against a real example. None appeared among 669 recorded images, so validate
   opportunistically if a sample is found.

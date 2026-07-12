@@ -5,6 +5,7 @@ import resforge.io.MessageReader;
 import resforge.io.MessageWriter;
 import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
+import resforge.layers.SkanInfo;
 import resforge.layers.SkelInfo;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
@@ -116,6 +117,28 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    private static byte[] skanRootWithEffect(int id) {
+        MessageWriter w = new MessageWriter();
+        w.int16(id).uint8(2).uint8(1).float32(1);
+        w.string("root").uint16(1);
+        w.uint16(0).float16(0).float16(0).float16(0);
+        w.uint16(0).int16(0).int16(0);
+        w.string("{ctl}").uint16(1);
+        w.uint16(0).uint8(1).string("trigger");
+        return w.toByteArray();
+    }
+
+    private static byte[] skanRootTwoFrames(int id, float secondX) {
+        MessageWriter w = new MessageWriter();
+        w.int16(id).uint8(2).uint8(1).float32(1);
+        w.string("root").uint16(2);
+        w.uint16(0).float16(0).float16(0).float16(0);
+        w.uint16(0).int16(0).int16(0);
+        w.uint16(0xffff).float16(secondX).float16(0).float16(0);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
     private static byte[] vbufLayer(ResContainer res) {
         for(Layer l : res.layers)
             if(l.name.equals("vbuf2"))
@@ -137,6 +160,113 @@ class GltfImportTest {
         return out;
     }
 
+    @SuppressWarnings("unchecked")
+    private static byte[] moveAnimationTranslation(byte[] glb, String action, String bone, float dx) {
+        byte[] out = glb.clone();
+        int jsonLen = le32(out, 12);
+        Map<String, Object> root = (Map<String, Object>) Json.parse(
+                new String(out, 20, jsonLen, StandardCharsets.UTF_8));
+        List<Object> nodes = (List<Object>) root.get("nodes");
+        int nodeIndex = -1;
+        for(int i = 0; i < nodes.size(); i++)
+            if(bone.equals(((Map<String, Object>) nodes.get(i)).get("name")))
+                nodeIndex = i;
+        assertTrue(nodeIndex >= 0);
+        Map<String, Object> selected = null;
+        for(Object value : (List<Object>) root.get("animations")) {
+            Map<String, Object> candidate = (Map<String, Object>) value;
+            if(action.equals(candidate.get("name")))
+                selected = candidate;
+        }
+        assertTrue(selected != null);
+        List<Object> samplers = (List<Object>) selected.get("samplers");
+        int output = -1;
+        for(Object value : (List<Object>) selected.get("channels")) {
+            Map<String, Object> channel = (Map<String, Object>) value;
+            Map<String, Object> target = (Map<String, Object>) channel.get("target");
+            if(((Number) target.get("node")).intValue() == nodeIndex
+                    && "translation".equals(target.get("path"))) {
+                Map<String, Object> sampler =
+                        (Map<String, Object>) samplers.get(((Number) channel.get("sampler")).intValue());
+                output = ((Number) sampler.get("output")).intValue();
+            }
+        }
+        assertTrue(output >= 0);
+        Map<String, Object> accessor =
+                (Map<String, Object>) ((List<Object>) root.get("accessors")).get(output);
+        Map<String, Object> view = (Map<String, Object>) ((List<Object>) root.get("bufferViews"))
+                .get(((Number) accessor.get("bufferView")).intValue());
+        int binStart = 20 + jsonLen + 8;
+        int offset = binStart + ((Number) view.getOrDefault("byteOffset", 0)).intValue()
+                + ((Number) accessor.getOrDefault("byteOffset", 0)).intValue();
+        float value = Float.intBitsToFloat(le32(out, offset)) + dx;
+        int bits = Float.floatToIntBits(value);
+        for(int i = 0; i < 4; i++)
+            out[offset + i] = (byte) (bits >>> (i * 8));
+        return out;
+    }
+
+    /** Makes Blender-style constant STEP channels and optionally adds a sampled scale channel. */
+    @SuppressWarnings("unchecked")
+    private static byte[] stepAnimation(byte[] glb, Float scale) {
+        int jsonLen = le32(glb, 12);
+        Map<String, Object> root = (Map<String, Object>) Json.parse(
+                new String(glb, 20, jsonLen, StandardCharsets.UTF_8));
+        Map<String, Object> animation =
+                (Map<String, Object>) ((List<Object>) root.get("animations")).get(0);
+        List<Object> samplers = (List<Object>) animation.get("samplers");
+        for(Object value : samplers)
+            ((Map<String, Object>) value).put("interpolation", "STEP");
+
+        int binHeader = 20 + jsonLen;
+        int binLen = le32(glb, binHeader);
+        byte[] bin = java.util.Arrays.copyOfRange(glb, binHeader + 8, binHeader + 8 + binLen);
+        if(scale != null) {
+            Map<String, Object> inputSampler = (Map<String, Object>) samplers.get(0);
+            int input = ((Number) inputSampler.get("input")).intValue();
+            List<Object> accessors = (List<Object>) root.get("accessors");
+            int count = ((Number) ((Map<String, Object>) accessors.get(input)).get("count")).intValue();
+            int dataLength = count * 3 * Float.BYTES;
+            int offset = (((Number) ((Map<String, Object>)
+                    ((List<Object>) root.get("buffers")).get(0)).get("byteLength")).intValue() + 3) & ~3;
+            bin = java.util.Arrays.copyOf(bin, offset + dataLength);
+            for(int i = 0; i < count * 3; i++) {
+                int bits = Float.floatToIntBits(scale);
+                for(int b = 0; b < 4; b++)
+                    bin[offset + i * 4 + b] = (byte) (bits >>> (b * 8));
+            }
+            List<Object> views = (List<Object>) root.get("bufferViews");
+            int view = views.size();
+            views.add(new java.util.LinkedHashMap<>(Map.of(
+                    "buffer", 0, "byteOffset", offset, "byteLength", dataLength)));
+            int accessor = accessors.size();
+            accessors.add(new java.util.LinkedHashMap<>(Map.of(
+                    "bufferView", view, "componentType", 5126, "count", count, "type", "VEC3")));
+            int sampler = samplers.size();
+            samplers.add(new java.util.LinkedHashMap<>(Map.of(
+                    "input", input, "output", accessor, "interpolation", "STEP")));
+            int rootNode = -1;
+            List<Object> nodes = (List<Object>) root.get("nodes");
+            for(int i = 0; i < nodes.size(); i++)
+                if("root".equals(((Map<String, Object>) nodes.get(i)).get("name")))
+                    rootNode = i;
+            assertTrue(rootNode >= 0);
+            ((List<Object>) animation.get("channels")).add(new java.util.LinkedHashMap<>(Map.of(
+                    "sampler", sampler, "target", new java.util.LinkedHashMap<>(Map.of(
+                            "node", rootNode, "path", "scale")))));
+            ((Map<String, Object>) ((List<Object>) root.get("buffers")).get(0))
+                    .put("byteLength", offset + dataLength);
+        }
+
+        byte[] json = pad(Json.write(root).getBytes(StandardCharsets.UTF_8), (byte) 0x20);
+        byte[] binPadded = pad(bin, (byte) 0);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + json.length + 8 + binPadded.length);
+        w.int32(json.length).int32(0x4E4F534A).bytes(json);
+        w.int32(binPadded.length).int32(0x004E4942).bytes(binPadded);
+        return w.toByteArray();
+    }
+
     /* ---------------------------------------------------------------- tests */
 
     @Test
@@ -156,6 +286,103 @@ class GltfImportTest {
             assertEquals("tip", d.boneNames[d.vJoints[v * 4]]);
             assertEquals(1f, d.vWeights[v * 4], 1e-2f);
         }
+    }
+
+    @Test
+    void unchangedSkanImportKeepsOriginalResourceBytes() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootWithEffect(3)));
+        animation.layers.add(new Layer("plparts", new byte[]{1, 2, 3}));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        GltfImport.AnimationRebuildResult result = GltfImport.rebuildSkan(original, glb);
+
+        assertEquals(0, result.changed);
+        assertEquals(1, result.unchanged);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void changedSkanImportUpdatesTrackAndPreservesEffectPayload() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        byte[] originalSkan = skanRootWithEffect(3);
+        animation.layers.add(new Layer("skan", originalSkan));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_3", "root", 1.25f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        SkanInfo before = SkanInfo.parse(originalSkan);
+        SkanInfo after = SkanInfo.parse(ResContainer.parse(result.res).layers.get(0).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(0, result.unchanged);
+        assertEquals(1.25f, after.tracks.get(0).trans[0][0], 1e-3);
+        assertArrayEquals(before.fxTracks.get(0).rawPayload, after.fxTracks.get(0).rawPayload);
+    }
+
+    @Test
+    void constantStepChannelsAndIdentityScaleAreAccepted() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(3, 0)));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(original, stepAnimation(glb, 1f));
+
+        assertEquals(0, result.changed);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void nonconstantStepMotionIsRejected() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(3, 1)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.rebuildSkan(animation.serialize(), stepAnimation(glb, null)));
+
+        assertTrue(error.getMessage().contains("nonconstant STEP"));
+    }
+
+    @Test
+    void nonidentityScaleChannelIsRejected() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(3, 0)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.rebuildSkan(animation.serialize(), stepAnimation(glb, 1.1f)));
+
+        assertTrue(error.getMessage().contains("scale edits"));
     }
 
     @Test

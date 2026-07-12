@@ -188,9 +188,13 @@ glTF:
    actions while this runs. It isn't byte-lossless, so verify in-game. Multi-part,
    skinned, morph-animated and normal-mapped models are all supported.
 
-What still can't be edited through the round-trip: the skeleton's *animation
-keyframes* (`skan`) and adding/removing morph *frames* — the meshes, materials,
-skinning, skeleton rest pose and morph shapes all round-trip.
+Standalone skeletal animations also round-trip: open the animation resource, choose
+its bind-skeleton resource and a compatible skinned preview model in the companion
+resource dialog, then edit the named `skan_<id>` actions in Blender.
+Translation/rotation keyframes can be added,
+removed, moved and re-timed within the original clip duration. Clip duration,
+playback mode, bone scale and control/effect events are preserved rather than edited.
+Adding/removing morph (`manim`) frames remains unsupported.
 
 ## Building / testing
 
@@ -274,6 +278,12 @@ resforge gltf   horse.res horse.glb
 # skeleton (regenerated, not byte-lossless, so verify in-game):
 resforge rebuild-gltf horse.res horse.glb horse-edited.res
 
+# Export standalone skeletal actions with their bind skeleton and a preview mesh:
+resforge gltf-skan animaltease.res body.res male.res animaltease.glb
+
+# Import edited Blender actions into the original animation resource:
+resforge rebuild-skan animaltease.res animaltease.glb animaltease-edited.res
+
 # Validate round-trip + image splitting for one file or a whole folder:
 resforge verify path/to/folder-of-res
 ```
@@ -330,22 +340,20 @@ of this up into one deduplicated report of every resource a file references —
 gathered across `deps`, `rlink`, `code` classpaths and `mat2` material links.
 The rig layers `skel` (bone hierarchy), `skan` (skeletal animation:
 length, mode, per-bone tracks) and `manim`
-(mesh/morph animation: per-frame vertex offsets) are decoded read-only; `boneoff`
+(mesh/morph animation: per-frame vertex offsets) have read-only structural views;
+`skel` rest poses, `skan` keyframes and fixed-timeline `manim` shapes edit through
+the glTF round-trip. `boneoff`
 (equip-point transforms) and `light` (a light source: colours, attenuation,
-direction) are editable as JSON. The skeletal/morph **animation
-keyframes** themselves (`skan` timing; adding/removing `manim` frames) are the main
-thing the round-trip doesn't yet edit; deeper typed editing can be layered on
-incrementally using the same parts model.
+direction) are editable as JSON.
 
 ### Known limitations (1.0)
 
 These are deliberately out of scope for 1.0 — nothing here risks corrupting a file
 (everything not editable stays lossless raw/read-only):
 
-- **Animation-keyframe editing.** Skeletal animation timing (`skan`) and
-  adding/removing mesh-morph frames (`manim`) are decoded **read-only**. Mesh
-  geometry, materials, skinning, the skeleton rest pose and morph *shapes* all
-  round-trip through glTF; only the keyframes themselves can't be retimed yet.
+- **Animation metadata and morph timelines.** `skan` keyframes round-trip, but clip
+  duration, playback mode, bone scale and control/effect events are preserved rather
+  than edited. Adding/removing `manim` frames remains unsupported.
 - **`code`/`codeentry` are read-only.** Class names and the entrypoint/classpath
   manifest are shown and the embedded `.class` can be exported, but client code
   isn't editable in-tool.

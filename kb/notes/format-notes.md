@@ -255,10 +255,19 @@ animation, each per-bone track = a translation channel + a rotation channel
 targeting that bone's joint node. Values are composed onto the bind pose exactly
 as the client does — `translation = bindLocalPos + frameTrans`,
 `rotation = bindLocalRot · frameRot` (normalised) — and frame times become the
-sampler input (with the required min/max). `SkanInfo` now captures per-frame
-time/translation/rotation (fmt0 cpfloat, fmt1 quantised). Only bones in the local
-skel animate (so knarr's sails + lilypadlotus animate; external-skel characters
-do not). `manim` (mesh/morph) layers also export as glTF **morph targets**: each
+sampler input (with the required min/max). `SkanInfo` captures per-frame
+time/translation/rotation (fmt0 cpfloat, fmt1 quantised). A normal model export uses
+its local `skel`; `gltf-skan` instead accepts separate model, skeleton and animation
+resources, matching the game's runtime composition. `rebuild-skan` inverts the bind
+composition, supports LINEAR translation/rotation keyframe edits within the original
+clip duration, and writes the original skan wire format. Unchanged actions keep their
+original bytes, while raw `{ctl}` payloads remain exact when other tracks change.
+Blender re-export can add constant two-key `STEP` T/R channels and identity-scale
+channels for otherwise static bones (observed on an edited `gfx/borka/wave` GLB:
+up to 98 STEP channels/action). These are safe to accept only when every T/R sample
+is equal (quaternion sign-equivalence included) and every scale component is 1.
+Nonconstant STEP cannot map faithfully to skan's interpolation and stays rejected.
+`manim` (mesh/morph) layers also export as glTF **morph targets**: each
 frame's per-vertex position deltas become a morph target (deltas are *added* to the
 base and *linearly* interpolated — exactly glTF morph semantics, matching the
 client's `add(in, poff)` + `mix`), and a `weights` animation drives them (e_i per
@@ -358,9 +367,9 @@ Real samples: `prog` (25 frames @120ms), `cleave`/`jump` (8 @100ms),
 
 ## rig / lighting layers (light, skel, skan, boneoff)
 Viewers ported from the client's `Light.java` and `Skeleton.java`
-(LGPL-3, in `docs/reference/`). `skel`/`skan` stay raw/lossless in the layer
-editor (we surface structure); glTF rebuild can re-pose `skel`, but does not
-import edited `skan` keyframes. **`boneoff` and `light` are editable JSON**.
+(LGPL-3, in `docs/reference/`). `skel`/`skan` have read-only structural layer
+views; glTF rebuild can re-pose `skel`, and the composite animation workflow imports
+edited `skan` translation/rotation tracks. **`boneoff` and `light` are editable JSON**.
 They use number encodings beyond the basic primitives, now in `MessageReader`:
 - **`cpfloat`** — custom-packed float: `int8` exponent + LE `uint32` (top bit sign,
   low 31 bits mantissa); value = `2^e · (1 + m/2^31)`, with `e=-128,m=0` meaning 0.
@@ -396,6 +405,9 @@ Formats:
   fmt1 = unorm16 time, 3×half-float trans, mnorm16 ang, 2×snorm16 axis). FX events:
   `u16 count`, each time + `u8 t` (`t&0x80` ⇒ sub-message of `u16` length); t 0/2
   spawn-sprite (resname+ver+sdt[+eqp]), 1 trigger, 3 mkoverlay, 4 rmoverlay.
+  `SkanInfo.encode` retains fmt 0 or 1 (including optional nspeed), re-encodes edited
+  bone tracks, and copies each control-track payload verbatim. Format retention is
+  required because fmt 0 control times are cpfloat while fmt 1 times are unorm16.
 - **`boneoff`** (`BoneOffInfo` for the read-only summary; `BoneOffCodec` for editing):
   equip-point opcode program — `string name` then
   opcodes to EOM: 0/16 translate (cpfloat/float32), 1/17 rotate (cpfloat / mnorm16

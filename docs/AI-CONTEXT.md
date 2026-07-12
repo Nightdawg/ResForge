@@ -65,12 +65,17 @@ a sibling project at `../hafen-client`).
 `gui [file]` · `fetch <path> [out.res]` · `info <file>` · `refs <file>` ·
 `unpack <file> [dir]` · `pack <dir> [out]` · `replace <file> <selector> <newfile> [out]` ·
 `gltf <file> [out.glb]` ·
+`gltf-skan <animation.res> <skeleton.res> <model.res> [out.glb]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
+`rebuild-skan <orig.res> <edited.glb> [out.res]` ·
 `catalog <file|dir>` · `cache-list [cacheDir]` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
 exports the 3D model as a Blender-ready binary glTF, and `rebuild-gltf`
 regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.
+`gltf-skan` combines a standalone animation, bind skeleton and preview model;
+`rebuild-skan` imports edited translation/rotation actions while preserving unchanged
+animation bytes and raw control tracks.
 `cache-list` scans the local game cache and prints the resource names found there,
 ready to `fetch`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).
@@ -98,6 +103,9 @@ built-in **3D viewer** (whole-model, software-rendered — see below; with a
 leaves), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
+For standalone `skan` export, one companion-resource dialog shows both required
+paths (bind skeleton and visible preview model), with Browse buttons, validation,
+session memory, and sibling `body.res`/`male.res` defaults.
 Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
 Cache (AppData)**; row 2 **View 3D · Export to glTF · Rebuild from glTF · References…**; the
 **resource-version spinner** (uint16) sits on the file-path bar below. Menu accelerators:
@@ -267,7 +275,7 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 | `vbuf2`/`mesh` | **editable via glTF round-trip**: decoded; GUI shows vertex/attribute + tri/vbuf/material detail; Export/Rebuild glTF |
 | `code`/`codeentry` | **read-only**: class name + `.class` export; entrypoint→class + classpath manifest shown |
 | `deps`/`rlink`/`src` | **read-only reference view**: explicit dependency list (`deps`: name@ver), resource links + decoded specs (`rlink`), embedded source files (`src`, `.java` export) |
-| `skel`/`skan` | layer view is **read-only**: bone hierarchy (`skel`) and skeletal animation tracks/events (`skan`); glTF rebuild can re-pose `skel`, but does not import edited `skan` keyframes |
+| `skel`/`skan` | structural view is read-only; **editable via glTF round-trip**: model rebuild can re-pose `skel`, while standalone `skan` actions export with a selected skeleton/model and import translation/rotation keyframes; clip metadata/effect tracks are preserved |
 | `manim` | layer view is **read-only**; glTF rebuild can replace each frame's morph shape when the original frame count is preserved, but does not add/remove/retime frames |
 | `tile` | edit: swap the terrain tile image (PNG/JPEG; runs to EOM like `image`); shows kind (ground/border/centre-transition), id, weight |
 | `tileset2`/`flavobj` | **read-only**: tileset tiler name + tags + flavor objects (`tileset2`); the sprite/sound a flavor spawns (`flavobj`) — both feed the `refs` report |
@@ -341,10 +349,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
 Completed feature history belongs in `CHANGELOG.md` and `DESIGN-notes.md`; this
 section lists only current limitations or intentionally deferred work.
 
-- **Animation editing:** `skan` keyframes are exported to glTF but edits are not
-  imported. `manim` morph shapes are rebuilt, but the original frame count and
-  timing are retained and Blender's shape-key animation is not read. Adding,
-  removing, or retiming `skan`/`manim` frames needs a dedicated write path.
+- **Animation follow-ons:** `skan` translation/rotation keyframes round-trip, but
+  clip duration, playback mode, bone scale and control/effect events are preserved
+  rather than edited. `manim` morph shapes rebuild with the original frame count
+  and timing; Blender's shape-key animation is not read.
 - **Typed coverage:** unusual `mat2`/`props` values using float8/float16 or
   snorm/unorm/mnorm still stay raw until exact decode→encode behavior is proven.
   The new-style typed (`tto`) `image` header parser is implemented exactly but

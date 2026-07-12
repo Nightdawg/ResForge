@@ -1,8 +1,10 @@
 package resforge.layers;
 
 import resforge.io.MessageReader;
+import resforge.io.MessageWriter;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -15,8 +17,8 @@ import java.util.List;
  * <p>The encoding has two formats selected by a flag: format 0 uses custom-packed
  * floats ({@code cpfloat}); format 1 uses quantised values (unorm/half/mnorm/
  * snorm). This decoder walks the whole structure to report counts and the
- * resources referenced by effect events; it neither plays nor edits the
- * animation, and the layer stays raw/lossless.
+ * resources referenced by effect events. Edited bone tracks can be encoded in
+ * the original wire format while retaining effect tracks byte-for-byte.
  */
 public final class SkanInfo {
     public static final class Track {
@@ -26,7 +28,9 @@ public final class SkanInfo {
         public final float[][] trans;      // per-frame local translation offset [x,y,z]
         public final float[][] rot;        // per-frame local rotation quaternion [w,x,y,z]
 
-        Track(String bone, float[] times, float[][] trans, float[][] rot) {
+        public Track(String bone, float[] times, float[][] trans, float[][] rot) {
+            if(times.length != trans.length || times.length != rot.length)
+                throw new IllegalArgumentException("skan track arrays have different lengths");
             this.bone = bone;
             this.frames = times.length;
             this.times = times;
@@ -38,10 +42,12 @@ public final class SkanInfo {
     public static final class Fx {
         public final int events;
         public final List<String> refs;   // resources spawned/overlaid by this track
+        public final byte[] rawPayload;   // event count + events, in the layer's original format
 
-        Fx(int events, List<String> refs) {
+        Fx(int events, List<String> refs, byte[] rawPayload) {
             this.events = events;
             this.refs = refs;
+            this.rawPayload = rawPayload;
         }
     }
 
@@ -73,10 +79,14 @@ public final class SkanInfo {
                 si.nspeed = (si.fmt == 0) ? in.cpfloat() : in.float32();
             while(!in.eom()) {
                 String bnm = in.string();
-                if(bnm.equals("{ctl}"))
-                    si.fxTracks.add(parseFx(si.fmt, si.len, in));
-                else
+                if(bnm.equals("{ctl}")) {
+                    int start = in.position();
+                    Fx fx = parseFx(si.fmt, si.len, in);
+                    si.fxTracks.add(new Fx(fx.events, fx.refs,
+                            Arrays.copyOfRange(payload, start, in.position())));
+                } else {
                     si.tracks.add(parseFrames(bnm, si.fmt, si.len, in));
+                }
             }
             si.recognized = true;
             si.reachedEnd = in.eom();
@@ -163,7 +173,118 @@ public final class SkanInfo {
                         throw new IllegalStateException("control event " + t);
             }
         }
-        return new Fx(n, refs);
+        return new Fx(n, refs, new byte[0]);
+    }
+
+    /**
+     * Encodes edited tracks using the layer's original format. Effect-track payloads
+     * are copied verbatim, so unknown length-delimited events remain lossless.
+     */
+    public static byte[] encode(SkanInfo info) {
+        if(info.fmt != 0 && info.fmt != 1)
+            throw new IllegalArgumentException("cannot encode skan format " + info.fmt);
+        if(!Float.isFinite(info.len) || info.len <= 0)
+            throw new IllegalArgumentException("skan length must be positive and finite");
+        int mode = modeCode(info.mode);
+        boolean hasSpeed = info.nspeed >= 0;
+        MessageWriter w = new MessageWriter();
+        w.int16(info.id).uint8((info.fmt << 1) | (hasSpeed ? 1 : 0)).uint8(mode);
+        writeNumber(w, info.fmt, info.len);
+        if(hasSpeed)
+            writeNumber(w, info.fmt, info.nspeed);
+        for(Track track : info.tracks)
+            writeTrack(w, info, track);
+        for(Fx fx : info.fxTracks) {
+            if(fx.rawPayload.length == 0)
+                throw new IllegalArgumentException("skan effect track has no raw payload");
+            w.string("{ctl}").bytes(fx.rawPayload);
+        }
+        return w.toByteArray();
+    }
+
+    private static void writeTrack(MessageWriter w, SkanInfo info, Track track) {
+        if(track.frames > 0xffff)
+            throw new IllegalArgumentException("skan track has too many frames: " + track.frames);
+        w.string(track.bone).uint16(track.frames);
+        float[] oct = new float[2];
+        for(int i = 0; i < track.frames; i++) {
+            float time = track.times[i];
+            float[] tr = track.trans[i], q = track.rot[i];
+            if(tr == null || tr.length != 3 || q == null || q.length != 4)
+                throw new IllegalArgumentException("invalid skan frame in track " + track.bone);
+            if(info.fmt == 0) {
+                w.cpfloat(time);
+                for(float v : tr)
+                    w.cpfloat(v);
+                float[] aa = axisAngle(q);
+                w.cpfloat(aa[3]).cpfloat(aa[0]).cpfloat(aa[1]).cpfloat(aa[2]);
+            } else {
+                int tq = Math.round(Math.max(0f, Math.min(1f, time / info.len)) * 0xffff);
+                w.uint16(tq);
+                for(float v : tr)
+                    w.float16(v);
+                float[] aa = axisAngle(q);
+                double turn = aa[3] / (2 * Math.PI);
+                turn -= Math.floor(turn);
+                w.uint16((int) Math.round(turn * 0x10000) & 0xffff);
+                uvec2oct(oct, aa[0], aa[1], aa[2]);
+                w.int16(snorm16(oct[0])).int16(snorm16(oct[1]));
+            }
+        }
+    }
+
+    private static void writeNumber(MessageWriter w, int fmt, double value) {
+        if(!Double.isFinite(value))
+            throw new IllegalArgumentException("non-finite skan value");
+        if(fmt == 0)
+            w.cpfloat(value);
+        else
+            w.float32((float) value);
+    }
+
+    private static int modeCode(String mode) {
+        for(int i = 0; i < MODES.length; i++)
+            if(MODES[i].equals(mode))
+                return i;
+        throw new IllegalArgumentException("unknown skan mode " + mode);
+    }
+
+    /** Returns unit axis xyz + angle radians, treating q and -q as the same rotation. */
+    private static float[] axisAngle(float[] q) {
+        double n = Math.sqrt((double) q[0] * q[0] + (double) q[1] * q[1]
+                + (double) q[2] * q[2] + (double) q[3] * q[3]);
+        if(!Double.isFinite(n) || n == 0)
+            throw new IllegalArgumentException("invalid skan rotation quaternion");
+        double w = q[0] / n, x = q[1] / n, y = q[2] / n, z = q[3] / n;
+        if(w < 0) {
+            w = -w;
+            x = -x;
+            y = -y;
+            z = -z;
+        }
+        w = Math.max(-1, Math.min(1, w));
+        double s = Math.sqrt(x * x + y * y + z * z);
+        if(s < 1e-12)
+            return new float[]{0, 0, 1, 0};
+        return new float[]{(float) (x / s), (float) (y / s), (float) (z / s),
+                (float) (2 * Math.atan2(s, w))};
+    }
+
+    private static int snorm16(float v) {
+        int q = Math.round(Math.max(-1f, Math.min(1f, v)) * 0x7fff);
+        return Math.max(-0x7fff, Math.min(0x7fff, q));
+    }
+
+    private static void uvec2oct(float[] out, float x, float y, float z) {
+        float m = 1.0f / (Math.abs(x) + Math.abs(y) + Math.abs(z));
+        float hx = x * m, hy = y * m;
+        if(z >= 0) {
+            out[0] = hx;
+            out[1] = hy;
+        } else {
+            out[0] = (1 - Math.abs(hy)) * Math.copySign(1, hx);
+            out[1] = (1 - Math.abs(hx)) * Math.copySign(1, hy);
+        }
     }
 
     public int totalFrames() {

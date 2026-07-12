@@ -459,6 +459,47 @@ class GltfExportTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void combinesSeparateModelSkeletonAndAnimationResources() {
+        ResContainer model = new ResContainer(7);
+        model.layers.add(new Layer("vbuf2", vbufBones()));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(7);
+        skeleton.layers.add(new Layer("skel", skel()));
+        ResContainer animation = new ResContainer(7);
+        animation.layers.add(new Layer("skan", skan(5)));
+
+        Map<String, Object> root = jsonOf(
+                GltfExport.toGlb(model, skeleton, animation, "animaltease.res").glb);
+
+        assertTrue(root.containsKey("meshes"));
+        assertTrue(root.containsKey("skins"));
+        List<Object> animations = (List<Object>) root.get("animations");
+        assertEquals(1, animations.size());
+        Map<String, Object> clip = (Map<String, Object>) animations.get(0);
+        assertEquals("skan_5", clip.get("name"));
+        Map<String, Object> extras = (Map<String, Object>) clip.get("extras");
+        assertEquals(5L, ((Number) extras.get("resforgeSkanId")).longValue());
+        assertEquals("loop", extras.get("resforgeMode"));
+    }
+
+    @Test
+    void compositeExportRejectsAnimationBonesMissingFromSkeleton() {
+        ResContainer model = new ResContainer(7);
+        model.layers.add(new Layer("vbuf2", vbufBones()));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(7);
+        skeleton.layers.add(new Layer("skel", skel()));
+        ResContainer animation = new ResContainer(7);
+        byte[] bad = skan(5).clone();
+        bad[8] = 'x'; // "root" -> "xoot"
+        animation.layers.add(new Layer("skan", bad));
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> GltfExport.toGlb(model, skeleton, animation, "bad.res"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void manimLayerBecomesMorphTargetsAndWeightAnimation() {
         ResContainer res = new ResContainer(7);
         res.layers.add(new Layer("vbuf2", vbuf(false)));     // 3 vertices, pos + tex

@@ -6,14 +6,30 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **Skeletal animations can now round-trip through Blender.** Standalone `skan`
+  resources export with a separately selected bind skeleton and skinned preview
+  model, then import edited translation/rotation actions while preserving unchanged
+  layers and control/effect tracks. New `gltf-skan` and `rebuild-skan` CLI commands
+  mirror the GUI workflow.
+
 ### Changed
 
+- **Standalone animation export now explains its two companion resources up front.**
+  One compact dialog shows the bind-skeleton and preview-model paths together, with
+  Browse buttons, validation, remembered choices, and nearby `body.res`/`male.res`
+  defaults, replacing two unexplained sequential file prompts.
 - **Dark mode now uses an IntelliJ-inspired layered palette.** Near-black content
   surfaces, raised controls and toolbars, clearer borders and separators, subdued
   blue selections, and matching preview checkerboards improve visual hierarchy.
 
 ### Fixed
 
+- **Blender-exported constant skeletal channels now import correctly.** Constant
+  `STEP` translation/rotation channels and sampled identity-scale channels are
+  accepted because they do not change motion; nonconstant STEP motion and real
+  scale edits remain rejected because `skan` cannot represent them faithfully.
 - **The layer table once again shows clear row and column boundaries.** Grid lines
   use the original Windows-theme grey and inter-cell spacing for clear contrast,
   including on selected rows, instead of depending on look-and-feel defaults.

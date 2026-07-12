@@ -99,24 +99,34 @@ public final class GltfExport {
     }
 
     public static Result toGlb(ResContainer res, String sourceName) {
+        return toGlb(res, res, res, sourceName);
+    }
+
+    /**
+     * Exports a composite assembled the same way as a runtime character: geometry
+     * and materials from {@code modelRes}, the bind pose from {@code skeletonRes},
+     * and animation clips from {@code animationRes}.
+     */
+    public static Result toGlb(ResContainer modelRes, ResContainer skeletonRes,
+                               ResContainer animationRes, String sourceName) {
         Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
-        for(Layer l : res.layers)
+        for(Layer l : modelRes.layers)
             if(l.name.equals("vbuf2")) {
                 Vbuf2Data d = Vbuf2Data.parse(l.data);
                 if(d != null)
                     vbufs.putIfAbsent(d.id, d);
             }
         List<MeshInfo> meshes = new ArrayList<>();
-        for(Layer l : res.layers)
+        for(Layer l : modelRes.layers)
             if(l.name.equals("mesh")) {
                 MeshInfo mi = MeshInfo.parse(l.data);
                 if(mi.recognized && mi.indices != null)
                     meshes.add(mi);
             }
 
-        List<TexMat> texMats = collectTextures(res);
-        Map<Integer, Integer> texIds = collectTexIds(res);
-        Map<Integer, Integer> matToTex = collectMatToTex(res, texIds);
+        List<TexMat> texMats = collectTextures(modelRes);
+        Map<Integer, Integer> texIds = collectTexIds(modelRes);
+        Map<Integer, Integer> matToTex = collectMatToTex(modelRes, texIds);
 
         // One glTF material per distinct submesh matid (named "rfmat_<matid>") so the
         // rebuild import can recover which part each face belongs to, and so Blender
@@ -133,7 +143,10 @@ public final class GltfExport {
                 for(String n : d.boneNames)
                     if(!joints.contains(n))
                         joints.add(n);
-        SkelInfo skel = firstSkel(res);                       // local skeleton, or null
+        SkelInfo skel = firstSkel(skeletonRes);               // bind skeleton, or null
+        boolean composite = modelRes != animationRes || skeletonRes != animationRes;
+        if(composite && (skel == null || !skel.recognized || skel.bones.isEmpty()))
+            throw new IllegalArgumentException("the selected skeleton resource has no decoded skel layer");
         Map<String, float[]> boneWorld = skeletonWorld(skel); // bone name -> native bind world matrix
 
         Buf bin = new Buf();
@@ -178,7 +191,7 @@ public final class GltfExport {
             int vbufid = vbufs.keySet().iterator().next();
             Vbuf2Data d = vbufs.get(vbufid);
             List<MeshAnimInfo> manims = new ArrayList<>();
-            for(Layer l : res.layers)
+            for(Layer l : modelRes.layers)
                 if(l.name.equals("manim")) {
                     MeshAnimInfo ma = MeshAnimInfo.parse(l.data);
                     if(ma.recognized)
@@ -330,7 +343,10 @@ public final class GltfExport {
         }
 
         // skan layers -> glTF animations (only for bones in the local skeleton).
-        List<Object> animations = buildAnimations(res, skel, boneNode, bin, bufferViews, accessors);
+        List<Object> animations = buildAnimations(animationRes, skel, boneNode,
+                bin, bufferViews, accessors, composite);
+        if(composite && animations.isEmpty())
+            throw new IllegalArgumentException("the animation resource has no usable skan tracks");
         // manim morph weight animations (one per manim) targeting the mesh node's weights.
         for(int mi = 0; mi < morphSlots.size(); mi++) {
             int slotBase = morphSlots.get(mi)[0], cnt = morphSlots.get(mi)[1];
@@ -582,7 +598,8 @@ public final class GltfExport {
      */
     private static List<Object> buildAnimations(ResContainer res, SkelInfo skel,
                                                 Map<String, Integer> boneNode,
-                                                Buf bin, List<Object> bvs, List<Object> accs) {
+                                                Buf bin, List<Object> bvs, List<Object> accs,
+                                                boolean requireAllBones) {
         List<Object> animations = new ArrayList<>();
         if(skel == null || !skel.recognized || boneNode.isEmpty())
             return animations;
@@ -601,7 +618,13 @@ public final class GltfExport {
             for(SkanInfo.Track t : sa.tracks) {
                 Integer node = boneNode.get(t.bone);
                 SkelInfo.Bone b = bind.get(t.bone);
-                if(node == null || b == null || t.frames == 0)
+                if(node == null || b == null) {
+                    if(requireAllBones)
+                        throw new IllegalArgumentException("animation bone \"" + t.bone
+                                + "\" is missing from the selected skeleton");
+                    continue;
+                }
+                if(t.frames == 0)
                     continue;
                 int inAccessor = addScalar(bin, bvs, accs, t.times);
 
@@ -633,7 +656,11 @@ public final class GltfExport {
                         "target", obj("node", node, "path", "rotation")));
             }
             if(!channels.isEmpty())
-                animations.add(obj("name", "skan_" + sa.id, "samplers", samplers, "channels", channels));
+                animations.add(obj("name", "skan_" + sa.id, "samplers", samplers,
+                        "channels", channels, "extras", obj(
+                                "resforgeSkanId", sa.id,
+                                "resforgeMode", sa.mode,
+                                "resforgeLength", sa.len)));
         }
         return animations;
     }

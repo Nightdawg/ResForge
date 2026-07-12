@@ -4,6 +4,7 @@ import resforge.io.Json;
 import resforge.io.MessageWriter;
 import resforge.layers.MeshAnimInfo;
 import resforge.layers.MeshInfo;
+import resforge.layers.SkanInfo;
 import resforge.layers.SkelInfo;
 import resforge.res.Layer;
 import resforge.res.ResContainer;
@@ -64,6 +65,419 @@ public final class GltfImport {
             this.skinned = skinned;
             this.skel = skel;
         }
+    }
+
+    public static final class AnimationRebuildResult {
+        public final byte[] res;
+        public final int changed, unchanged;
+
+        AnimationRebuildResult(byte[] res, int changed, int unchanged) {
+            this.res = res;
+            this.changed = changed;
+            this.unchanged = unchanged;
+        }
+    }
+
+    /**
+     * Rebuilds skeletal-animation layers from named glTF actions. Missing actions
+     * leave their original layer untouched; actions that are present must provide
+     * paired translation/rotation channels for every edited bone.
+     */
+    @SuppressWarnings("unchecked")
+    public static AnimationRebuildResult rebuildSkan(byte[] origRes, byte[] glb) {
+        Glb g = parseGlb(glb);
+        ResContainer res = ResContainer.parse(origRes);
+        List<Object> animations = (List<Object>) g.root.get("animations");
+        if(animations == null || animations.isEmpty())
+            throw new IllegalArgumentException("the glTF contains no animation actions");
+
+        Map<Integer, Map<String, Object>> byId = new LinkedHashMap<>();
+        for(Object value : animations) {
+            Map<String, Object> animation = (Map<String, Object>) value;
+            Integer id = skanId(animation);
+            if(id == null)
+                continue;
+            if(byId.putIfAbsent(id, animation) != null)
+                throw new IllegalArgumentException("the glTF contains multiple actions for skan id " + id);
+        }
+        if(byId.isEmpty())
+            throw new IllegalArgumentException("the glTF contains no actions named skan_<id>");
+
+        int changed = 0, unchanged = 0, layers = 0;
+        for(int i = 0; i < res.layers.size(); i++) {
+            Layer layer = res.layers.get(i);
+            if(!layer.name.equals("skan"))
+                continue;
+            layers++;
+            SkanInfo original = SkanInfo.parse(layer.data);
+            if(!original.recognized)
+                throw new IllegalArgumentException("couldn't decode skan layer " + i);
+            Map<String, Object> animation = byId.get(original.id);
+            if(animation == null) {
+                unchanged++;
+                continue;
+            }
+            List<SkanInfo.Track> tracks = readSkanTracks(g, animation, original);
+            if(sameTracks(original.tracks, tracks)) {
+                unchanged++;
+                continue;
+            }
+            SkanInfo edited = new SkanInfo();
+            edited.id = original.id;
+            edited.fmt = original.fmt;
+            edited.mode = original.mode;
+            edited.len = original.len;
+            edited.nspeed = original.nspeed;
+            edited.tracks.addAll(tracks);
+            edited.fxTracks.addAll(original.fxTracks);
+            res.layers.set(i, new Layer("skan", SkanInfo.encode(edited)));
+            changed++;
+        }
+        if(layers == 0)
+            throw new IllegalArgumentException("the resource contains no skan layers");
+        return new AnimationRebuildResult(res.serialize(), changed, unchanged);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Integer skanId(Map<String, Object> animation) {
+        Object extrasValue = animation.get("extras");
+        if(extrasValue instanceof Map) {
+            Object id = ((Map<String, Object>) extrasValue).get("resforgeSkanId");
+            if(id instanceof Number)
+                return ((Number) id).intValue();
+        }
+        Object nameValue = animation.get("name");
+        if(!(nameValue instanceof String))
+            return null;
+        String name = (String) nameValue;
+        if(!name.matches("skan_-?\\d+"))
+            return null;
+        try {
+            return Integer.parseInt(name.substring(5));
+        } catch(NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static final class AnimChannel {
+        final float[] times, values;
+        final int components;
+
+        AnimChannel(float[] times, float[] values, int components) {
+            this.times = times;
+            this.values = values;
+            this.components = components;
+        }
+    }
+
+    private static final class BoneChannels {
+        final int node;
+        AnimChannel translation, rotation;
+
+        BoneChannels(int node) {
+            this.node = node;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<SkanInfo.Track> readSkanTracks(Glb g, Map<String, Object> animation,
+                                                       SkanInfo original) {
+        List<Object> nodes = (List<Object>) g.root.get("nodes");
+        List<Object> samplers = (List<Object>) animation.get("samplers");
+        List<Object> channels = (List<Object>) animation.get("channels");
+        if(nodes == null || samplers == null || channels == null)
+            throw new IllegalArgumentException("skan action is missing nodes, samplers, or channels");
+
+        Map<String, BoneChannels> byBone = new LinkedHashMap<>();
+        for(Object value : channels) {
+            Map<String, Object> channel = (Map<String, Object>) value;
+            Map<String, Object> target = (Map<String, Object>) channel.get("target");
+            if(target == null || !(target.get("node") instanceof Number))
+                throw new IllegalArgumentException("skan action has a channel without a target bone");
+            int nodeIndex = idx(target.get("node"));
+            if(nodeIndex < 0 || nodeIndex >= nodes.size())
+                throw new IllegalArgumentException("skan action targets missing node " + nodeIndex);
+            Map<String, Object> node = (Map<String, Object>) nodes.get(nodeIndex);
+            Object nameValue = node.get("name");
+            if(!(nameValue instanceof String) || ((String) nameValue).isEmpty())
+                throw new IllegalArgumentException("skan action targets an unnamed bone");
+            String path = String.valueOf(target.get("path"));
+            if(!path.equals("translation") && !path.equals("rotation") && !path.equals("scale"))
+                throw new IllegalArgumentException("unsupported skan animation channel " + path);
+            int samplerIndex = idx(channel.get("sampler"));
+            if(samplerIndex < 0 || samplerIndex >= samplers.size())
+                throw new IllegalArgumentException("skan action references missing sampler " + samplerIndex);
+            Map<String, Object> sampler = (Map<String, Object>) samplers.get(samplerIndex);
+            String interpolation = String.valueOf(sampler.getOrDefault("interpolation", "LINEAR"));
+            if(!interpolation.equals("LINEAR") && !interpolation.equals("STEP"))
+                throw new IllegalArgumentException("skan import supports only LINEAR or constant STEP "
+                        + "interpolation, not " + interpolation);
+            int components = path.equals("rotation") ? 4 : 3;
+            float[] times = readAccessor(g, idx(sampler.get("input")), 1);
+            float[] values = readAccessor(g, idx(sampler.get("output")), components);
+            validateKeyframes(times, values, components, original.len, (String) nameValue);
+            if(path.equals("scale")) {
+                if(!identityScale(values))
+                    throw new IllegalArgumentException("skan does not support bone scale edits ("
+                            + nameValue + ")");
+                continue;
+            }
+            if(interpolation.equals("STEP") && !constantChannel(values, components,
+                    path.equals("rotation")))
+                throw new IllegalArgumentException("skan cannot represent nonconstant STEP "
+                        + path + " for bone " + nameValue);
+            BoneChannels pair = byBone.computeIfAbsent((String) nameValue,
+                    key -> new BoneChannels(nodeIndex));
+            if(pair.node != nodeIndex)
+                throw new IllegalArgumentException("multiple nodes are named " + nameValue);
+            AnimChannel decoded = new AnimChannel(times, values, components);
+            if(path.equals("translation")) {
+                if(pair.translation != null)
+                    throw new IllegalArgumentException("duplicate translation channel for " + nameValue);
+                pair.translation = decoded;
+            } else {
+                if(pair.rotation != null)
+                    throw new IllegalArgumentException("duplicate rotation channel for " + nameValue);
+                pair.rotation = decoded;
+            }
+        }
+
+        Map<String, SkanInfo.Track> originalByBone = new LinkedHashMap<>();
+        for(SkanInfo.Track track : original.tracks)
+            originalByBone.put(track.bone, track);
+        List<SkanInfo.Track> out = new ArrayList<>();
+        for(SkanInfo.Track track : original.tracks) {
+            BoneChannels pair = byBone.remove(track.bone);
+            out.add(pair == null ? track : decodeTrack(nodes, track.bone, pair));
+        }
+        for(Map.Entry<String, BoneChannels> entry : byBone.entrySet()) {
+            SkanInfo.Track added = decodeTrack(nodes, entry.getKey(), entry.getValue());
+            if(!identityTrack(added))
+                out.add(added);
+        }
+        return out;
+    }
+
+    private static boolean identityScale(float[] values) {
+        for(float value : values)
+            if(Math.abs(value - 1f) > 1e-5f)
+                return false;
+        return true;
+    }
+
+    private static boolean constantChannel(float[] values, int components, boolean quaternion) {
+        if(quaternion) {
+            double[] first = {values[0], values[1], values[2], values[3]};
+            normalizeQuat(first);
+            for(int offset = components; offset < values.length; offset += components) {
+                double[] frame = {values[offset], values[offset + 1],
+                        values[offset + 2], values[offset + 3]};
+                normalizeQuat(frame);
+                double dot = Math.abs(first[0] * frame[0] + first[1] * frame[1]
+                        + first[2] * frame[2] + first[3] * frame[3]);
+                if(Math.toDegrees(2 * Math.acos(Math.min(1, dot))) > 1e-4)
+                    return false;
+            }
+            return true;
+        }
+        for(int offset = components; offset < values.length; offset += components)
+            for(int component = 0; component < components; component++)
+                if(Math.abs(values[offset + component] - values[component]) > 1e-6f)
+                    return false;
+        return true;
+    }
+
+    private static void validateKeyframes(float[] times, float[] values, int components,
+                                          float length, String bone) {
+        if(times.length == 0 || values.length != times.length * components)
+            throw new IllegalArgumentException("invalid animation keyframes for bone " + bone);
+        float previous = -Float.MAX_VALUE;
+        for(float time : times) {
+            if(!Float.isFinite(time) || time < -1e-5f || time > length + 1e-4f)
+                throw new IllegalArgumentException("animation keyframe for " + bone
+                        + " is outside the original clip length " + length);
+            if(time <= previous)
+                throw new IllegalArgumentException("animation keyframe times for " + bone
+                        + " are not strictly increasing");
+            previous = time;
+        }
+        for(float value : values)
+            if(!Float.isFinite(value))
+                throw new IllegalArgumentException("animation for " + bone + " contains a non-finite value");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static SkanInfo.Track decodeTrack(List<Object> nodes, String bone, BoneChannels pair) {
+        if(pair.translation == null || pair.rotation == null)
+            throw new IllegalArgumentException("bone " + bone
+                    + " must have both translation and rotation channels");
+        Map<String, Object> node = (Map<String, Object>) nodes.get(pair.node);
+        if(node.containsKey("matrix"))
+            throw new IllegalArgumentException("animated bone " + bone + " uses a matrix instead of TRS");
+        double[] scale = vecd(node.get("scale"), 3, 1);
+        if(Math.abs(scale[0] - 1) > 1e-5 || Math.abs(scale[1] - 1) > 1e-5
+                || Math.abs(scale[2] - 1) > 1e-5)
+            throw new IllegalArgumentException("skan does not support bone scale edits (" + bone + ")");
+        double[] bindT = vecd(node.get("translation"), 3, 0);
+        double[] bindQ = vecd(node.get("rotation"), 4, Double.NaN);
+        if(Double.isNaN(bindQ[3]))
+            bindQ = new double[]{0, 0, 0, 1};
+        normalizeQuat(bindQ);
+
+        float[] times = unionTimes(pair.translation.times, pair.rotation.times);
+        float[][] trans = new float[times.length][3];
+        float[][] rot = new float[times.length][4];
+        for(int i = 0; i < times.length; i++) {
+            float[] tv = sample(pair.translation, times[i], false);
+            for(int c = 0; c < 3; c++)
+                trans[i][c] = (float) (tv[c] - bindT[c]);
+            float[] rv = sample(pair.rotation, times[i], true);
+            double[] absolute = {rv[0], rv[1], rv[2], rv[3]};
+            normalizeQuat(absolute);
+            double[] delta = quatMul(quatConjugate(bindQ), absolute);
+            normalizeQuat(delta);
+            rot[i][0] = (float) delta[3];
+            rot[i][1] = (float) delta[0];
+            rot[i][2] = (float) delta[1];
+            rot[i][3] = (float) delta[2];
+        }
+        return new SkanInfo.Track(bone, times, trans, rot);
+    }
+
+    private static float[] unionTimes(float[] a, float[] b) {
+        List<Float> values = new ArrayList<>();
+        int ai = 0, bi = 0;
+        while(ai < a.length || bi < b.length) {
+            float value;
+            if(bi >= b.length || (ai < a.length && a[ai] < b[bi] - 1e-6f))
+                value = a[ai++];
+            else if(ai >= a.length || b[bi] < a[ai] - 1e-6f)
+                value = b[bi++];
+            else {
+                value = (a[ai++] + b[bi++]) * 0.5f;
+            }
+            values.add(value);
+        }
+        float[] out = new float[values.size()];
+        for(int i = 0; i < out.length; i++)
+            out[i] = values.get(i);
+        return out;
+    }
+
+    private static float[] sample(AnimChannel channel, float time, boolean quaternion) {
+        int i = 0;
+        while(i + 1 < channel.times.length && channel.times[i + 1] < time)
+            i++;
+        if(i + 1 >= channel.times.length || time <= channel.times[i] + 1e-7f)
+            return frame(channel, i);
+        float alpha = (time - channel.times[i]) / (channel.times[i + 1] - channel.times[i]);
+        float[] a = frame(channel, i), b = frame(channel, i + 1);
+        return quaternion ? slerp(a, b, alpha) : lerp(a, b, alpha);
+    }
+
+    private static float[] frame(AnimChannel channel, int index) {
+        float[] out = new float[channel.components];
+        System.arraycopy(channel.values, index * channel.components, out, 0, channel.components);
+        return out;
+    }
+
+    private static float[] lerp(float[] a, float[] b, float alpha) {
+        float[] out = new float[a.length];
+        for(int i = 0; i < out.length; i++)
+            out[i] = a[i] + (b[i] - a[i]) * alpha;
+        return out;
+    }
+
+    /** glTF quaternion interpolation, input/output order xyzw. */
+    private static float[] slerp(float[] a, float[] b, float alpha) {
+        double dot = 0;
+        for(int i = 0; i < 4; i++)
+            dot += (double) a[i] * b[i];
+        float[] end = b.clone();
+        if(dot < 0) {
+            dot = -dot;
+            for(int i = 0; i < 4; i++)
+                end[i] = -end[i];
+        }
+        double wa, wb;
+        if(dot > 0.9995) {
+            wa = 1 - alpha;
+            wb = alpha;
+        } else {
+            double theta = Math.acos(Math.max(-1, Math.min(1, dot)));
+            double sin = Math.sin(theta);
+            wa = Math.sin((1 - alpha) * theta) / sin;
+            wb = Math.sin(alpha * theta) / sin;
+        }
+        float[] out = new float[4];
+        double n = 0;
+        for(int i = 0; i < 4; i++) {
+            out[i] = (float) (wa * a[i] + wb * end[i]);
+            n += (double) out[i] * out[i];
+        }
+        n = Math.sqrt(n);
+        for(int i = 0; i < 4; i++)
+            out[i] /= (float) n;
+        return out;
+    }
+
+    private static double[] quatConjugate(double[] q) {
+        return new double[]{-q[0], -q[1], -q[2], q[3]};
+    }
+
+    /** Quaternion product in xyzw order. */
+    private static double[] quatMul(double[] a, double[] b) {
+        return new double[]{
+                a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+                a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+                a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+                a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2]
+        };
+    }
+
+    private static void normalizeQuat(double[] q) {
+        double n = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+        if(!Double.isFinite(n) || n == 0)
+            throw new IllegalArgumentException("animation contains an invalid quaternion");
+        for(int i = 0; i < 4; i++)
+            q[i] /= n;
+    }
+
+    private static boolean identityTrack(SkanInfo.Track track) {
+        for(int i = 0; i < track.frames; i++) {
+            if(Math.abs(track.trans[i][0]) > 1e-4 || Math.abs(track.trans[i][1]) > 1e-4
+                    || Math.abs(track.trans[i][2]) > 1e-4)
+                return false;
+            if(Math.abs(track.rot[i][0]) < 0.999999
+                    || Math.abs(track.rot[i][1]) > 1e-4 || Math.abs(track.rot[i][2]) > 1e-4
+                    || Math.abs(track.rot[i][3]) > 1e-4)
+                return false;
+        }
+        return true;
+    }
+
+    private static boolean sameTracks(List<SkanInfo.Track> a, List<SkanInfo.Track> b) {
+        if(a.size() != b.size())
+            return false;
+        for(int i = 0; i < a.size(); i++) {
+            SkanInfo.Track x = a.get(i), y = b.get(i);
+            if(!x.bone.equals(y.bone) || x.frames != y.frames)
+                return false;
+            for(int f = 0; f < x.frames; f++) {
+                if(Math.abs(x.times[f] - y.times[f]) > 1e-4)
+                    return false;
+                for(int c = 0; c < 3; c++)
+                    if(Math.abs(x.trans[f][c] - y.trans[f][c]) > 1e-4)
+                        return false;
+                double dot = Math.abs((double) x.rot[f][0] * y.rot[f][0]
+                        + (double) x.rot[f][1] * y.rot[f][1]
+                        + (double) x.rot[f][2] * y.rot[f][2]
+                        + (double) x.rot[f][3] * y.rot[f][3]);
+                if(Math.toDegrees(2 * Math.acos(Math.min(1, dot))) > 0.1)
+                    return false;
+            }
+        }
+        return true;
     }
 
     /**

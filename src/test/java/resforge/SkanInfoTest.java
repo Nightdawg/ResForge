@@ -6,6 +6,7 @@ import resforge.layers.SkanInfo;
 
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -74,7 +75,61 @@ class SkanInfoTest {
         assertEquals(5, info.fxTracks.get(0).events);
         assertEquals(List.of("gfx/spawn", "gfx/equipped", "gfx/overlay"),
                 info.fxTracks.get(0).refs);
+        assertTrue(info.fxTracks.get(0).rawPayload.length > 0);
         assertTrue(info.tracks.isEmpty());
+    }
+
+    @Test
+    void editedFormatZeroTrackRetainsControlPayloadExactly() {
+        MessageWriter w = header(4, 0, 1, 2);
+        w.string("root").uint16(1);
+        eventTime(w, 1);
+        cpfloat(w, 1);
+        cpfloat(w, -2);
+        cpfloat(w, 3);
+        cpfloat(w, Math.PI / 2);
+        cpfloat(w, 0);
+        cpfloat(w, 0);
+        cpfloat(w, 1);
+        w.string("{ctl}");
+        int fxStart = w.size();
+        w.uint16(1);
+        eventTime(w, 0.5);
+        w.uint8(1).string("trigger");
+        byte[] original = w.toByteArray();
+
+        SkanInfo info = SkanInfo.parse(original);
+        byte[] rawFx = info.fxTracks.get(0).rawPayload.clone();
+        info.tracks.set(0, new SkanInfo.Track("root", new float[]{1},
+                new float[][]{{4, 5, 6}}, new float[][]{{1, 0, 0, 0}}));
+        byte[] encoded = SkanInfo.encode(info);
+        SkanInfo decoded = SkanInfo.parse(encoded);
+
+        assertTrue(decoded.recognized);
+        assertEquals(0, decoded.fmt);
+        assertEquals(4f, decoded.tracks.get(0).trans[0][0], 1e-6);
+        assertArrayEquals(rawFx, decoded.fxTracks.get(0).rawPayload);
+        assertArrayEquals(java.util.Arrays.copyOfRange(original, fxStart, original.length), rawFx);
+    }
+
+    @Test
+    void formatOneEncoderUsesQuantizedFrameRepresentation() {
+        MessageWriter w = new MessageWriter();
+        w.int16(9).uint8(2).uint8(3).float32(4);
+        w.string("root").uint16(1);
+        w.uint16(0x8000).float16(1.25f).float16(-2.5f).float16(3.75f);
+        w.uint16(0x4000).int16(0).int16(0);
+        SkanInfo info = SkanInfo.parse(w.toByteArray());
+
+        SkanInfo decoded = SkanInfo.parse(SkanInfo.encode(info));
+
+        assertTrue(decoded.recognized);
+        assertEquals(1, decoded.fmt);
+        assertEquals("pong-loop", decoded.mode);
+        assertEquals(info.tracks.get(0).times[0], decoded.tracks.get(0).times[0], 1e-4);
+        assertEquals(info.tracks.get(0).trans[0][1], decoded.tracks.get(0).trans[0][1], 1e-4);
+        assertEquals(Math.abs(info.tracks.get(0).rot[0][0]),
+                Math.abs(decoded.tracks.get(0).rot[0][0]), 1e-4);
     }
 
     @Test

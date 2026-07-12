@@ -27,7 +27,9 @@ import java.nio.file.Path;
  *   pack    <dir> [out.res]
  *   replace <file.res> <selector> <newfile> [out.res]
  *   gltf    <file.res> [out.glb]
+ *   gltf-skan <animation.res> <skeleton.res> <model.res> [out.glb]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
+ *   rebuild-skan <orig.res> <edited.glb> [out.res]
  *   catalog <file.res | dir>
  *   cache-list [cacheDir]
  *   verify  <file.res | dir>
@@ -64,7 +66,9 @@ public class Main {
             case "pack":   pack(args);   break;
             case "replace": replace(args); break;
             case "gltf":   gltf(args);   break;
+            case "gltf-skan": gltfSkan(args); break;
             case "rebuild-gltf": rebuildGltf(args); break;
+            case "rebuild-skan": rebuildSkan(args); break;
             case "catalog": catalog(args); break;
             case "cache-list": cacheList(args); break;
             case "verify": verify(args); break;
@@ -382,6 +386,47 @@ public class Main {
                 r.vertices, r.triangles, extra, glbFile, out);
     }
 
+    private static void gltfSkan(String[] args) throws IOException {
+        if(args.length < 4)
+            throw new UsageException(
+                    "gltf-skan requires <animation.res> <skeleton.res> <model.res> [out.glb]");
+        Path animationFile = Path.of(args[1]);
+        Path skeletonFile = Path.of(args[2]);
+        Path modelFile = Path.of(args[3]);
+        String name = animationFile.getFileName().toString();
+        Path out;
+        if(args.length >= 5) {
+            out = Path.of(args[4]);
+        } else {
+            String base = name.toLowerCase().endsWith(".res")
+                    ? name.substring(0, name.length() - 4) : name;
+            out = animationFile.resolveSibling(base + ".glb");
+        }
+        ResContainer animation = ResContainer.parse(Files.readAllBytes(animationFile));
+        ResContainer skeleton = ResContainer.parse(Files.readAllBytes(skeletonFile));
+        ResContainer model = ResContainer.parse(Files.readAllBytes(modelFile));
+        GltfExport.Result r = GltfExport.toGlb(model, skeleton, animation, name);
+        if(r.vertices == 0 || r.triangles == 0)
+            throw new RuntimeException("no 3D geometry (vbuf2/mesh) found in " + modelFile);
+        SafeFiles.write(out, r.glb);
+        System.out.printf("Exported skeletal animation preview: %d vertices, %d triangles "
+                        + "(%d submeshes, %d texture(s)) -> %s%n",
+                r.vertices, r.triangles, r.submeshes, r.textures, out);
+    }
+
+    private static void rebuildSkan(String[] args) throws IOException {
+        if(args.length < 3)
+            throw new UsageException("rebuild-skan requires <original.res> <edited.glb> [out.res]");
+        Path resFile = Path.of(args[1]);
+        Path glbFile = Path.of(args[2]);
+        Path out = (args.length >= 4) ? Path.of(args[3]) : resFile;
+        GltfImport.AnimationRebuildResult r = GltfImport.rebuildSkan(
+                Files.readAllBytes(resFile), Files.readAllBytes(glbFile));
+        SafeFiles.write(out, r.res);
+        System.out.printf("Rebuilt skeletal animations: %d changed, %d unchanged from %s -> %s%n",
+                r.changed, r.unchanged, glbFile, out);
+    }
+
     private static void replace(String[] args) throws IOException {
         if(args.length < 4)
             throw new UsageException("replace requires <file.res> <selector> <newfile> [out.res]");
@@ -411,8 +456,12 @@ public class Main {
         System.out.println("                               Swap one asset (image/tex/audio2/font/midi/");
         System.out.println("                               tooltip/pagina text, or props/action JSON)");
         System.out.println("  gltf   <file.res> [out.glb]  Export 3D geometry to a binary glTF (Blender-ready)");
+        System.out.println("  gltf-skan <animation.res> <skeleton.res> <model.res> [out.glb]");
+        System.out.println("                               Export skeletal actions with a rigged preview model");
         System.out.println("  rebuild-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Rebuild geometry from a glTF (allows added/removed vertices)");
+        System.out.println("  rebuild-skan <orig.res> <edited.glb> [out.res]");
+        System.out.println("                               Import edited skeletal actions from Blender");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
         System.out.println("  cache-list [cacheDir]        List resource names in the local game cache");
         System.out.println("                               (default: %APPDATA%\\Haven and Hearth\\data)");
