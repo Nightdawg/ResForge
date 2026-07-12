@@ -201,7 +201,9 @@ treated as Blender frame-grid rounding rather than an intentional duration edit.
 Adding/removing morph (`manim`) frames remains unsupported.
 
 **View 3D** also previews `skan` directly. For standalone player animations it uses
-the same skeleton/model companion dialog, then CPU-skins the model with controls for
+the same skeleton/model companion dialog. Each companion can be browsed from disk or
+fetched directly from the resource server and retained in memory, then ResForge
+CPU-skins the model with controls for
 play/pause, stop, speed and timeline scrubbing. Multi-layer resources default to
 **All clips**, matching the game's combined body-part pose; individual numbered
 components remain selectable for diagnosis.

@@ -18,6 +18,10 @@ All notable changes to ResForge are documented here. The format is based on
   animation asks for its bind skeleton and preview model, then offers composed
   **All clips** playback plus individual clip inspection, play/pause, stop, speed,
   and timeline scrubbing using generation-gated CPU skinning.
+- **Animation companions can be fetched directly from the resource server.** Each
+  bind-skeleton/model row now offers **Fetch from server…** alongside **Browse**;
+  validated resources stay in memory and work for both View 3D and glTF export
+  without requiring local `.res` files.
 
 ### Changed
 

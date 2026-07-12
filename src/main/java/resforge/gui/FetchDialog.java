@@ -34,11 +34,16 @@ final class FetchDialog {
 
     /** Shows the modal dialog over {@code parent}; returns the choice, or null if cancelled. */
     static Selection show(Component parent) {
+        return show(parent, "");
+    }
+
+    /** Shows the dialog with an optional suggested resource path. */
+    static Selection show(Component parent, String suggestedPath) {
         java.util.prefs.Preferences prefs = java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
         String base = prefs.get("resBaseUrl", resforge.net.ResourceFetcher.DEFAULT_BASE);
         List<String> history = FetchHistory.parse(prefs.get("fetchHistory", ""));
 
-        JTextField pathFld = new JTextField(24);
+        JTextField pathFld = new JTextField(suggestedPath == null ? "" : suggestedPath, 24);
         JTextField baseFld = new JTextField(base, 24);
 
         // JOptionPane initially focuses its default button, so grab focus for the

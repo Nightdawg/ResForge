@@ -625,6 +625,10 @@ Play/pause, stop, 0.25-4x speed and timeline scrub run through generation-gated
 daemon work. The default **All clips** entry composes every compatible `skan` layer
 in resource order, matching `Skeleton.CombinedMod`; `wave` has 38 disjoint tracks
 across six parts and was visually validated, while individual parts remain selectable.
+Each companion row accepts either a local `.res` or an in-memory download through
+the existing bounded `ResourceFetcher` + fetch-history dialog; fetched skeletons
+must contain `skel`, fetched preview models must contain `vbuf2` + `mesh`, and the
+same immutable bytes feed playback or export without temporary files.
 
 The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh

@@ -65,6 +65,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
@@ -91,7 +92,7 @@ public class ResForgeFrame extends JFrame {
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn;
-    private Path lastAnimationSkeleton, lastAnimationModel;
+    private CompanionResource lastAnimationSkeleton, lastAnimationModel;
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final ThumbnailCache thumbCache = new ThumbnailCache();
@@ -139,11 +140,35 @@ public class ResForgeFrame extends JFrame {
     }
 
     private static final class AnimationExportFiles {
-        final Path skeleton, model;
+        final CompanionResource skeleton, model;
 
-        AnimationExportFiles(Path skeleton, Path model) {
+        AnimationExportFiles(CompanionResource skeleton, CompanionResource model) {
             this.skeleton = skeleton;
             this.model = model;
+        }
+    }
+
+    private static final class CompanionResource {
+        final Path file;
+        final byte[] fetched;
+        final String display;
+
+        private CompanionResource(Path file, byte[] fetched, String display) {
+            this.file = file;
+            this.fetched = fetched;
+            this.display = display;
+        }
+
+        static CompanionResource local(Path file) {
+            return new CompanionResource(file, null, file.toString());
+        }
+
+        static CompanionResource fetched(String path, byte[] data) {
+            return new CompanionResource(null, data, "Server: " + path);
+        }
+
+        byte[] bytes() throws IOException {
+            return fetched != null ? fetched : Files.readAllBytes(file);
         }
     }
 
@@ -162,18 +187,18 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
-    private static final class RebuildProgress {
+    private static final class BusyProgress {
         private final JDialog dialog;
 
-        RebuildProgress(ResForgeFrame owner, String sourceName) {
-            dialog = new JDialog(owner, "Rebuilding from glTF", true);
+        BusyProgress(java.awt.Window owner, String title, String message) {
+            dialog = new JDialog(owner, title, java.awt.Dialog.ModalityType.APPLICATION_MODAL);
             dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 
             JProgressBar progress = new JProgressBar();
             progress.setIndeterminate(true);
             JPanel body = new JPanel(new BorderLayout(UiScaling.scale(8), UiScaling.scale(8)));
             body.setBorder(UiScaling.emptyBorder(12, 12, 12, 12));
-            body.add(new JLabel("Rebuilding from " + sourceName + "\u2026"), BorderLayout.NORTH);
+            body.add(new JLabel(message), BorderLayout.NORTH);
             body.add(progress, BorderLayout.CENTER);
             dialog.setContentPane(body);
             dialog.pack();
@@ -827,7 +852,8 @@ public class ResForgeFrame extends JFrame {
         final Path curFile = file;
         final String curPath = pathField.getText();
         final DocumentRevision.Token operation = documentRevision.beginOperation();
-        final RebuildProgress progress = new RebuildProgress(this, sel.getName());
+        final BusyProgress progress = new BusyProgress(this, "Rebuilding from glTF",
+                "Rebuilding from " + sel.getName() + "\u2026");
         setStatus("Rebuilding from " + sel.getName() + " \u2026");
         Thread t = new Thread(() -> {
             byte[] rebuilt = null;
@@ -903,9 +929,9 @@ public class ResForgeFrame extends JFrame {
                 ResContainer model = animation;
                 ResContainer skeleton = animation;
                 if(selectedCompanions != null) {
-                    modelBytes = Files.readAllBytes(selectedCompanions.model);
+                    modelBytes = selectedCompanions.model.bytes();
                     model = ResContainer.parse(modelBytes);
-                    skeleton = ResContainer.parse(Files.readAllBytes(selectedCompanions.skeleton));
+                    skeleton = ResContainer.parse(selectedCompanions.skeleton.bytes());
                 }
                 g = animationRequested
                         ? ModelGeometry.forAnimation(model, PreviewBudget.MAX_RENDER_TRIANGLES)
@@ -1214,7 +1240,7 @@ public class ResForgeFrame extends JFrame {
         boolean hasGeom = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
         boolean hasSkan = res.layers.stream().anyMatch(l -> l.name.equals("skan"));
         boolean animationOnly = hasSkan && !hasGeom;
-        Path skeletonFile = null, modelFile = null;
+        CompanionResource skeletonFile = null, modelFile = null;
         if(animationOnly) {
             AnimationExportFiles selected = chooseAnimationCompanionFiles(CompanionAction.EXPORT);
             if(selected == null)
@@ -1224,8 +1250,8 @@ public class ResForgeFrame extends JFrame {
         }
         final String modelName = file != null ? file.getFileName().toString() : "model";
         final byte[] snapshot = res.serialize();
-        final Path selectedSkeleton = skeletonFile;
-        final Path selectedModel = modelFile;
+        final CompanionResource selectedSkeleton = skeletonFile;
+        final CompanionResource selectedModel = modelFile;
         setStatus("Exporting glTF \u2026");
         Thread t = new Thread(() -> {
             GltfExport.Result r = null;
@@ -1233,8 +1259,8 @@ public class ResForgeFrame extends JFrame {
             try {
                 ResContainer animation = ResContainer.parse(snapshot);
                 if(animationOnly) {
-                    ResContainer skeleton = ResContainer.parse(Files.readAllBytes(selectedSkeleton));
-                    ResContainer model = ResContainer.parse(Files.readAllBytes(selectedModel));
+                    ResContainer skeleton = ResContainer.parse(selectedSkeleton.bytes());
+                    ResContainer model = ResContainer.parse(selectedModel.bytes());
                     r = GltfExport.toGlb(model, skeleton, animation, modelName);
                 } else {
                     r = GltfExport.toGlb(animation, modelName);
@@ -1273,29 +1299,62 @@ public class ResForgeFrame extends JFrame {
     }
 
     private AnimationExportFiles chooseAnimationCompanionFiles(CompanionAction action) {
-        JTextField skeletonPath = new JTextField(companionDefault(lastAnimationSkeleton, "body.res"), 42);
-        JTextField modelPath = new JTextField(companionDefault(lastAnimationModel, "male.res"), 42);
+        CompanionResource[] skeleton = {companionDefault(lastAnimationSkeleton, "body.res")};
+        CompanionResource[] model = {companionDefault(lastAnimationModel, "male.res")};
+        JTextField skeletonPath = new JTextField(
+                skeleton[0] == null ? "" : skeleton[0].display, 42);
+        JTextField modelPath = new JTextField(model[0] == null ? "" : model[0].display, 42);
+        skeletonPath.setEditable(false);
+        modelPath.setEditable(false);
         FileNameExtensionFilter filter = new FileNameExtensionFilter("Haven resource (*.res)", "res");
 
         JButton browseSkeleton = new JButton("Browse\u2026");
         browseSkeleton.addActionListener(e -> {
             Path selected = openDialog("Select bind-skeleton resource", filter);
-            if(selected != null)
-                skeletonPath.setText(selected.toString());
+            if(selected != null) {
+                skeleton[0] = CompanionResource.local(selected);
+                skeletonPath.setText(skeleton[0].display);
+            }
+        });
+        JButton fetchSkeleton = new JButton("Fetch from server\u2026");
+        fetchSkeleton.addActionListener(e -> {
+            CompanionResource selected =
+                    fetchCompanion(fetchSkeleton, "gfx/borka/body", "bind skeleton", true);
+            if(selected != null) {
+                skeleton[0] = selected;
+                skeletonPath.setText(selected.display);
+            }
         });
         JButton browseModel = new JButton("Browse\u2026");
         browseModel.addActionListener(e -> {
             Path selected = openDialog("Select preview-model resource", filter);
-            if(selected != null)
-                modelPath.setText(selected.toString());
+            if(selected != null) {
+                model[0] = CompanionResource.local(selected);
+                modelPath.setText(model[0].display);
+            }
+        });
+        JButton fetchModel = new JButton("Fetch from server\u2026");
+        fetchModel.addActionListener(e -> {
+            CompanionResource selected =
+                    fetchCompanion(fetchModel, "gfx/borka/male", "preview model", false);
+            if(selected != null) {
+                model[0] = selected;
+                modelPath.setText(selected.display);
+            }
         });
 
+        JPanel skeletonButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        skeletonButtons.add(browseSkeleton);
+        skeletonButtons.add(fetchSkeleton);
         JPanel skeletonRow = new JPanel(new BorderLayout(6, 0));
         skeletonRow.add(skeletonPath, BorderLayout.CENTER);
-        skeletonRow.add(browseSkeleton, BorderLayout.EAST);
+        skeletonRow.add(skeletonButtons, BorderLayout.EAST);
+        JPanel modelButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        modelButtons.add(browseModel);
+        modelButtons.add(fetchModel);
         JPanel modelRow = new JPanel(new BorderLayout(6, 0));
         modelRow.add(modelPath, BorderLayout.CENTER);
-        modelRow.add(browseModel, BorderLayout.EAST);
+        modelRow.add(modelButtons, BorderLayout.EAST);
 
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -1325,37 +1384,117 @@ public class ResForgeFrame extends JFrame {
                     JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
             if(result != 0)
                 return null;
-            Path skeleton, model;
-            try {
-                skeleton = Path.of(skeletonPath.getText().trim());
-                model = Path.of(modelPath.getText().trim());
-            } catch(RuntimeException e) {
-                error("Enter valid paths for both companion resources.");
+            CompanionResource selectedSkeleton =
+                    resolveCompanion(skeletonPath.getText(), skeleton[0], "Bind skeleton");
+            if(selectedSkeleton == null)
                 continue;
-            }
-            if(!Files.isRegularFile(skeleton)) {
-                error("Bind skeleton file not found: " + skeleton);
+            CompanionResource selectedModel =
+                    resolveCompanion(modelPath.getText(), model[0], "Preview model");
+            if(selectedModel == null)
                 continue;
-            }
-            if(!Files.isRegularFile(model)) {
-                error("Preview model file not found: " + model);
-                continue;
-            }
-            lastAnimationSkeleton = skeleton;
-            lastAnimationModel = model;
-            return new AnimationExportFiles(skeleton, model);
+            lastAnimationSkeleton = selectedSkeleton;
+            lastAnimationModel = selectedModel;
+            return new AnimationExportFiles(selectedSkeleton, selectedModel);
         }
     }
 
-    private String companionDefault(Path remembered, String siblingName) {
+    private CompanionResource fetchCompanion(Component parent, String suggestedPath,
+                                                 String role, boolean skeletonRole) {
+        FetchDialog.Selection selection = FetchDialog.show(parent, suggestedPath);
+        if(selection == null)
+            return null;
+        if(selection.path.isEmpty()) {
+            JOptionPane.showMessageDialog(parent, "Please enter a resource path.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        java.util.prefs.Preferences prefs =
+                java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
+        prefs.put("resBaseUrl", selection.base);
+        String url;
+        try {
+            url = resforge.net.ResourceFetcher.urlFor(selection.base, selection.path);
+        } catch(IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(parent, e.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+
+        final CompanionResource[] result = {null};
+        final String[] failure = {null};
+        java.awt.Window owner = SwingUtilities.getWindowAncestor(parent);
+        BusyProgress progress = new BusyProgress(owner != null ? owner : this,
+                "Fetching companion resource",
+                "Fetching " + role + " from " + url + "\u2026");
+        setStatus("Fetching " + url + " \u2026");
+        Thread thread = new Thread(() -> {
+            try {
+                byte[] data = resforge.net.ResourceFetcher.fetch(selection.base, selection.path);
+                ResContainer parsed = ResContainer.parse(data);
+                boolean valid = skeletonRole
+                        ? parsed.layers.stream().anyMatch(layer -> layer.name.equals("skel"))
+                        : parsed.layers.stream().anyMatch(layer -> layer.name.equals("vbuf2"))
+                                && parsed.layers.stream().anyMatch(layer -> layer.name.equals("mesh"));
+                if(!valid)
+                    throw new IllegalArgumentException("Fetched resource is not a compatible " + role + ".");
+                result[0] = CompanionResource.fetched(selection.path, data);
+            } catch(InterruptedException e) {
+                Thread.currentThread().interrupt();
+                failure[0] = "Fetch interrupted.";
+            } catch(Exception e) {
+                failure[0] = e.getMessage();
+            }
+            SwingUtilities.invokeLater(progress::close);
+        }, "companion-fetch");
+        thread.setDaemon(true);
+        thread.start();
+        progress.showModal();
+
+        if(result[0] == null) {
+            setStatus("Ready");
+            JOptionPane.showMessageDialog(parent, "Could not fetch " + role + ": " + failure[0],
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return null;
+        }
+        try {
+            List<String> history = FetchHistory.parse(prefs.get("fetchHistory", ""));
+            prefs.put("fetchHistory",
+                    FetchHistory.serialize(FetchHistory.add(history, selection.path)));
+        } catch(IllegalArgumentException | SecurityException e) {
+            setStatus("Fetched " + selection.path + " \u2014 history not saved: " + e.getMessage());
+            return result[0];
+        }
+        setStatus("Fetched " + selection.path + " for " + role);
+        return result[0];
+    }
+
+    private CompanionResource resolveCompanion(String text, CompanionResource selected, String role) {
+        String value = text.trim();
+        if(selected != null && value.equals(selected.display))
+            return selected;
+        Path path;
+        try {
+            path = Path.of(value);
+        } catch(RuntimeException e) {
+            error(role + " path is invalid.");
+            return null;
+        }
+        if(!Files.isRegularFile(path)) {
+            error(role + " file not found: " + path);
+            return null;
+        }
+        return CompanionResource.local(path);
+    }
+
+    private CompanionResource companionDefault(CompanionResource remembered, String siblingName) {
         if(remembered != null)
-            return remembered.toString();
+            return remembered;
         if(file != null && file.getParent() != null) {
             Path sibling = file.getParent().resolve(siblingName);
             if(Files.isRegularFile(sibling))
-                return sibling.toString();
+                return CompanionResource.local(sibling);
         }
-        return "";
+        return null;
     }
 
     private void doShowReferences() {

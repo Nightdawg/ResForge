@@ -105,8 +105,10 @@ play/pause/stop, speed and timeline scrub), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 For standalone `skan` export, one companion-resource dialog shows both required
-paths (bind skeleton and visible preview model), with Browse buttons, validation,
-session memory, and sibling `body.res`/`male.res` defaults.
+sources (bind skeleton and visible preview model), with **Browse** and **Fetch from
+server…** per row, validation, session memory, and sibling `body.res`/`male.res`
+defaults. Server companions are parsed and retained in memory (not saved to disk)
+and feed both View 3D and glTF export.
 Toolbar (two rows, with separators): row 1 **Open File · Fetch from Server · Open from
 Cache (AppData)**; row 2 **View 3D · Export to glTF · Rebuild from glTF · References…**; the
 **resource-version spinner** (uint16) sits on the file-path bar below. Menu accelerators:
