@@ -4,6 +4,7 @@ import resforge.model.ExternalTextures;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
 import resforge.model.ModelGeometry;
+import resforge.model.SkanPlayback;
 import resforge.res.Layer;
 import resforge.res.Replacer;
 import resforge.res.ResContainer;
@@ -143,6 +144,21 @@ public class ResForgeFrame extends JFrame {
         AnimationExportFiles(Path skeleton, Path model) {
             this.skeleton = skeleton;
             this.model = model;
+        }
+    }
+
+    private enum CompanionAction {
+        VIEW("View", "Skeletal animation preview resources",
+                "Select both companion resources needed to display and animate it in 3D."),
+        EXPORT("Export", "Skeletal animation export resources",
+                "Select both companion resources to include in the Blender preview.");
+
+        final String button, title, help;
+
+        CompanionAction(String button, String title, String help) {
+            this.button = button;
+            this.title = title;
+            this.help = help;
         }
     }
 
@@ -864,33 +880,65 @@ public class ResForgeFrame extends JFrame {
             return;
         final byte[] snapshot = res.serialize();
         final String title = file != null ? file.getFileName().toString() : "model";
+        boolean hasGeometry = res.layers.stream().anyMatch(l -> l.name.equals("vbuf2"));
+        boolean hasSkan = res.layers.stream().anyMatch(l -> l.name.equals("skan"));
+        AnimationExportFiles companions = null;
+        if(!hasGeometry && hasSkan) {
+            companions = chooseAnimationCompanionFiles(CompanionAction.VIEW);
+            if(companions == null)
+                return;
+        }
+        final AnimationExportFiles selectedCompanions = companions;
+        final boolean animationRequested = hasSkan;
         setStatus("Building 3D model \u2026");
         Thread t = new Thread(() -> {
             ModelGeometry g = null;
             Model3DView.DecodedPalette palette = null;
+            SkanPlayback p = null;
             boolean hasExt = false;
+            byte[] modelBytes = snapshot;
             String err = null;
             try {
-                ResContainer parsed = ResContainer.parse(snapshot);
-                g = ModelGeometry.from(parsed, null, PreviewBudget.MAX_RENDER_TRIANGLES);
+                ResContainer animation = ResContainer.parse(snapshot);
+                ResContainer model = animation;
+                ResContainer skeleton = animation;
+                if(selectedCompanions != null) {
+                    modelBytes = Files.readAllBytes(selectedCompanions.model);
+                    model = ResContainer.parse(modelBytes);
+                    skeleton = ResContainer.parse(Files.readAllBytes(selectedCompanions.skeleton));
+                }
+                g = animationRequested
+                        ? ModelGeometry.forAnimation(model, PreviewBudget.MAX_RENDER_TRIANGLES)
+                        : ModelGeometry.from(model, null, PreviewBudget.MAX_RENDER_TRIANGLES);
                 if(g != null)
                     palette = Model3DView.preparePalette(g);
-                hasExt = ExternalTextures.hasExternalStatic(parsed);
+                if(g != null)
+                    p = SkanPlayback.from(g, skeleton, animation);
+                hasExt = p == null && ExternalTextures.hasExternalStatic(model);
             } catch(Exception e) {
                 err = e.getMessage();
             }
             final ModelGeometry geo = g;
             final Model3DView.DecodedPalette decodedPalette = palette;
+            final SkanPlayback playback = p;
             final boolean hasExternal = hasExt;
+            final byte[] resolvedModelBytes = modelBytes;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 setStatus("Ready");
-                if(geo == null || decodedPalette == null) {
-                    info(error != null ? "Could not build the 3D model: " + error
-                            : "This resource has no 3D geometry (vbuf2/mesh) to view.");
+                if(error != null) {
+                    info("Could not build the 3D model: " + error);
                     return;
                 }
-                show3DDialog(title, snapshot, geo, decodedPalette, hasExternal);
+                if(geo == null || decodedPalette == null) {
+                    info("This resource has no 3D geometry (vbuf2/mesh) to view.");
+                    return;
+                }
+                if(selectedCompanions != null && playback == null) {
+                    info("The selected resources do not provide compatible skinned animation playback.");
+                    return;
+                }
+                show3DDialog(title, resolvedModelBytes, geo, decodedPalette, hasExternal, playback);
             });
         }, "model-3d");
         t.setDaemon(true);
@@ -898,13 +946,15 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain,
-                              Model3DView.DecodedPalette palettePlain, boolean hasExternal) {
+                              Model3DView.DecodedPalette palettePlain, boolean hasExternal,
+                              SkanPlayback playback) {
         JDialog dlg = new JDialog(this, "3D view \u2014 " + title, false);
         dlg.setLayout(new BorderLayout());
         dlg.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
         JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
-                + " \u2014 shown in bind pose (no skinning/animation)");
+                + (playback != null ? " \u2014 use the timeline to preview skeletal animation"
+                : " \u2014 shown in bind pose (no skinning/animation)"));
         Theme.muted(hint);
         hint.setBorder(UiScaling.emptyBorder(2, 4, 2, 4));
         dlg.add(hint, BorderLayout.SOUTH);
@@ -920,6 +970,7 @@ public class ResForgeFrame extends JFrame {
         final Model3DView.DecodedPalette[] resolvedPalette = {null};
         final Component[] installed = {null, null};   // current NORTH, CENTER
         final Model3DView[] installedView = {null};
+        final SkanPlayerPanel[] installedPlayer = {null};
         final boolean[] closed = {false};
         final long[] resolveGeneration = {0};
 
@@ -928,6 +979,10 @@ public class ResForgeFrame extends JFrame {
                 return;
             if(installedView[0] != null)
                 installedView[0].dispose();
+            if(installedPlayer[0] != null) {
+                installedPlayer[0].close();
+                installedPlayer[0] = null;
+            }
             if(installed[0] != null)
                 dlg.remove(installed[0]);
             if(installed[1] != null)
@@ -940,6 +995,12 @@ public class ResForgeFrame extends JFrame {
                 return;
             }
             JPanel north = build3DControls(geo, view, resolveExt);
+            if(playback != null) {
+                SkanPlayerPanel player = new SkanPlayerPanel(playback, view);
+                player.setAlignmentX(Component.LEFT_ALIGNMENT);
+                north.add(player);
+                installedPlayer[0] = player;
+            }
             dlg.add(north, BorderLayout.NORTH);
             dlg.add(view, BorderLayout.CENTER);
             installed[0] = north;
@@ -953,6 +1014,10 @@ public class ResForgeFrame extends JFrame {
             @Override public void windowClosed(WindowEvent e) {
                 closed[0] = true;
                 resolveGeneration[0]++;
+                if(installedPlayer[0] != null) {
+                    installedPlayer[0].close();
+                    installedPlayer[0] = null;
+                }
                 if(installedView[0] != null) {
                     installedView[0].dispose();
                     installedView[0] = null;
@@ -1151,7 +1216,7 @@ public class ResForgeFrame extends JFrame {
         boolean animationOnly = hasSkan && !hasGeom;
         Path skeletonFile = null, modelFile = null;
         if(animationOnly) {
-            AnimationExportFiles selected = chooseAnimationExportFiles();
+            AnimationExportFiles selected = chooseAnimationCompanionFiles(CompanionAction.EXPORT);
             if(selected == null)
                 return;
             skeletonFile = selected.skeleton;
@@ -1207,7 +1272,7 @@ public class ResForgeFrame extends JFrame {
         t.start();
     }
 
-    private AnimationExportFiles chooseAnimationExportFiles() {
+    private AnimationExportFiles chooseAnimationCompanionFiles(CompanionAction action) {
         JTextField skeletonPath = new JTextField(companionDefault(lastAnimationSkeleton, "body.res"), 42);
         JTextField modelPath = new JTextField(companionDefault(lastAnimationModel, "male.res"), 42);
         FileNameExtensionFilter filter = new FileNameExtensionFilter("Haven resource (*.res)", "res");
@@ -1235,7 +1300,7 @@ public class ResForgeFrame extends JFrame {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         JLabel help = new JLabel("<html>This animation resource has no rig or visible mesh. "
-                + "Select both companion resources used for the Blender preview.</html>");
+                + action.help + "</html>");
         help.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(help);
         panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
@@ -1253,10 +1318,10 @@ public class ResForgeFrame extends JFrame {
         panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
         panel.add(modelRow);
 
-        Object[] options = {"Export", "Cancel"};
+        Object[] options = {action.button, "Cancel"};
         while(true) {
             int result = JOptionPane.showOptionDialog(this, panel,
-                    "Skeletal animation export resources", JOptionPane.DEFAULT_OPTION,
+                    action.title, JOptionPane.DEFAULT_OPTION,
                     JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
             if(result != 0)
                 return null;

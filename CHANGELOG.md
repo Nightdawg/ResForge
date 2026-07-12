@@ -14,13 +14,19 @@ All notable changes to ResForge are documented here. The format is based on
   layers and control/effect tracks. The latest Blender key can shorten or extend a
   clip when it has no control/effect track. New `gltf-skan` and `rebuild-skan` CLI
   commands mirror the GUI workflow.
+- **The 3D viewer can play skeletal animations.** `View 3D` on a standalone
+  animation asks for its bind skeleton and preview model, then offers composed
+  **All clips** playback plus individual clip inspection, play/pause, stop, speed,
+  and timeline scrubbing using generation-gated CPU skinning.
 
 ### Changed
 
 - **Standalone animation export now explains its two companion resources up front.**
   One compact dialog shows the bind-skeleton and preview-model paths together, with
   Browse buttons, validation, remembered choices, and nearby `body.res`/`male.res`
-  defaults, replacing two unexplained sequential file prompts.
+  defaults, replacing two unexplained sequential file prompts. The shared dialog is
+  action-aware: **View 3D** uses preview wording and a **View** button, while glTF
+  export uses **Export**.
 - **Dark mode now uses an IntelliJ-inspired layered palette.** Near-black content
   surfaces, raised controls and toolbars, clearer borders and separators, subdued
   blue selections, and matching preview checkerboards improve visual hierarchy.

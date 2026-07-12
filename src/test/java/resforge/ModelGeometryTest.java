@@ -66,6 +66,23 @@ class ModelGeometryTest {
         return w.toByteArray();
     }
 
+    private static byte[] vbufSkinned() {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0).uint16(3);
+        w.string("pos2").uint8(1).string("f4");
+        for(float v : new float[]{0, 0, 0, 1, 0, 0, 0, 1, 0})
+            w.float32(v);
+        w.string("nrm2").uint8(1).string("f4");
+        for(int i = 0; i < 3; i++)
+            w.float32(0).float32(0).float32(1);
+        w.string("bones2").uint8(1).string("f4").uint8(1);
+        w.string("root").uint16(3).uint16(0)
+                .float32(1).float32(1).float32(1)
+                .uint16(0).uint16(0);
+        w.string("");
+        return w.toByteArray();
+    }
+
     /** A tex layer wrapping a tiny valid PNG signature so TexInfo locates it. */
     private static byte[] tex(int id, byte marker) {
         byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, marker, 2};
@@ -207,5 +224,19 @@ class ModelGeometryTest {
         assertEquals(1, g.localTextures.size());   // palette still lists the resource's tex layer
         for(int m : g.triMat)
             assertEquals(-1, m);
+    }
+
+    @Test
+    void staticViewOfSkinnedModelDoesNotRetainOrCopyInfluences() {
+        ResContainer res = new ResContainer(1);
+        res.layers.add(new Layer("vbuf2", vbufSkinned()));
+        res.layers.add(new Layer("mesh", mesh(0, 1, 2)));
+
+        ModelGeometry geometry = ModelGeometry.from(res);
+
+        assertTrue(geometry != null);
+        assertTrue(geometry.boneNames.isEmpty());
+        assertEquals(0, geometry.joints.length);
+        assertEquals(0, geometry.weights.length);
     }
 }

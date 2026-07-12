@@ -273,6 +273,12 @@ channels for otherwise static bones (observed on an edited `gfx/borka/wave` GLB:
 up to 98 STEP channels/action). These are safe to accept only when every T/R sample
 is equal (quaternion sign-equivalence included) and every scale component is 1.
 Nonconstant STEP cannot map faithfully to skan's interpolation and stays rejected.
+The software 3D viewer also plays `skan`: bind-local transforms are composed as
+`bindPos + frameTrans` and `bindRot * frameRot`, world matrices follow the `skel`
+parents, and each soup vertex uses the same normalized top-four linear blend as the
+client. Multi-layer resources default to all compatible clips combined in resource
+order (`Skeleton.CombinedMod.apply` semantics: translations add, rotations multiply).
+`gfx/borka/wave` confirms six parts / 38 disjoint tracks animate together.
 `manim` (mesh/morph) layers also export as glTF **morph targets**: each
 frame's per-vertex position deltas become a morph target (deltas are *added* to the
 base and *linearly* interpolated — exactly glTF morph semantics, matching the

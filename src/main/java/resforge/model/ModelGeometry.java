@@ -14,9 +14,9 @@ import java.util.Map;
  * ({@link Vbuf2Data} + {@link MeshInfo}); coordinates are kept in Haven's native
  * Z-up space (the viewer orients its camera with +Z up).
  *
- * <p>Skinned models are assembled in their bind / rest pose (no bone transforms),
- * matching the static-geometry view the glTF export gives. Returns {@code null}
- * from {@link #from} when the resource has no usable geometry.
+ * <p>Skinned models are assembled in their bind / rest pose and retain the
+ * per-soup-vertex bone influences needed by {@link SkanPlayback}. Returns
+ * {@code null} from {@link #from} when the resource has no usable geometry.
  */
 public final class ModelGeometry {
     /** 9 floats per triangle (3 vertices × xyz), Haven Z-up. */
@@ -27,6 +27,12 @@ public final class ModelGeometry {
     public final float[] uv;
     /** Per triangle: index into {@link #materials}, or -1 if the triangle is untextured. */
     public final int[] triMat;
+    /** Unified influence-index to bone name for the triangle soup. */
+    public final java.util.List<String> boneNames;
+    /** Four influence indices per soup vertex (indices into {@link #boneNames}). */
+    public final int[] joints;
+    /** Four normalized influence weights per soup vertex. */
+    public final float[] weights;
     /** The textured materials used by the model (in first-seen order); each names the
      *  local-texture palette ordinal it was authored with. The viewer lets the user
      *  re-point each to any palette entry (e.g. mulberry's seasonal leaf variants). */
@@ -79,6 +85,7 @@ public final class ModelGeometry {
                           java.util.List<Material> materials, java.util.List<byte[]> localTextures,
                           java.util.List<byte[]> localMasks, java.util.List<Integer> localTexIds,
                           java.util.List<byte[]> externalTextures, java.util.List<byte[]> externalMasks,
+                          java.util.List<String> boneNames, int[] joints, float[] weights,
                           int triangleCount, int vertexCount, int submeshCount) {
         this.positions = positions;
         this.normals = normals;
@@ -90,6 +97,9 @@ public final class ModelGeometry {
         this.localTexIds = localTexIds;
         this.externalTextures = externalTextures;
         this.externalMasks = externalMasks;
+        this.boneNames = java.util.List.copyOf(boneNames);
+        this.joints = joints;
+        this.weights = weights;
         this.triangleCount = triangleCount;
         this.vertexCount = vertexCount;
         this.submeshCount = submeshCount;
@@ -140,6 +150,16 @@ public final class ModelGeometry {
      * before allocating the triangle soup. Used by bounded GUI previews. */
     public static ModelGeometry from(ResContainer res, ExternalTextures.Fetcher fetcher,
                                      int maxTriangles) {
+        return from(res, fetcher, maxTriangles, false);
+    }
+
+    /** Build geometry while retaining per-soup-vertex skin influences for animation playback. */
+    public static ModelGeometry forAnimation(ResContainer res, int maxTriangles) {
+        return from(res, null, maxTriangles, true);
+    }
+
+    private static ModelGeometry from(ResContainer res, ExternalTextures.Fetcher fetcher,
+                                      int maxTriangles, boolean retainSkinning) {
         if(maxTriangles < 0)
             throw new IllegalArgumentException("maxTriangles must be non-negative");
         Map<Integer, Vbuf2Data> vbufs = new LinkedHashMap<>();
@@ -178,11 +198,22 @@ public final class ModelGeometry {
         java.util.List<byte[]> externalMasks = new java.util.ArrayList<>();
         Map<Integer, Integer> matidToExtOrd = new java.util.HashMap<>();
         int localCount = lt.images.size();
+        java.util.List<String> boneNames = new java.util.ArrayList<>();
+        Map<String, Integer> boneIndex = new java.util.LinkedHashMap<>();
+        for(Vbuf2Data d : vbufs.values())
+            if(retainSkinning && d.boneNames != null)
+                for(String name : d.boneNames)
+                    if(!boneIndex.containsKey(name)) {
+                        boneIndex.put(name, boneNames.size());
+                        boneNames.add(name);
+                    }
 
         float[] pos = new float[tris * 9];
         float[] nrm = new float[tris * 9];
         float[] uv = new float[tris * 6];
         int[] triMat = new int[tris];
+        int[] joints = boneNames.isEmpty() ? new int[0] : new int[tris * 3 * 4];
+        float[] weights = boneNames.isEmpty() ? new float[0] : new float[tris * 3 * 4];
         int o = 0;          // pos/nrm cursor (9 per triangle)
         int uo = 0;         // uv cursor (6 per triangle)
         int tri = 0;        // emitted-triangle counter
@@ -233,6 +264,7 @@ public final class ModelGeometry {
                 float[] face = (vn == null) ? faceNormal(vp, a, b, c) : null;
                 for(int k = 0; k < 3; k++) {
                     int v = vidx[k];
+                    int soupVertex = o / 3;
                     pos[o] = vp[v * 3];
                     pos[o + 1] = vp[v * 3 + 1];
                     pos[o + 2] = vp[v * 3 + 2];
@@ -249,6 +281,15 @@ public final class ModelGeometry {
                         uv[uo] = vt[v * 2];
                         uv[uo + 1] = vt[v * 2 + 1];
                     }
+                    if(retainSkinning && d.boneNames != null
+                            && d.vJoints != null && d.vWeights != null)
+                        for(int influence = 0; influence < 4; influence++) {
+                            int source = v * 4 + influence;
+                            int target = soupVertex * 4 + influence;
+                            String bone = d.boneNames[d.vJoints[source]];
+                            joints[target] = boneIndex.get(bone);
+                            weights[target] = d.vWeights[source];
+                        }
                     o += 3;
                     uo += 2;
                 }
@@ -262,12 +303,17 @@ public final class ModelGeometry {
             nrm = java.util.Arrays.copyOf(nrm, o);
             uv = java.util.Arrays.copyOf(uv, uo);
             triMat = java.util.Arrays.copyOf(triMat, tri);
+            if(!boneNames.isEmpty()) {
+                joints = java.util.Arrays.copyOf(joints, tri * 3 * 4);
+                weights = java.util.Arrays.copyOf(weights, tri * 3 * 4);
+            }
         }
         int verts = 0;          // distinct source vertices (vbufs are shared across submeshes)
         for(int id : usedVbufs)
             verts += vbufs.get(id).num;
         return new ModelGeometry(pos, nrm, uv, triMat, materials,
                 lt.images, lt.masks, lt.texIds, externalTextures, externalMasks,
+                boneNames, joints, weights,
                 tri, verts, meshes.size());
     }
 

@@ -615,6 +615,17 @@ the new duration. A duration change is rejected when the layer has `{ctl}` track
 fmt-1 event times are normalized by `len`, while fmt-0 event times are absolute, so
 silently retaining the raw payload would impose inconsistent retiming semantics.
 
+**In-app skeletal playback is implemented.** `View 3D` on a standalone animation
+uses the same skeleton/model companions as glTF export. `ModelGeometry` retains
+top-four bone influences aligned to its triangle soup only for animation previews;
+`SkanPlayback` evaluates the client's bind+delta local pose, slerps rotations,
+rebuilds parented world matrices, and applies linear-blend skinning to positions and
+normals. `Model3DView` receives immutable posed arrays in its render snapshot.
+Play/pause, stop, 0.25-4x speed and timeline scrub run through generation-gated
+daemon work. The default **All clips** entry composes every compatible `skan` layer
+in resource order, matching `Skeleton.CombinedMod`; `wave` has 38 disjoint tracks
+across six parts and was visually validated, while individual parts remain selectable.
+
 The Haven encode toolkit is fully in the client (`Utils.hfenc`/`uvec2oct`,
 `Message.add*`, `NormNumber` encoders) plus `mkres-fragment.py` for the mesh
 quantization/stripping choices — no dev code needed.
@@ -625,6 +636,7 @@ quantization/stripping choices — no dev code needed.
   glTF; effect-free clip duration follows the latest key, while duration changes on
   clips with effect tracks are rejected. `manim` morph shapes rebuild, but frame
   count and timing remain those of the original resource.
+- The 3D viewer plays skeletal animation but not `manim` morph animation.
 - Direct in-app editors for `vbuf2`/`mesh`/`skel`/`skan`/`manim` are deferred.
   Geometry, skin weights, skeleton poses, skeletal actions, and fixed-timeline morph
   shapes are edited through glTF instead.

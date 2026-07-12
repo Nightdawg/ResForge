@@ -200,6 +200,12 @@ rejected when effect timing would become ambiguous. Sub-20 ms end-time drift is
 treated as Blender frame-grid rounding rather than an intentional duration edit.
 Adding/removing morph (`manim`) frames remains unsupported.
 
+**View 3D** also previews `skan` directly. For standalone player animations it uses
+the same skeleton/model companion dialog, then CPU-skins the model with controls for
+play/pause, stop, speed and timeline scrubbing. Multi-layer resources default to
+**All clips**, matching the game's combined body-part pose; individual numbered
+components remain selectable for diagnosis.
+
 ## Building / testing
 
 Requires JDK 21. There are three equivalent builds — use whichever you prefer;
@@ -346,7 +352,7 @@ The rig layers `skel` (bone hierarchy), `skan` (skeletal animation:
 length, mode, per-bone tracks) and `manim`
 (mesh/morph animation: per-frame vertex offsets) have read-only structural views;
 `skel` rest poses, `skan` keyframes and fixed-timeline `manim` shapes edit through
-the glTF round-trip. `boneoff`
+the glTF round-trip, while `skan` can also play in the 3D viewer. `boneoff`
 (equip-point transforms) and `light` (a light source: colours, attenuation,
 direction) are editable as JSON.
 

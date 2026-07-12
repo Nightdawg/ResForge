@@ -43,6 +43,8 @@ final class Model3DView extends JPanel {
     private int lastX, lastY;
     private volatile BufferedImage cachedImage;
     private volatile String cachedFailure;
+    private volatile float[] animatedPositions;
+    private volatile float[] animatedNormals;
     private volatile boolean disposed;
 
     Model3DView(ModelGeometry geo, DecodedPalette palette) throws PreviewFailure {
@@ -228,6 +230,21 @@ final class Model3DView extends JPanel {
         requestRender();
     }
 
+    void setAnimatedGeometry(float[] positions, float[] normals) {
+        if(positions == null || normals == null
+                || positions.length != geo.positions.length || normals.length != geo.normals.length)
+            throw new IllegalArgumentException("animated geometry does not match the model");
+        animatedPositions = positions;
+        animatedNormals = normals;
+        requestRender();
+    }
+
+    void clearAnimatedGeometry() {
+        animatedPositions = null;
+        animatedNormals = null;
+        requestRender();
+    }
+
     private void requestRender() {
         requestRender(getWidth(), getHeight());
     }
@@ -278,8 +295,11 @@ final class Model3DView extends JPanel {
 
     private RenderState snapshot(int displayWidth, int displayHeight) {
         int[] framebuffer = PreviewBudget.framebufferSize(displayWidth, displayHeight);
+        float[] positions = animatedPositions;
+        float[] normals = animatedNormals;
         return new RenderState(yaw, pitch, dist, panX, panY, shaded, wireframe, textured,
-                matOrd, framebuffer[0], framebuffer[1]);
+                matOrd, positions != null ? positions : geo.positions,
+                normals != null ? normals : geo.normals, framebuffer[0], framebuffer[1]);
     }
 
     private boolean isCurrent(long generation) {
@@ -311,6 +331,8 @@ final class Model3DView extends JPanel {
         renderGeneration.incrementAndGet();
         cachedImage = null;
         cachedFailure = null;
+        animatedPositions = null;
+        animatedNormals = null;
         if(ownedWorker != null)
             ownedWorker.shutdownNow();
     }
@@ -362,7 +384,8 @@ final class Model3DView extends JPanel {
 
     private record RenderState(double yaw, double pitch, double dist, double panX, double panY,
                                boolean shaded, boolean wireframe, boolean textured,
-                               int[] matOrd, int width, int height) {
+                               int[] matOrd, float[] positions, float[] normals,
+                               int width, int height) {
         private RenderState {
             matOrd = matOrd.clone();
         }
@@ -412,8 +435,8 @@ final class Model3DView extends JPanel {
             double[] light = norm(new double[]{eye[0] - target[0],
                     eye[1] - target[1], eye[2] - target[2]});
 
-            float[] positions = geo.positions;
-            float[] normals = geo.normals;
+            float[] positions = state.positions;
+            float[] normals = state.normals;
             float[] uv = geo.uv;
             double[] sx = new double[3], sy = new double[3], sz = new double[3];
             double[] intensity = new double[3], tu = new double[3], tv = new double[3];

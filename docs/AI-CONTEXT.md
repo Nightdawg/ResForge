@@ -100,7 +100,8 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 (read-only structural display), font/midi replace+export, raw replace+export, a
 built-in **3D viewer** (whole-model, software-rendered — see below; with a
 **per-material texture picker** to swap each part's local `tex`, e.g. seasonal
-leaves), 3D →
+leaves, plus CPU-skinned `skan` playback with composed/individual clip selection,
+play/pause/stop, speed and timeline scrub), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 For standalone `skan` export, one companion-resource dialog shows both required
@@ -243,7 +244,12 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   latest cached frame. Triangle, internal-framebuffer, and cumulative raster-work
   budgets bound that work; generation/disposal cancellation is checked inside the
   raster loops, and budget failures become visible preview errors instead of partial
-  frames. Closing/replacing a view invalidates late renders and external-resolution callbacks.
+  frames. `model/SkanPlayback` retains soup-aligned top-four influences only for
+  animation views, evaluates client-equivalent bind+delta poses and wrap modes, and
+  CPU-skins positions/normals on a generation-gated daemon worker. Multi-layer player
+  poses default to an **All clips** composite (the game applies those body-part mods
+  together), while each numbered `skan` remains inspectable.
+  Closing/replacing a view invalidates late renders and external-resolution callbacks.
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files
   don't freeze the EDT. Document-replacing open/fetch/rebuild workers capture one
@@ -359,7 +365,7 @@ section lists only current limitations or intentionally deferred work.
   The new-style typed (`tto`) `image` header parser is implemented exactly but
   remains unverified on a real sample; none occurred among 669 images in the
   recorded corpus, so validation is opportunistic if one is found.
-- **3D viewer follow-ons:** the viewport still has no skeletal/morph playback,
+- **3D viewer follow-ons:** the viewport has skeletal playback but no morph playback,
   and it does not composite a local `otex` overlay over a fetched external base.
   Runtime-selected varmat textures and `Dyntex` sprite additions remain out of
   scope because their final pixels are not stored in the model resource.

@@ -185,6 +185,23 @@ class Model3DViewTest {
     }
 
     @Test
+    void animatedGeometrySupersedesBindGeometryInRenderSnapshot() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
+        int[] bind = view.renderForTest(120, 120).getRGB(0, 0, 120, 120, null, 0, 120);
+        float[] moved = geo.positions.clone();
+        for(int i = 0; i < moved.length; i += 3)
+            moved[i] += 20;
+
+        view.setAnimatedGeometry(moved, geo.normals.clone());
+        int[] animated = view.renderForTest(120, 120).getRGB(0, 0, 120, 120, null, 0, 120);
+        view.dispose();
+
+        assertTrue(reddish(bind) > 0);
+        assertEquals(0, reddish(animated), "the translated animated triangle leaves the camera view");
+    }
+
+    @Test
     void rendererCancelsDeterministicallyDuringRasterization() throws Exception {
         ModelGeometry geo = texturedGeometry();
         Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
