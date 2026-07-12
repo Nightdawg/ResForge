@@ -114,13 +114,21 @@ final class CachePickerDialog {
         status.accept("Scanning game cache " + dir + " \u2026");
         Thread t = new Thread(() -> {
             List<String> found = null;
+            boolean reusedIndex = false;
+            String indexWarning = null;
             String err = null;
             try {
-                found = resforge.net.CacheIndex.scan(dir);
+                resforge.net.CacheIndex.ScanResult result =
+                        resforge.net.CacheIndex.scanCached(dir);
+                found = result.paths;
+                reusedIndex = result.reusedIndex;
+                indexWarning = result.warning;
             } catch(Exception ex) {
                 err = ex.getMessage();
             }
             final List<String> names = found;
+            final boolean reused = reusedIndex;
+            final String warning = indexWarning;
             final String error = err;
             SwingUtilities.invokeLater(() -> {
                 if(names == null) {
@@ -135,11 +143,15 @@ final class CachePickerDialog {
                 filterFld.setEnabled(true);
                 border.setTitle(names.isEmpty()
                         ? "No resources found in " + dir
-                        : names.size() + " resources in your game cache (fetched fresh from the server)");
+                        : names.size() + " resources in your game cache"
+                                + (reused ? " (saved index)" : "")
+                                + " (fetched fresh from the server)");
                 refilter.run();
                 scroll.revalidate();
                 scroll.repaint();
-                status.accept(names.size() + " resource(s) found in cache");
+                status.accept(names.size() + " resource(s) found in cache"
+                        + (reused ? " (saved index)" : "")
+                        + (warning == null ? "" : " \u2014 " + warning));
             });
         }, "cache-scan");
         t.setDaemon(true);

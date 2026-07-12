@@ -87,7 +87,8 @@ cache…** (Ctrl+O; scans the local Haven cache at `%APPDATA%\Haven and Hearth\d
 opening immediately with a "scanning…" state then filling in a filterable list — `dyn/`
 account-attached resources sort last and are greyed — and fetches the chosen one *fresh
 from the server*, so the cache supplies names only and you always open the latest
-version); layer table with **thumbnails** for
+version; persists and reuses the name index until the cache directory changes, avoiding
+repeated reads of map-entry headers); layer table with **thumbnails** for
 image/tex; per-layer editors: image/tex **preview**+**metadata** (id, z/sub-z,
 offset — **editable** for old-style image headers)+replace+export (and a tex layer's
 **alpha mask** gets its own preview+replace+export), **Ogg player**
@@ -212,7 +213,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   (reads the local Haven `HashDirCache` at `%APPDATA%\Haven and Hearth\data`: each
   `%016x.%d` file's header is `byte(1)`+`writeUTF(cid)`+`writeUTF(name)`, decoded with
   `DataInputStream.readUTF`; `res/`-prefixed names are the fetchable resource paths —
-  scanned in parallel, sorted/deduped — so the GUI/CLI can list what the player has and
+  scanned in parallel, sorted/deduped; the GUI persists the resulting list under the
+  user's application-cache directory and reuses it while the Haven cache directory
+  modification time is unchanged — so the GUI/CLI can list what the player has and
   re-fetch it fresh. Implemented from the client format; no third-party code).
 - `gui/` — `ResForgeFrame` (the window: layer table, toolbar/menus, undo/redo,
   file/fetch/save orchestration + background threading), `LayerEditors` (builds the

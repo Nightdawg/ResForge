@@ -172,7 +172,12 @@ It also keeps the cache reader trivial and robust (we only parse a tiny header, 
 every cached payload) and reuses the already-tested `ResourceFetcher` path. The
 header decodes with `DataInputStream.readUTF` exactly as the client's `readhead`
 does, so it's authoritative; resource entries are the `res/`-prefixed names. The
-idea was prompted by the read-only Rust tool `ancientchina/hafen-res`, but the
+flat cache also contains far more `map/` entries than resources, and the hashed
+filenames do not reveal their type before opening the header. ResForge therefore
+persists its sorted resource-name index in the user's application-cache directory
+and reuses it while the Haven cache directory modification time is unchanged. A
+stale or damaged saved index falls back to the authoritative full header scan.
+The idea was prompted by the read-only Rust tool `ancientchina/hafen-res`, but the
 implementation is clean-room from the client's `HashDirCache.java` (MIT vs. its
 LGPL-3 — no code taken).
 

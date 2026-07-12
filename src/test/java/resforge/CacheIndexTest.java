@@ -9,6 +9,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -99,6 +100,49 @@ class CacheIndexTest {
                 CacheIndex.scan(dir));
         assertTrue(CacheIndex.isDynamic("dyn/aaa"));
         assertFalse(CacheIndex.isDynamic("gfx/borka/male"));
+    }
+
+    @Test
+    void savedIndexIsReusedUntilCacheDirectoryChanges(@TempDir Path dir) throws IOException {
+        Path cache = Files.createDirectory(dir.resolve("data"));
+        Path index = dir.resolve("cache-index.bin");
+        Path entry = cache.resolve("0000000000000000.0");
+        Files.write(entry, header(RENDER, "res/gfx/original"));
+        FileTime stamp = Files.getLastModifiedTime(cache);
+
+        CacheIndex.ScanResult initial = CacheIndex.scanCached(cache, index);
+        assertEquals(List.of("gfx/original"), initial.paths);
+        assertFalse(initial.reusedIndex);
+        assertTrue(Files.isRegularFile(index));
+
+        Files.write(entry, header(RENDER, "res/gfx/replaced"));
+        Files.setLastModifiedTime(cache, stamp);
+        CacheIndex.ScanResult reused = CacheIndex.scanCached(cache, index);
+        assertEquals(List.of("gfx/original"), reused.paths);
+        assertTrue(reused.reusedIndex);
+
+        Files.setLastModifiedTime(cache, FileTime.fromMillis(stamp.toMillis() + 2_000));
+        CacheIndex.ScanResult refreshed = CacheIndex.scanCached(cache, index);
+        assertEquals(List.of("gfx/replaced"), refreshed.paths);
+        assertFalse(refreshed.reusedIndex);
+    }
+
+    @Test
+    void corruptSavedIndexFallsBackToFullScan(@TempDir Path dir) throws IOException {
+        Path cache = Files.createDirectory(dir.resolve("data"));
+        Path index = dir.resolve("cache-index.bin");
+        Files.write(cache.resolve("0000000000000000.0"),
+                header(RENDER, "res/gfx/recovered"));
+        Files.write(index, new byte[]{1, 2, 3});
+
+        CacheIndex.ScanResult recovered = CacheIndex.scanCached(cache, index);
+        assertEquals(List.of("gfx/recovered"), recovered.paths);
+        assertFalse(recovered.reusedIndex);
+        assertTrue(recovered.warning.contains("saved cache index could not be read"));
+
+        CacheIndex.ScanResult reused = CacheIndex.scanCached(cache, index);
+        assertEquals(List.of("gfx/recovered"), reused.paths);
+        assertTrue(reused.reusedIndex);
     }
 
     @Test

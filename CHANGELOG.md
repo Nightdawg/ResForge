@@ -8,6 +8,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Opening the game-cache resource picker no longer repeatedly scans map entries.**
+  ResForge saves the resource-name index and reuses it while the Haven cache directory
+  remains unchanged, with automatic full-scan recovery for stale or damaged indexes.
 - **The 3D viewer remains responsive while models are rotated continuously.**
   Render requests now retain only the latest pending camera state without repeatedly
   cancelling the active frame, and reuse interpolated reciprocal depth during rasterisation.

@@ -1,12 +1,16 @@
 package resforge.net;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -44,6 +48,11 @@ import java.util.stream.Stream;
  * third-party code is used.
  */
 public final class CacheIndex {
+    private static final int INDEX_MAGIC = 0x52464958; // RFIX
+    private static final int INDEX_VERSION = 1;
+    private static final int MAX_INDEX_NAMES = 1_000_000;
+    private static final long MAX_INDEX_BYTES = 64L * 1024 * 1024;
+
     private CacheIndex() {}
 
     /** Resource names in the cache are prefixed with this; stripped to get the path. */
@@ -76,6 +85,20 @@ public final class CacheIndex {
         }
     }
 
+    /** The resource paths loaded for the picker, including whether the saved index
+     *  was reused and any non-fatal index read/write warning. */
+    public static final class ScanResult {
+        public final List<String> paths;
+        public final boolean reusedIndex;
+        public final String warning;
+
+        private ScanResult(List<String> paths, boolean reusedIndex, String warning) {
+            this.paths = List.copyOf(paths);
+            this.reusedIndex = reusedIndex;
+            this.warning = warning;
+        }
+    }
+
     /** The default Haven cache {@code data} directory for this OS, or
      *  {@link Optional#empty()} if it can't be determined. Existence is not
      *  required (the caller decides what to do if it's missing). */
@@ -89,6 +112,21 @@ public final class CacheIndex {
         String home = System.getProperty("user.home");
         if(home != null && !home.isBlank())
             return Optional.of(Path.of(home, ".haven", "data"));
+        return Optional.empty();
+    }
+
+    /** The private ResForge index file used to avoid reopening every cache entry
+     *  when the game cache directory has not changed. */
+    public static Optional<Path> defaultIndexFile() {
+        String os = System.getProperty("os.name", "").toLowerCase();
+        if(os.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if(localAppData != null && !localAppData.isBlank())
+                return Optional.of(Path.of(localAppData, "ResForge", "cache-index-v1.bin"));
+        }
+        String home = System.getProperty("user.home");
+        if(home != null && !home.isBlank())
+            return Optional.of(Path.of(home, ".cache", "resforge", "cache-index-v1.bin"));
         return Optional.empty();
     }
 
@@ -167,6 +205,116 @@ public final class CacheIndex {
                 .map(Optional::get)
                 .collect(Collectors.toCollection(() -> new TreeSet<>(ORDER)));
         return new ArrayList<>(paths);
+    }
+
+    /** Load resource paths from ResForge's saved index when the cache directory is
+     *  unchanged; otherwise perform a full scan and refresh the index. */
+    public static ScanResult scanCached(Path dir) throws IOException {
+        Optional<Path> indexFile = defaultIndexFile();
+        if(indexFile.isEmpty())
+            return new ScanResult(scan(dir), false, null);
+        return scanCached(dir, indexFile.get());
+    }
+
+    /** As {@link #scanCached(Path)}, with an explicit index file for tests and
+     *  callers that manage their own application cache location. */
+    public static ScanResult scanCached(Path dir, Path indexFile) throws IOException {
+        if(!Files.isDirectory(dir))
+            return new ScanResult(new ArrayList<>(), false, null);
+
+        Path source = dir.toAbsolutePath().normalize();
+        long stamp = Files.getLastModifiedTime(source).toMillis();
+        String warning = null;
+        try {
+            Optional<List<String>> saved = readIndex(indexFile, source, stamp);
+            if(saved.isPresent())
+                return new ScanResult(saved.get(), true, null);
+        } catch(IOException e) {
+            warning = "saved cache index could not be read: " + messageOf(e);
+        }
+
+        List<String> paths = scan(source);
+        long scannedStamp = Files.getLastModifiedTime(source).toMillis();
+        if(stamp == scannedStamp) {
+            try {
+                writeIndex(indexFile, source, stamp, paths);
+            } catch(IOException e) {
+                String writeWarning = "cache index could not be saved: " + messageOf(e);
+                warning = warning == null ? writeWarning : warning + "; " + writeWarning;
+            }
+        }
+        return new ScanResult(paths, false, warning);
+    }
+
+    private static Optional<List<String>> readIndex(Path indexFile, Path source, long stamp)
+            throws IOException {
+        if(!Files.isRegularFile(indexFile))
+            return Optional.empty();
+        if(Files.size(indexFile) > MAX_INDEX_BYTES)
+            throw new IOException("index exceeds " + MAX_INDEX_BYTES + " bytes");
+
+        try(DataInputStream in = new DataInputStream(
+                new BufferedInputStream(Files.newInputStream(indexFile)))) {
+            if(in.readInt() != INDEX_MAGIC || in.readInt() != INDEX_VERSION)
+                throw new IOException("unrecognised index format");
+            String savedSource = in.readUTF();
+            long savedStamp = in.readLong();
+            if(!savedSource.equals(source.toString()) || savedStamp != stamp)
+                return Optional.empty();
+
+            int count = in.readInt();
+            if(count < 0 || count > MAX_INDEX_NAMES)
+                throw new IOException("invalid resource count " + count);
+            List<String> paths = new ArrayList<>(count);
+            String previous = null;
+            for(int i = 0; i < count; i++) {
+                String path = in.readUTF();
+                if(path.isEmpty() || (previous != null && ORDER.compare(previous, path) >= 0))
+                    throw new IOException("resource names are not strictly sorted");
+                paths.add(path);
+                previous = path;
+            }
+            if(in.read() != -1)
+                throw new IOException("trailing index data");
+            return Optional.of(paths);
+        } catch(EOFException e) {
+            throw new IOException("truncated index", e);
+        }
+    }
+
+    private static void writeIndex(Path indexFile, Path source, long stamp, List<String> paths)
+            throws IOException {
+        Path target = indexFile.toAbsolutePath().normalize();
+        Path parent = target.getParent();
+        if(parent == null)
+            throw new IOException("index path has no parent");
+        Files.createDirectories(parent);
+        Path temp = Files.createTempFile(parent, "cache-index-", ".tmp");
+        try {
+            try(DataOutputStream out = new DataOutputStream(
+                    new BufferedOutputStream(Files.newOutputStream(temp)))) {
+                out.writeInt(INDEX_MAGIC);
+                out.writeInt(INDEX_VERSION);
+                out.writeUTF(source.toString());
+                out.writeLong(stamp);
+                out.writeInt(paths.size());
+                for(String path : paths)
+                    out.writeUTF(path);
+            }
+            try {
+                Files.move(temp, target, StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch(java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private static String messageOf(IOException e) {
+        String message = e.getMessage();
+        return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
     }
 
     /** Read one cache file and return its fetchable resource path, if any. */
