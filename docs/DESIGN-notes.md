@@ -604,7 +604,9 @@ runtime-composed resources into one Blender file: a preview mesh, its bind `skel
 and the animation resource. Each `skan` layer becomes a named `skan_<id>` action.
 When two or more compatible layers animate disjoint bones, export also adds a
 preview-only `skan_combined` action matching the client's `CombinedMod`; rebuild
-ignores that action and continues to map edits through the individual ids. Every
+ignores that action and continues to map edits through the individual ids. It is
+ordered first because Blender restores the first imported glTF animation as the
+armature's active action. Every
 track whose last stored frame precedes `len` gets an explicit glTF closing key at
 `len` carrying frame 0, preserving the client's implicit final-to-first interpolation
 and making static one-key poses span their declared duration in Blender. Import

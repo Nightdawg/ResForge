@@ -635,7 +635,7 @@ public final class GltfExport {
                             "resforgeLength", combined.len),
                     bind, boneNode, bin, bvs, accs, requireAllBones);
             if(animation != null)
-                animations.add(animation);
+                animations.add(0, animation);
         }
         return animations;
     }

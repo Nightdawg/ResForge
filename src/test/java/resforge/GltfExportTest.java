@@ -492,11 +492,13 @@ class GltfExportTest {
         List<Object> animations = (List<Object>) root.get("animations");
 
         assertEquals(3, animations.size());
-        Map<String, Object> combined = (Map<String, Object>) animations.get(2);
+        Map<String, Object> combined = (Map<String, Object>) animations.get(0);
         assertEquals("skan_combined", combined.get("name"));
         assertEquals(4, ((List<Object>) combined.get("channels")).size());
         Map<String, Object> extras = (Map<String, Object>) combined.get("extras");
         assertEquals(List.of(0L, 1L), extras.get("resforgeCombinedSkanIds"));
+        assertEquals("skan_0", ((Map<String, Object>) animations.get(1)).get("name"));
+        assertEquals("skan_1", ((Map<String, Object>) animations.get(2)).get("name"));
     }
 
     @Test

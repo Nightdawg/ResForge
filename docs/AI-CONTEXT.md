@@ -75,7 +75,8 @@ exports the 3D model as a Blender-ready binary glTF, and `rebuild-gltf`
 regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.
 `gltf-skan` combines a standalone animation, bind skeleton and preview model, emits
 editable per-layer actions plus a composed preview action for compatible disjoint
-layers, and writes explicit loop-closing keys through the declared clip duration;
+layers (ordered first so Blender activates it), and writes explicit loop-closing keys
+through the declared clip duration;
 `rebuild-skan` imports edited translation/rotation actions while preserving unchanged
 animation bytes and raw control tracks.
 `cache-list` scans the local game cache and prints the resource names found there,
