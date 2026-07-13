@@ -12,8 +12,8 @@ The editor is the main way to use ResForge. Double-click the jar, or run it with
 no arguments, to open it:
 
 ```sh
-java -jar build-gradle/libs/resforge-1.2.0.jar          # opens the editor
-java -jar build-gradle/libs/resforge-1.2.0.jar gui horse.res   # opens a file
+java -jar build-gradle/libs/resforge-1.2.1.jar          # opens the editor
+java -jar build-gradle/libs/resforge-1.2.1.jar gui horse.res   # opens a file
 ```
 
 **Display scaling (HiDPI).** The editor adapts to the monitor's scale factor, so
@@ -28,8 +28,8 @@ property `-Dresforge.uiScale` (both clamped to 0.5–4.0); a launch override win
 over the saved GUI preference:
 
 ```sh
-RESFORGE_UI_SCALE=1.25 java -jar build-gradle/libs/resforge-1.2.0.jar
-java -Dresforge.uiScale=1.25 -jar build-gradle/libs/resforge-1.2.0.jar
+RESFORGE_UI_SCALE=1.25 java -jar build-gradle/libs/resforge-1.2.1.jar
+java -Dresforge.uiScale=1.25 -jar build-gradle/libs/resforge-1.2.1.jar
 ```
 
 **Dark mode.** Prefer a darker UI? Toggle **Options → Dark mode** to switch the
@@ -224,21 +224,21 @@ directory so they never clash.
 
 ```sh
 ./gradlew build      # compile + run the tests
-./gradlew jar        # -> build-gradle/libs/resforge-1.2.0.jar
+./gradlew jar        # -> build-gradle/libs/resforge-1.2.1.jar
 ```
 
 **Maven** (auto-downloads dependencies + plugins from Maven Central):
 
 ```sh
 mvn package          # compile + run the tests + build the jar
-                     # -> build-maven/resforge-1.2.0.jar
+                     # -> build-maven/resforge-1.2.1.jar
 ```
 
 **Ant** (for those who prefer it; no internet needed — JUnit jars are vendored in `lib/`):
 
 ```sh
 ant build            # compile + jar + run the tests  -> build-ant/
-ant jar              # -> build-ant/libs/resforge-1.2.0.jar
+ant jar              # -> build-ant/libs/resforge-1.2.1.jar
 ```
 
 The Ant build has no internet dependency — the JUnit 5 jars live in `lib/`. Gradle
@@ -257,8 +257,8 @@ paths with spaces):
 
 ```sh
 ./gradlew jar
-# the jar is at build-gradle/libs/resforge-1.2.0.jar
-alias resforge='java -jar build-gradle/libs/resforge-1.2.0.jar'
+# the jar is at build-gradle/libs/resforge-1.2.1.jar
+alias resforge='java -jar build-gradle/libs/resforge-1.2.1.jar'
 ```
 
 ```sh

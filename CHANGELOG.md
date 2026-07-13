@@ -6,6 +6,8 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.2.1] — 2026-07-13
+
 ### Fixed
 
 - **Multi-layer skeletal animations now appear completely in Blender.** Compatible,
@@ -341,7 +343,8 @@ In short: `skan` playback mode, bone scale, control/effect events, and adding/re
 not byte-lossless (verify in-game); the 3D viewer shows `varmat`-textured parts shaded;
 and a few unusual typed instances stay raw by design (lossless-or-raw).
 
-[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/Nightdawg/ResForge/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Nightdawg/ResForge/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/Nightdawg/ResForge/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/Nightdawg/ResForge/releases/tag/v1.0.0

@@ -34,7 +34,7 @@ a sibling project at `../hafen-client`).
     (jar+tests), `ant gui` (launch GUI detached), `ant test`, `ant clean`.
     JUnit jars are vendored in `lib/`; Ant needs 1.10+ (native `junitlauncher`).
 - **Runnable jar:** `build-gradle/libs/` or `build-ant/libs/` or `build-maven/`,
-  all `resforge-1.2.0.jar`. Use the jar (not `gradlew/ant run`) for paths with
+  all `resforge-1.2.1.jar`. Use the jar (not `gradlew/ant run`) for paths with
   spaces — `--args`/`-Dargs` mangle them.
 - **Runtime dependency components (three; four jars):** `org.jcraft:jorbis` 0.0.17
   (LGPL-2.0-or-later, ~97 KB, bundles `jogg`+`jorbis`) — the GUI's Ogg player; **JNA**
