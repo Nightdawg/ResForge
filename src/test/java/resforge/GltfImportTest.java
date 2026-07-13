@@ -590,6 +590,24 @@ class GltfImportTest {
     }
 
     @Test
+    void syntheticStaticEndKeyRemainsByteIdentical() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootWithEffect(3)));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        GltfImport.AnimationRebuildResult result = GltfImport.rebuildSkan(original, glb);
+
+        assertEquals(0, result.changed);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
     void minorBlenderFrameRoundingDoesNotChangeClipLength() {
         ResContainer model = new ResContainer(1);
         model.layers.add(new Layer("vbuf2", vbufBones2("f4")));

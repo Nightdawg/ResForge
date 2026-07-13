@@ -258,7 +258,11 @@ as the client does — `translation = bindLocalPos + frameTrans`,
 sampler input (with the required min/max). `SkanInfo` captures per-frame
 time/translation/rotation (fmt0 cpfloat, fmt1 quantised). A normal model export uses
 its local `skel`; `gltf-skan` instead accepts separate model, skeleton and animation
-resources, matching the game's runtime composition. `rebuild-skan` inverts the bind
+resources, matching the game's runtime composition. If compatible `skan` layers
+target disjoint bones, export adds a preview-only `skan_combined` action while
+retaining each editable `skan_<id>` action. A track ending before `len` implicitly
+interpolates back to frame 0 in the client, so glTF export writes frame 0 explicitly
+at `len`; import removes that generated closing key when unchanged. `rebuild-skan` inverts the bind
 composition, supports LINEAR translation/rotation keyframe edits, and writes the
 original skan wire format. If the edited latest key differs from
 the original track range, it becomes the new effect-free clip duration; an unchanged

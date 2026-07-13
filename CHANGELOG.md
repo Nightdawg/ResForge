@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Multi-layer skeletal animations now appear completely in Blender.** Compatible,
+  disjoint `skan` layers export both as their editable `skan_<id>` actions and as one
+  `skan_combined` preview action. Explicit loop-closing keys preserve the resource's
+  declared duration, including static one-key poses, without changing no-edit rebuilds.
 - **Opening the game-cache resource picker no longer repeatedly scans map entries.**
   ResForge saves the resource-name index and reuses it while the Haven cache directory
   remains unchanged, with automatic full-scan recovery for stale or damaged indexes.

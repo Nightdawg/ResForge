@@ -264,7 +264,8 @@ public final class GltfImport {
         List<SkanInfo.Track> out = new ArrayList<>();
         for(SkanInfo.Track track : original.tracks) {
             BoneChannels pair = byBone.remove(track.bone);
-            out.add(pair == null ? track : decodeTrack(nodes, track.bone, pair));
+            SkanInfo.Track decoded = pair == null ? track : decodeTrack(nodes, track.bone, pair);
+            out.add(collapseLoopClose(track, decoded, original.len));
         }
         for(Map.Entry<String, BoneChannels> entry : byBone.entrySet()) {
             SkanInfo.Track added = decodeTrack(nodes, entry.getKey(), entry.getValue());
@@ -279,6 +280,33 @@ public final class GltfImport {
                 && Math.abs(editedMax - originalMax) > DURATION_EDIT_TOLERANCE)
                 ? editedMax : original.len;
         return new SkanEdit(out, length);
+    }
+
+    private static SkanInfo.Track collapseLoopClose(SkanInfo.Track original,
+                                                     SkanInfo.Track decoded,
+                                                     float length) {
+        if(decoded.frames != original.frames + 1
+                || Math.abs(decoded.times[decoded.frames - 1] - length) > 1e-4f)
+            return decoded;
+        int last = decoded.frames - 1;
+        if(!sameFrame(decoded, 0, last))
+            return decoded;
+        return new SkanInfo.Track(decoded.bone,
+                java.util.Arrays.copyOf(decoded.times, last),
+                java.util.Arrays.copyOf(decoded.trans, last),
+                java.util.Arrays.copyOf(decoded.rot, last));
+    }
+
+    private static boolean sameFrame(SkanInfo.Track track, int a, int b) {
+        for(int component = 0; component < 3; component++)
+            if(Math.abs(track.trans[a][component] - track.trans[b][component]) > 1e-5f)
+                return false;
+        boolean same = true, negated = true;
+        for(int component = 0; component < 4; component++) {
+            same &= Math.abs(track.rot[a][component] - track.rot[b][component]) <= 1e-5f;
+            negated &= Math.abs(track.rot[a][component] + track.rot[b][component]) <= 1e-5f;
+        }
+        return same || negated;
     }
 
     private static boolean identityScale(float[] values) {

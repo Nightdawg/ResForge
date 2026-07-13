@@ -607,62 +607,119 @@ public final class GltfExport {
         for(SkelInfo.Bone b : skel.bones)
             bind.put(b.name, b);
 
+        List<SkanInfo> clips = new ArrayList<>();
         for(Layer l : res.layers) {
             if(!l.name.equals("skan"))
                 continue;
             SkanInfo sa = SkanInfo.parse(l.data);
             if(!sa.recognized)
                 continue;
-            List<Object> samplers = new ArrayList<>();
-            List<Object> channels = new ArrayList<>();
-            for(SkanInfo.Track t : sa.tracks) {
-                Integer node = boneNode.get(t.bone);
-                SkelInfo.Bone b = bind.get(t.bone);
-                if(node == null || b == null) {
-                    if(requireAllBones)
-                        throw new IllegalArgumentException("animation bone \"" + t.bone
-                                + "\" is missing from the selected skeleton");
-                    continue;
-                }
-                if(t.frames == 0)
-                    continue;
-                int inAccessor = addScalar(bin, bvs, accs, t.times);
+            clips.add(sa);
+            Map<String, Object> animation = buildAnimation(sa, "skan_" + sa.id,
+                    obj("resforgeSkanId", sa.id,
+                            "resforgeMode", sa.mode,
+                            "resforgeLength", sa.len),
+                    bind, boneNode, bin, bvs, accs, requireAllBones);
+            if(animation != null)
+                animations.add(animation);
+        }
 
-                // translation = bind local position + per-frame offset
-                float[] tv = new float[t.frames * 3];
-                for(int i = 0; i < t.frames; i++) {
-                    tv[i * 3] = b.px + t.trans[i][0];
-                    tv[i * 3 + 1] = b.py + t.trans[i][1];
-                    tv[i * 3 + 2] = b.pz + t.trans[i][2];
-                }
-                int tAccessor = addVec3(bin, bvs, accs, tv, t.frames, false, false);
-                samplers.add(obj("input", inAccessor, "output", tAccessor, "interpolation", "LINEAR"));
-                channels.add(obj("sampler", samplers.size() - 1,
-                        "target", obj("node", node, "path", "translation")));
-
-                // rotation = bind local rotation · per-frame rotation (normalised)
-                float[] bq = M4.quat(b.ax, b.ay, b.az, b.ang);
-                float[] rv = new float[t.frames * 4];
-                for(int i = 0; i < t.frames; i++) {
-                    float[] q = normalizeQuat(M4.qmul(bq, t.rot[i]));
-                    rv[i * 4] = q[1];     // glTF order x,y,z,w
-                    rv[i * 4 + 1] = q[2];
-                    rv[i * 4 + 2] = q[3];
-                    rv[i * 4 + 3] = q[0];
-                }
-                int rAccessor = addVec4(bin, bvs, accs, rv, t.frames);
-                samplers.add(obj("input", inAccessor, "output", rAccessor, "interpolation", "LINEAR"));
-                channels.add(obj("sampler", samplers.size() - 1,
-                        "target", obj("node", node, "path", "rotation")));
-            }
-            if(!channels.isEmpty())
-                animations.add(obj("name", "skan_" + sa.id, "samplers", samplers,
-                        "channels", channels, "extras", obj(
-                                "resforgeSkanId", sa.id,
-                                "resforgeMode", sa.mode,
-                                "resforgeLength", sa.len)));
+        SkanInfo combined = combineDisjoint(clips);
+        if(combined != null) {
+            List<Object> ids = new ArrayList<>();
+            for(SkanInfo clip : clips)
+                ids.add(clip.id);
+            Map<String, Object> animation = buildAnimation(combined, "skan_combined",
+                    obj("resforgeCombinedSkanIds", ids,
+                            "resforgeMode", combined.mode,
+                            "resforgeLength", combined.len),
+                    bind, boneNode, bin, bvs, accs, requireAllBones);
+            if(animation != null)
+                animations.add(animation);
         }
         return animations;
+    }
+
+    private static Map<String, Object> buildAnimation(SkanInfo clip, String name,
+                                                       Map<String, Object> extras,
+                                                       Map<String, SkelInfo.Bone> bind,
+                                                       Map<String, Integer> boneNode,
+                                                       Buf bin, List<Object> bvs,
+                                                       List<Object> accs,
+                                                       boolean requireAllBones) {
+        List<Object> samplers = new ArrayList<>();
+        List<Object> channels = new ArrayList<>();
+        for(SkanInfo.Track track : clip.tracks) {
+            Integer node = boneNode.get(track.bone);
+            SkelInfo.Bone bone = bind.get(track.bone);
+            if(node == null || bone == null) {
+                if(requireAllBones)
+                    throw new IllegalArgumentException("animation bone \"" + track.bone
+                            + "\" is missing from the selected skeleton");
+                continue;
+            }
+            if(track.frames == 0)
+                continue;
+
+            boolean closeLoop = track.times[track.frames - 1] < clip.len - 1e-6f;
+            int keys = track.frames + (closeLoop ? 1 : 0);
+            float[] times = closeLoop ? Arrays.copyOf(track.times, keys) : track.times;
+            if(closeLoop)
+                times[keys - 1] = clip.len;
+            int inAccessor = addScalar(bin, bvs, accs, times);
+
+            // The client implicitly interpolates from the final frame back to frame 0
+            // until clip.len; glTF needs that closing key written explicitly.
+            float[] tv = new float[keys * 3];
+            for(int i = 0; i < keys; i++) {
+                int frame = (i < track.frames) ? i : 0;
+                tv[i * 3] = bone.px + track.trans[frame][0];
+                tv[i * 3 + 1] = bone.py + track.trans[frame][1];
+                tv[i * 3 + 2] = bone.pz + track.trans[frame][2];
+            }
+            int tAccessor = addVec3(bin, bvs, accs, tv, keys, false, false);
+            samplers.add(obj("input", inAccessor, "output", tAccessor, "interpolation", "LINEAR"));
+            channels.add(obj("sampler", samplers.size() - 1,
+                    "target", obj("node", node, "path", "translation")));
+
+            float[] bindRotation = M4.quat(bone.ax, bone.ay, bone.az, bone.ang);
+            float[] rv = new float[keys * 4];
+            for(int i = 0; i < keys; i++) {
+                int frame = (i < track.frames) ? i : 0;
+                float[] q = normalizeQuat(M4.qmul(bindRotation, track.rot[frame]));
+                rv[i * 4] = q[1];     // glTF order x,y,z,w
+                rv[i * 4 + 1] = q[2];
+                rv[i * 4 + 2] = q[3];
+                rv[i * 4 + 3] = q[0];
+            }
+            int rAccessor = addVec4(bin, bvs, accs, rv, keys);
+            samplers.add(obj("input", inAccessor, "output", rAccessor, "interpolation", "LINEAR"));
+            channels.add(obj("sampler", samplers.size() - 1,
+                    "target", obj("node", node, "path", "rotation")));
+        }
+        if(channels.isEmpty())
+            return null;
+        return obj("name", name, "samplers", samplers, "channels", channels, "extras", extras);
+    }
+
+    /** Returns a preview-only composite when layer fragments can be merged without resampling. */
+    private static SkanInfo combineDisjoint(List<SkanInfo> clips) {
+        if(clips.size() < 2)
+            return null;
+        SkanInfo first = clips.get(0);
+        java.util.Set<String> bones = new java.util.HashSet<>();
+        SkanInfo combined = new SkanInfo();
+        combined.mode = first.mode;
+        combined.len = first.len;
+        for(SkanInfo clip : clips) {
+            if(!clip.mode.equals(first.mode) || Math.abs(clip.len - first.len) > 1e-4f)
+                return null;
+            for(SkanInfo.Track track : clip.tracks)
+                if(!bones.add(track.bone))
+                    return null;
+            combined.tracks.addAll(clip.tracks);
+        }
+        return combined;
     }
 
     private static float[] normalizeQuat(float[] q) {

@@ -73,7 +73,9 @@ No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
 exports the 3D model as a Blender-ready binary glTF, and `rebuild-gltf`
 regenerates geometry from an edited `.glb` to allow reshaped/added/removed vertices.
-`gltf-skan` combines a standalone animation, bind skeleton and preview model;
+`gltf-skan` combines a standalone animation, bind skeleton and preview model, emits
+editable per-layer actions plus a composed preview action for compatible disjoint
+layers, and writes explicit loop-closing keys through the declared clip duration;
 `rebuild-skan` imports edited translation/rotation actions while preserving unchanged
 animation bytes and raw control tracks.
 `cache-list` scans the local game cache and prints the resource names found there,
@@ -183,7 +185,8 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   `M4` (column-major 4×4 maths), `GltfExport` (geometry → Blender-ready binary
   glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
-  `WEIGHTS_0` — dependency-free),
+  `WEIGHTS_0` — plus per-layer/composed skeletal actions with explicit loop-closing
+  keys; dependency-free),
   `GltfImport.rebuild` (regenerate `vbuf2`+`mesh`(+`bones2`/`bones`/`manim`) from an
   edited `.glb` at a new vertex count → re-quantises pos/nrm/both UVs into their original
   on-wire formats, Y-up→Z-up, rebuilds skinning weights via

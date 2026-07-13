@@ -74,7 +74,8 @@ parts (e.g. a tree's bark) — shown only for models that have such parts — wh
 varmat/`Dyntex` parts stay shaded); and a full **3D model round-trip** — export to a Blender-ready binary
 **glTF** (`.glb`, carrying both of Haven's UV sets, textures, the
 **skeleton/skinning**, **skeletal animations** and **mesh-morph animations** in one
-file); **Rebuild from glTF** to bring edits back — regenerate geometry so you can
+file — compatible skeletal layer fragments also get a composed Blender action, and
+loop-closing keys preserve the declared clip duration); **Rebuild from glTF** to bring edits back — regenerate geometry so you can
 **reshape/sculpt, re-UV, add, remove or re-topologize vertices and faces** (multi-part,
 morph, skinned and normal-mapped models supported — positions/normals/UVs are
 re-quantised into the original on-wire formats, **skinning weights** rebuilt, tangents

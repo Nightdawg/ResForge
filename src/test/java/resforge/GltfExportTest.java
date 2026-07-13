@@ -97,14 +97,30 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    private static byte[] skelTwoBones() {
+        MessageWriter w = new MessageWriter();
+        w.string("\u0001");
+        w.string("root").string("");
+        w.float32(0).float32(0).float32(0);
+        w.uint16(0).int16(0).int16(0);
+        w.string("tip").string("root");
+        w.float32(0).float32(0).float32(1);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
     /** skan (fmt 1, loop) animating bone "root" with a single keyframe. */
     private static byte[] skan(int id) {
+        return skan(id, "root");
+    }
+
+    private static byte[] skan(int id, String bone) {
         MessageWriter w = new MessageWriter();
         w.int16(id);
         w.uint8(2);                  // fl: fmt = (2&6)>>1 = 1, no nspeed
         w.uint8(1);                  // mode = loop
         w.float32(1.0f);             // length
-        w.string("root").uint16(1);  // one track "root", one frame
+        w.string(bone).uint16(1);
         w.uint16(0).int16(0).int16(0).int16(0).uint16(0).int16(0).int16(0);  // fmt-1 frame
         return w.toByteArray();
     }
@@ -455,6 +471,32 @@ class GltfExportTest {
         Map<String, Object> in = (Map<String, Object>) ((List<Object>) root.get("accessors")).get(input);
         assertEquals("SCALAR", in.get("type"));
         assertTrue(in.containsKey("min") && in.containsKey("max"));
+        assertEquals(2L, ((Number) in.get("count")).longValue());
+        assertEquals(1.0, ((Number) ((List<Object>) in.get("max")).get(0)).doubleValue(), 1e-6);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void compatibleSkanLayersAlsoExportAsCombinedPreview() {
+        ResContainer model = new ResContainer(7);
+        model.layers.add(new Layer("vbuf2", vbufBones()));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(7);
+        skeleton.layers.add(new Layer("skel", skelTwoBones()));
+        ResContainer animation = new ResContainer(7);
+        animation.layers.add(new Layer("skan", skan(0, "root")));
+        animation.layers.add(new Layer("skan", skan(1, "tip")));
+
+        Map<String, Object> root = jsonOf(
+                GltfExport.toGlb(model, skeleton, animation, "arms.res").glb);
+        List<Object> animations = (List<Object>) root.get("animations");
+
+        assertEquals(3, animations.size());
+        Map<String, Object> combined = (Map<String, Object>) animations.get(2);
+        assertEquals("skan_combined", combined.get("name"));
+        assertEquals(4, ((List<Object>) combined.get("channels")).size());
+        Map<String, Object> extras = (Map<String, Object>) combined.get("extras");
+        assertEquals(List.of(0L, 1L), extras.get("resforgeCombinedSkanIds"));
     }
 
     @Test
