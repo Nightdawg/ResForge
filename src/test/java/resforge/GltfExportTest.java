@@ -115,11 +115,15 @@ class GltfExportTest {
     }
 
     private static byte[] skan(int id, String bone) {
+        return skan(id, bone, 1);
+    }
+
+    private static byte[] skan(int id, String bone, float length) {
         MessageWriter w = new MessageWriter();
         w.int16(id);
         w.uint8(2);                  // fl: fmt = (2&6)>>1 = 1, no nspeed
         w.uint8(1);                  // mode = loop
-        w.float32(1.0f);             // length
+        w.float32(length);
         w.string(bone).uint16(1);
         w.uint16(0).int16(0).int16(0).int16(0).uint16(0).int16(0).int16(0);  // fmt-1 frame
         return w.toByteArray();
@@ -473,6 +477,27 @@ class GltfExportTest {
         assertTrue(in.containsKey("min") && in.containsKey("max"));
         assertEquals(2L, ((Number) in.get("count")).longValue());
         assertEquals(1.0, ((Number) ((List<Object>) in.get("max")).get(0)).doubleValue(), 1e-6);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void zeroLengthSkanGetsSyntheticBlenderEditWindow() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("skel", skel()));
+        res.layers.add(new Layer("vbuf2", vbufBones()));
+        res.layers.add(new Layer("mesh", mesh(-1)));
+        res.layers.add(new Layer("skan", skan(5, "root", 0)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "rig.res").glb);
+        Map<String, Object> animation =
+                (Map<String, Object>) ((List<Object>) root.get("animations")).get(0);
+        Map<String, Object> sampler =
+                (Map<String, Object>) ((List<Object>) animation.get("samplers")).get(0);
+        Map<String, Object> input = (Map<String, Object>) ((List<Object>) root.get("accessors"))
+                .get(((Number) sampler.get("input")).intValue());
+
+        assertEquals(2L, ((Number) input.get("count")).longValue());
+        assertEquals(1.0, ((Number) ((List<Object>) input.get("max")).get(0)).doubleValue(), 1e-6);
     }
 
     @Test

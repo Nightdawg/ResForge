@@ -611,6 +611,11 @@ track whose last stored frame precedes `len` gets an explicit glTF closing key a
 `len` carrying frame 0, preserving the client's implicit final-to-first interpolation
 and making static one-key poses span their declared duration in Blender. Import
 collapses an unchanged generated closing key so no-edit rebuilds remain byte-identical.
+Valid zero-duration poses (observed in `gfx/borka/arms-2hsword`) instead receive a
+synthetic one-second closing key. Import recognizes this edit scaffold: changing
+either endpoint produces one edited frame at time zero, while distinct edited
+endpoints remain a deliberate timed clip. `SkanInfo.encode` accepts zero length and
+encodes fmt-1 frame times as zero without dividing by the duration.
 `rebuild-skan` reads LINEAR translation/rotation channels by bone name, unions
 independent channel times, inverts the bind composition (`frameRot = bindRot^-1 *
 animatedRot`, `frameTrans = animatedTrans - bindTrans`), and writes edited tracks in

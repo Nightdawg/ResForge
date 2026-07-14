@@ -262,7 +262,10 @@ resources, matching the game's runtime composition. If compatible `skan` layers
 target disjoint bones, export adds a preview-only `skan_combined` action while
 retaining each editable `skan_<id>` action. A track ending before `len` implicitly
 interpolates back to frame 0 in the client, so glTF export writes frame 0 explicitly
-at `len`; import removes that generated closing key when unchanged. `rebuild-skan` inverts the bind
+at `len`; import removes that generated closing key when unchanged. A zero-duration
+static pose is valid (`gfx/borka/arms-2hsword` has three): export uses a synthetic
+one-second endpoint for Blender, and import collapses a static edit back to one frame
+at time zero. `rebuild-skan` inverts the bind
 composition, supports LINEAR translation/rotation keyframe edits, and writes the
 original skan wire format. If the edited latest key differs from
 the original track range, it becomes the new effect-free clip duration; an unchanged

@@ -38,6 +38,7 @@ import java.util.Map;
  */
 public final class GltfImport {
     private static final float DURATION_EDIT_TOLERANCE = 0.02f;
+    private static final float STATIC_EDIT_DURATION = 1f;
 
     private GltfImport() {
     }
@@ -276,35 +277,59 @@ public final class GltfImport {
         for(SkanInfo.Track track : original.tracks)
             if(editedBones.contains(track.bone) && track.frames > 0)
                 originalMax = Math.max(originalMax, track.times[track.frames - 1]);
-        float length = (editedMax > 1e-6f
-                && Math.abs(editedMax - originalMax) > DURATION_EDIT_TOLERANCE)
-                ? editedMax : original.len;
+        float length;
+        if(original.len == 0) {
+            length = 0;
+            for(SkanInfo.Track track : out)
+                if(track.frames > 0)
+                    length = Math.max(length, track.times[track.frames - 1]);
+        } else {
+            length = (editedMax > 1e-6f
+                    && Math.abs(editedMax - originalMax) > DURATION_EDIT_TOLERANCE)
+                    ? editedMax : original.len;
+        }
         return new SkanEdit(out, length);
     }
 
     private static SkanInfo.Track collapseLoopClose(SkanInfo.Track original,
                                                      SkanInfo.Track decoded,
                                                      float length) {
+        float closingTime = length > 0 ? length : STATIC_EDIT_DURATION;
         if(decoded.frames != original.frames + 1
-                || Math.abs(decoded.times[decoded.frames - 1] - length) > 1e-4f)
+                || Math.abs(decoded.times[decoded.frames - 1] - closingTime) > 1e-4f)
             return decoded;
         int last = decoded.frames - 1;
+        if(length == 0 && original.frames == 1) {
+            boolean firstOriginal = sameFrame(decoded, 0, original, 0);
+            boolean lastOriginal = sameFrame(decoded, last, original, 0);
+            if(firstOriginal && !lastOriginal)
+                return singleFrame(decoded, last);
+            if(!firstOriginal && lastOriginal)
+                return singleFrame(decoded, 0);
+        }
         if(!sameFrame(decoded, 0, last))
             return decoded;
-        return new SkanInfo.Track(decoded.bone,
-                java.util.Arrays.copyOf(decoded.times, last),
-                java.util.Arrays.copyOf(decoded.trans, last),
-                java.util.Arrays.copyOf(decoded.rot, last));
+        return new SkanInfo.Track(decoded.bone, java.util.Arrays.copyOf(decoded.times, last),
+                java.util.Arrays.copyOf(decoded.trans, last), java.util.Arrays.copyOf(decoded.rot, last));
+    }
+
+    private static SkanInfo.Track singleFrame(SkanInfo.Track track, int frame) {
+        return new SkanInfo.Track(track.bone, new float[]{0},
+                new float[][]{track.trans[frame]}, new float[][]{track.rot[frame]});
     }
 
     private static boolean sameFrame(SkanInfo.Track track, int a, int b) {
+        return sameFrame(track, a, track, b);
+    }
+
+    private static boolean sameFrame(SkanInfo.Track a, int ai, SkanInfo.Track b, int bi) {
         for(int component = 0; component < 3; component++)
-            if(Math.abs(track.trans[a][component] - track.trans[b][component]) > 1e-5f)
+            if(Math.abs(a.trans[ai][component] - b.trans[bi][component]) > 1e-5f)
                 return false;
         boolean same = true, negated = true;
         for(int component = 0; component < 4; component++) {
-            same &= Math.abs(track.rot[a][component] - track.rot[b][component]) <= 1e-5f;
-            negated &= Math.abs(track.rot[a][component] + track.rot[b][component]) <= 1e-5f;
+            same &= Math.abs(a.rot[ai][component] - b.rot[bi][component]) <= 1e-5f;
+            negated &= Math.abs(a.rot[ai][component] + b.rot[bi][component]) <= 1e-5f;
         }
         return same || negated;
     }

@@ -133,6 +133,23 @@ class SkanInfoTest {
     }
 
     @Test
+    void zeroLengthStaticTrackCanBeEncoded() {
+        MessageWriter w = new MessageWriter();
+        w.int16(9).uint8(2).uint8(1).float32(0);
+        w.string("root").uint16(1);
+        w.uint16(0).float16(1).float16(2).float16(3);
+        w.uint16(0).int16(0).int16(0);
+        SkanInfo info = SkanInfo.parse(w.toByteArray());
+
+        SkanInfo decoded = SkanInfo.parse(SkanInfo.encode(info));
+
+        assertTrue(decoded.recognized);
+        assertEquals(0f, decoded.len);
+        assertEquals(0f, decoded.tracks.get(0).times[0]);
+        assertEquals(2f, decoded.tracks.get(0).trans[0][1], 1e-6);
+    }
+
+    @Test
     void malformedPayloadsFailGracefully() {
         MessageWriter badMode = header(1, 0, 7, 1);
         MessageWriter unknownEvent = header(1, 0, 0, 1);

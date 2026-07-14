@@ -35,6 +35,8 @@ import java.util.Map;
  * The {@code .glb} is fully self-contained (geometry + textures in one file).
  */
 public final class GltfExport {
+    private static final float STATIC_EDIT_DURATION = 1f;
+
     public static final class Result {
         public final byte[] glb;
         public final int vertices, triangles, submeshes, textures;
@@ -661,15 +663,17 @@ public final class GltfExport {
             if(track.frames == 0)
                 continue;
 
-            boolean closeLoop = track.times[track.frames - 1] < clip.len - 1e-6f;
+            float exportLength = clip.len > 0 ? clip.len : STATIC_EDIT_DURATION;
+            boolean closeLoop = track.times[track.frames - 1] < exportLength - 1e-6f;
             int keys = track.frames + (closeLoop ? 1 : 0);
             float[] times = closeLoop ? Arrays.copyOf(track.times, keys) : track.times;
             if(closeLoop)
-                times[keys - 1] = clip.len;
+                times[keys - 1] = exportLength;
             int inAccessor = addScalar(bin, bvs, accs, times);
 
             // The client implicitly interpolates from the final frame back to frame 0
-            // until clip.len; glTF needs that closing key written explicitly.
+            // until clip.len. A zero-length static pose gets a synthetic one-second
+            // endpoint so Blender exposes an editable action instead of a frame-0 dot.
             float[] tv = new float[keys * 3];
             for(int i = 0; i < keys; i++) {
                 int frame = (i < track.frames) ? i : 0;

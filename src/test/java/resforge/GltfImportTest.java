@@ -128,6 +128,15 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    private static byte[] zeroLengthSkan(int id) {
+        MessageWriter w = new MessageWriter();
+        w.int16(id).uint8(2).uint8(1).float32(0);
+        w.string("root").uint16(1);
+        w.uint16(0).float16(0).float16(0).float16(0);
+        w.uint16(0).int16(0).int16(0);
+        return w.toByteArray();
+    }
+
     private static byte[] skanRootTwoFrames(int id, float secondX) {
         return skanRootTwoFrames(id, secondX, 1, 0xffff);
     }
@@ -598,6 +607,46 @@ class GltfImportTest {
         skeleton.layers.add(new Layer("skel", skel2()));
         ResContainer animation = new ResContainer(1);
         animation.layers.add(new Layer("skan", skanRootWithEffect(3)));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        GltfImport.AnimationRebuildResult result = GltfImport.rebuildSkan(original, glb);
+
+        assertEquals(0, result.changed);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void zeroLengthStaticEditKeepsZeroDuration() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", zeroLengthSkan(3)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_3", "root", 1.25f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        SkanInfo rebuilt = SkanInfo.parse(ResContainer.parse(result.res).layers.get(0).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(0f, rebuilt.len);
+        assertEquals(1, rebuilt.tracks.get(0).frames);
+        assertEquals(1.25f, rebuilt.tracks.get(0).trans[0][0], 1e-3);
+    }
+
+    @Test
+    void untouchedZeroLengthSkanRemainsByteIdentical() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", zeroLengthSkan(3)));
         byte[] original = animation.serialize();
         byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
 

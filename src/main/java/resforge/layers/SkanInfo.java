@@ -183,8 +183,8 @@ public final class SkanInfo {
     public static byte[] encode(SkanInfo info) {
         if(info.fmt != 0 && info.fmt != 1)
             throw new IllegalArgumentException("cannot encode skan format " + info.fmt);
-        if(!Float.isFinite(info.len) || info.len <= 0)
-            throw new IllegalArgumentException("skan length must be positive and finite");
+        if(!Float.isFinite(info.len) || info.len < 0)
+            throw new IllegalArgumentException("skan length must be non-negative and finite");
         int mode = modeCode(info.mode);
         boolean hasSpeed = info.nspeed >= 0;
         MessageWriter w = new MessageWriter();
@@ -219,7 +219,10 @@ public final class SkanInfo {
                 float[] aa = axisAngle(q);
                 w.cpfloat(aa[3]).cpfloat(aa[0]).cpfloat(aa[1]).cpfloat(aa[2]);
             } else {
-                int tq = Math.round(Math.max(0f, Math.min(1f, time / info.len)) * 0xffff);
+                if(info.len == 0 && Math.abs(time) > 1e-6f)
+                    throw new IllegalArgumentException("zero-length skan has a nonzero frame time");
+                int tq = (info.len == 0) ? 0
+                        : Math.round(Math.max(0f, Math.min(1f, time / info.len)) * 0xffff);
                 w.uint16(tq);
                 for(float v : tr)
                     w.float16(v);
