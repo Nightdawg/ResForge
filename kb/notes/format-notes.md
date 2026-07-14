@@ -265,7 +265,11 @@ interpolates back to frame 0 in the client, so glTF export writes frame 0 explic
 at `len`; import removes that generated closing key when unchanged. A zero-duration
 static pose is valid (`gfx/borka/arms-2hsword` has three): export uses a synthetic
 one-second endpoint for Blender, and import collapses a static edit back to one frame
-at time zero. `rebuild-skan` inverts the bind
+at time zero. SKAN ids are not unique per resource (`gfx/terobjs/arch/sawmill` has
+two `id=0` layers), so glTF actions also carry their SKAN layer ordinal. Quaternion
+equivalence checks must normalize both values: fmt-0 decoded axes can leave norms a
+few parts per million from one, enough to look like >0.1 degrees if raw dot products
+are passed to `acos`. `rebuild-skan` inverts the bind
 composition, supports LINEAR translation/rotation keyframe edits, and writes the
 original skan wire format. If the edited latest key differs from
 the original track range, it becomes the new effect-free clip duration; an unchanged

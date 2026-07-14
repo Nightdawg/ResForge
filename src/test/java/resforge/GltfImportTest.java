@@ -163,6 +163,15 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    private static byte[] skanRootFormatZeroNearUnitAxis(int id) {
+        MessageWriter w = new MessageWriter();
+        w.int16(id).uint8(0).uint8(1).cpfloat(1);
+        w.string("root").uint16(1);
+        w.cpfloat(0).cpfloat(0).cpfloat(0).cpfloat(0);
+        w.cpfloat(Math.PI).cpfloat(0.707106f).cpfloat(0.707106f).cpfloat(0);
+        return w.toByteArray();
+    }
+
     private static byte[] skanTwoBones(int id) {
         MessageWriter w = new MessageWriter();
         w.int16(id).uint8(2).uint8(1).float32(1);
@@ -423,6 +432,49 @@ class GltfImportTest {
         assertEquals(0, result.changed);
         assertEquals(1, result.unchanged);
         assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void nearUnitQuaternionDoesNotCreateFalseSkanEdit() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootFormatZeroNearUnitAxis(-1)));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+
+        GltfImport.AnimationRebuildResult result = GltfImport.rebuildSkan(original, glb);
+
+        assertEquals(0, result.changed);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void duplicateSkanIdsRoundTripAndEditByLayer() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(0, 1)));
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(0, 2)));
+        byte[] firstLayer = animation.layers.get(0).data.clone();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_0_layer_1", "root", 1.25f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        ResContainer rebuilt = ResContainer.parse(result.res);
+        SkanInfo second = SkanInfo.parse(rebuilt.layers.get(1).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(1, result.unchanged);
+        assertArrayEquals(firstLayer, rebuilt.layers.get(0).data);
+        assertEquals(1.25f, second.tracks.get(0).trans[0][0], 1e-3);
     }
 
     @Test

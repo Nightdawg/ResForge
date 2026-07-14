@@ -552,6 +552,31 @@ class GltfExportTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void duplicateSkanIdsGetLayerQualifiedActions() {
+        ResContainer model = new ResContainer(7);
+        model.layers.add(new Layer("vbuf2", vbufBones()));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(7);
+        skeleton.layers.add(new Layer("skel", skel()));
+        ResContainer animation = new ResContainer(7);
+        animation.layers.add(new Layer("skan", skan(0)));
+        animation.layers.add(new Layer("skan", skan(0)));
+
+        Map<String, Object> root = jsonOf(
+                GltfExport.toGlb(model, skeleton, animation, "duplicate.res").glb);
+        List<Object> animations = (List<Object>) root.get("animations");
+
+        assertEquals(2, animations.size());
+        for(int i = 0; i < animations.size(); i++) {
+            Map<String, Object> action = (Map<String, Object>) animations.get(i);
+            assertEquals("skan_0_layer_" + i, action.get("name"));
+            Map<String, Object> extras = (Map<String, Object>) action.get("extras");
+            assertEquals((long) i, ((Number) extras.get("resforgeSkanLayer")).longValue());
+        }
+    }
+
+    @Test
     void compositeExportRejectsAnimationBonesMissingFromSkeleton() {
         ResContainer model = new ResContainer(7);
         model.layers.add(new Layer("vbuf2", vbufBones()));

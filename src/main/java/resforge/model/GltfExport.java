@@ -617,8 +617,18 @@ public final class GltfExport {
             if(!sa.recognized)
                 continue;
             clips.add(sa);
-            Map<String, Object> animation = buildAnimation(sa, "skan_" + sa.id,
+        }
+        Map<Integer, Integer> idCounts = new LinkedHashMap<>();
+        for(SkanInfo clip : clips)
+            idCounts.merge(clip.id, 1, Integer::sum);
+        for(int layer = 0; layer < clips.size(); layer++) {
+            SkanInfo sa = clips.get(layer);
+            String name = "skan_" + sa.id;
+            if(idCounts.get(sa.id) > 1)
+                name += "_layer_" + layer;
+            Map<String, Object> animation = buildAnimation(sa, name,
                     obj("resforgeSkanId", sa.id,
+                            "resforgeSkanLayer", layer,
                             "resforgeMode", sa.mode,
                             "resforgeLength", sa.len),
                     bind, boneNode, bin, bvs, accs, requireAllBones);

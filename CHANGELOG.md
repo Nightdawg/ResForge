@@ -17,6 +17,10 @@ All notable changes to ResForge are documented here. The format is based on
   including static one-key poses, without changing no-edit rebuilds. Zero-duration
   poses receive a synthetic one-second Blender edit window that collapses back to
   their original zero-time representation on import.
+- **Duplicate-ID and near-unit skeletal animations now round-trip unchanged.** Actions
+  carry their SKAN layer occurrence when multiple layers share an id, and quaternion
+  equivalence normalizes both operands before measuring angular drift. A sample-wide
+  audit now passes all 143 self-contained models and all 117 borka animations.
 - **Opening the game-cache resource picker no longer repeatedly scans map entries.**
   ResForge saves the resource-name index and reuses it while the Haven cache directory
   remains unchanged, with automatic full-scan recovery for stale or damaged indexes.

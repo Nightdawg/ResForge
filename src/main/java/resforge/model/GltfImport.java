@@ -94,19 +94,28 @@ public final class GltfImport {
         if(animations == null || animations.isEmpty())
             throw new IllegalArgumentException("the glTF contains no animation actions");
 
-        Map<Integer, Map<String, Object>> byId = new LinkedHashMap<>();
+        Map<SkanKey, Map<String, Object>> byLayer = new LinkedHashMap<>();
+        Map<Integer, Map<String, Object>> legacyById = new LinkedHashMap<>();
         for(Object value : animations) {
             Map<String, Object> animation = (Map<String, Object>) value;
             Integer id = skanId(animation);
             if(id == null)
                 continue;
-            if(byId.putIfAbsent(id, animation) != null)
-                throw new IllegalArgumentException("the glTF contains multiple actions for skan id " + id);
+            Integer layer = skanLayer(animation);
+            if(layer != null) {
+                SkanKey key = new SkanKey(id, layer);
+                if(byLayer.putIfAbsent(key, animation) != null)
+                    throw new IllegalArgumentException("the glTF contains multiple actions for skan id "
+                            + id + " at layer " + layer);
+            } else if(legacyById.putIfAbsent(id, animation) != null) {
+                throw new IllegalArgumentException("the glTF contains multiple legacy actions for skan id "
+                        + id + " without layer metadata");
+            }
         }
-        if(byId.isEmpty())
+        if(byLayer.isEmpty() && legacyById.isEmpty())
             throw new IllegalArgumentException("the glTF contains no actions named skan_<id>");
 
-        int changed = 0, unchanged = 0, layers = 0;
+        int changed = 0, unchanged = 0, layers = 0, skanLayer = 0;
         for(int i = 0; i < res.layers.size(); i++) {
             Layer layer = res.layers.get(i);
             if(!layer.name.equals("skan"))
@@ -115,7 +124,9 @@ public final class GltfImport {
             SkanInfo original = SkanInfo.parse(layer.data);
             if(!original.recognized)
                 throw new IllegalArgumentException("couldn't decode skan layer " + i);
-            Map<String, Object> animation = byId.get(original.id);
+            Map<String, Object> animation = byLayer.get(new SkanKey(original.id, skanLayer++));
+            if(animation == null)
+                animation = legacyById.get(original.id);
             if(animation == null) {
                 unchanged++;
                 continue;
@@ -145,6 +156,9 @@ public final class GltfImport {
         return new AnimationRebuildResult(res.serialize(), changed, unchanged);
     }
 
+    private record SkanKey(int id, int layer) {
+    }
+
     @SuppressWarnings("unchecked")
     private static Integer skanId(Map<String, Object> animation) {
         Object extrasValue = animation.get("extras");
@@ -157,10 +171,36 @@ public final class GltfImport {
         if(!(nameValue instanceof String))
             return null;
         String name = (String) nameValue;
-        if(!name.matches("skan_-?\\d+"))
+        if(!name.startsWith("skan_"))
+            return null;
+        String value = name.substring(5);
+        int marker = value.indexOf("_layer_");
+        if(marker >= 0)
+            value = value.substring(0, marker);
+        try {
+            return Integer.parseInt(value);
+        } catch(NumberFormatException e) {
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Integer skanLayer(Map<String, Object> animation) {
+        Object extrasValue = animation.get("extras");
+        if(extrasValue instanceof Map) {
+            Object layer = ((Map<String, Object>) extrasValue).get("resforgeSkanLayer");
+            if(layer instanceof Number)
+                return ((Number) layer).intValue();
+        }
+        Object nameValue = animation.get("name");
+        if(!(nameValue instanceof String))
+            return null;
+        String name = (String) nameValue;
+        int marker = name.lastIndexOf("_layer_");
+        if(marker < 0)
             return null;
         try {
-            return Integer.parseInt(name.substring(5));
+            return Integer.parseInt(name.substring(marker + 7));
         } catch(NumberFormatException e) {
             return null;
         }
@@ -545,10 +585,15 @@ public final class GltfImport {
                 for(int c = 0; c < 3; c++)
                     if(Math.abs(x.trans[f][c] - y.trans[f][c]) > 1e-4)
                         return false;
-                double dot = Math.abs((double) x.rot[f][0] * y.rot[f][0]
-                        + (double) x.rot[f][1] * y.rot[f][1]
-                        + (double) x.rot[f][2] * y.rot[f][2]
-                        + (double) x.rot[f][3] * y.rot[f][3]);
+                double dot = 0, xn = 0, yn = 0;
+                for(int c = 0; c < 4; c++) {
+                    dot += (double) x.rot[f][c] * y.rot[f][c];
+                    xn += (double) x.rot[f][c] * x.rot[f][c];
+                    yn += (double) y.rot[f][c] * y.rot[f][c];
+                }
+                if(xn == 0 || yn == 0)
+                    return false;
+                dot = Math.abs(dot) / Math.sqrt(xn * yn);
                 if(Math.toDegrees(2 * Math.acos(Math.min(1, dot))) > 0.1)
                     return false;
             }

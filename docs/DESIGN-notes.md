@@ -616,6 +616,13 @@ synthetic one-second closing key. Import recognizes this edit scaffold: changing
 either endpoint produces one edited frame at time zero, while distinct edited
 endpoints remain a deliberate timed clip. `SkanInfo.encode` accepts zero length and
 encodes fmt-1 frame times as zero without dividing by the duration.
+Duplicate ids are valid (`gfx/terobjs/arch/sawmill` has two `id=0` layers).
+Export adds `resforgeSkanLayer` and uses `skan_<id>_layer_<ordinal>` names only for
+collisions; import keys new actions by id+layer while retaining id-only support for
+older unique-id GLBs. No-edit quaternion comparison normalizes both operands before
+computing angular distance, avoiding false edits from tiny norm error in decoded
+fmt-0 axes (`ent` and `anteggs`). The sample-wide no-edit audit passes 143/143
+self-contained animated models and 117/117 borka animations byte-identically.
 `rebuild-skan` reads LINEAR translation/rotation channels by bone name, unions
 independent channel times, inverts the bind composition (`frameRot = bindRot^-1 *
 animatedRot`, `frameTrans = animatedTrans - bindTrans`), and writes edited tracks in
