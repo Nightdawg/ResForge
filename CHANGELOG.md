@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Combined Blender actions can now rebuild multi-layer skeletal animations.**
+  Editing `skan_combined` routes each bone track back to its original disjoint
+  `skan` layer, while untouched combined actions continue to allow individual-action
+  edits. Conflicting edits to both representations are rejected explicitly.
 - **Rebuilding modern mesh resources no longer drops their materials.** Modern
   `mesh` layers retain their typed `mat`/`ref` metadata, and glTF exports give each
   such layer a stable material identity so Blender preserves distinct submeshes.

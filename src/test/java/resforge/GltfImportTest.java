@@ -152,9 +152,18 @@ class GltfImportTest {
     }
 
     private static byte[] skanRootTwoFrames(int id, float secondX, float length, int secondTime) {
+        return skanBoneTwoFrames(id, "root", secondX, length, secondTime);
+    }
+
+    private static byte[] skanBoneTwoFrames(int id, String bone, float secondX) {
+        return skanBoneTwoFrames(id, bone, secondX, 1, 0xffff);
+    }
+
+    private static byte[] skanBoneTwoFrames(int id, String bone, float secondX,
+                                            float length, int secondTime) {
         MessageWriter w = new MessageWriter();
         w.int16(id).uint8(2).uint8(1).float32(length);
-        w.string("root").uint16(2);
+        w.string(bone).uint16(2);
         w.uint16(0).float16(0).float16(0).float16(0);
         w.uint16(0).int16(0).int16(0);
         w.uint16(secondTime).float16(secondX).float16(0).float16(0);
@@ -509,6 +518,93 @@ class GltfImportTest {
         assertEquals(0, result.unchanged);
         assertEquals(1.25f, after.tracks.get(0).trans[0][0], 1e-3);
         assertArrayEquals(before.fxTracks.get(0).rawPayload, after.fxTracks.get(0).rawPayload);
+    }
+
+    @Test
+    void changedCombinedSkanSplitsTracksBackIntoOwningLayers() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(0, "root", 1)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_combined", "tip", 1.25f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        ResContainer rebuilt = ResContainer.parse(result.res);
+        SkanInfo root = SkanInfo.parse(rebuilt.layers.get(0).data);
+        SkanInfo tip = SkanInfo.parse(rebuilt.layers.get(1).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(1, result.unchanged);
+        assertEquals("root", root.tracks.get(0).bone);
+        assertEquals(0f, root.tracks.get(0).trans[0][0], 1e-4);
+        assertEquals("tip", tip.tracks.get(0).bone);
+        assertEquals(1.25f, tip.tracks.get(0).trans[0][0], 1e-3);
+    }
+
+    @Test
+    void untouchedCombinedSkanDoesNotOverrideIndividualEdit() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(0, "root", 1)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_1", "tip", 1.25f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        SkanInfo tip = SkanInfo.parse(ResContainer.parse(result.res).layers.get(1).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(1.25f, tip.tracks.get(0).trans[0][0], 1e-3);
+    }
+
+    @Test
+    void editingCombinedAndIndividualSkanActionsIsRejected() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(0, "root", 1)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_combined", "root", 1);
+        byte[] editedGlb = moveAnimationTranslation(glb, "skan_1", "tip", 1);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.rebuildSkan(animation.serialize(), editedGlb));
+
+        assertTrue(error.getMessage().contains("both skan_combined and an individual"));
+    }
+
+    @Test
+    void combinedDurationEditWithAnyEffectTrackIsRejected() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootWithEffect(0)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        byte[] editedGlb = moveAnimationEndTime(glb, 2);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.rebuildSkan(animation.serialize(), editedGlb));
+
+        assertTrue(error.getMessage().contains("control/effect tracks"));
     }
 
     @Test

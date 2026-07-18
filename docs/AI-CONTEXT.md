@@ -80,7 +80,9 @@ through the declared clip duration; zero-duration static poses get a synthetic
 one-second edit window that import collapses back to one zero-time frame; duplicate
 ids are qualified by SKAN layer occurrence so each action rebuilds independently;
 `rebuild-skan` imports edited translation/rotation actions while preserving unchanged
-animation bytes and raw control tracks.
+animation bytes and raw control tracks. An edited `skan_combined` action is split back
+into its original disjoint layers by bone ownership; an untouched combined action
+still allows individual edits, while conflicting combined+individual edits are rejected.
 `cache-list` scans the local game cache and prints the resource names found there,
 ready to `fetch`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).

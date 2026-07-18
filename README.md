@@ -205,6 +205,10 @@ ranges preserve any original trailing duration. Playback mode, bone scale and
 control/effect events are preserved rather than edited, and duration changes are
 rejected when effect timing would become ambiguous. Sub-20 ms end-time drift is
 treated as Blender frame-grid rounding rather than an intentional duration edit.
+For compatible multi-layer animations, editing only the initially active
+`skan_combined` action is also supported: ResForge routes each edited bone track
+back to its original layer. Editing both the combined and an individual action is
+rejected rather than choosing one ambiguously.
 Adding/removing morph (`manim`) frames remains unsupported.
 
 **View 3D** also previews `skan` directly. For standalone player animations it uses

@@ -96,8 +96,15 @@ public final class GltfImport {
 
         Map<SkanKey, Map<String, Object>> byLayer = new LinkedHashMap<>();
         Map<Integer, Map<String, Object>> legacyById = new LinkedHashMap<>();
+        Map<String, Object> combinedAction = null;
         for(Object value : animations) {
             Map<String, Object> animation = (Map<String, Object>) value;
+            if(isCombinedSkan(animation)) {
+                if(combinedAction != null)
+                    throw new IllegalArgumentException("the glTF contains multiple combined skan actions");
+                combinedAction = animation;
+                continue;
+            }
             Integer id = skanId(animation);
             if(id == null)
                 continue;
@@ -112,51 +119,144 @@ public final class GltfImport {
                         + id + " without layer metadata");
             }
         }
-        if(byLayer.isEmpty() && legacyById.isEmpty())
+        if(byLayer.isEmpty() && legacyById.isEmpty() && combinedAction == null)
             throw new IllegalArgumentException("the glTF contains no actions named skan_<id>");
 
-        int changed = 0, unchanged = 0, layers = 0, skanLayer = 0;
+        List<Integer> resourceIndices = new ArrayList<>();
+        List<SkanInfo> originals = new ArrayList<>();
         for(int i = 0; i < res.layers.size(); i++) {
             Layer layer = res.layers.get(i);
             if(!layer.name.equals("skan"))
                 continue;
-            layers++;
             SkanInfo original = SkanInfo.parse(layer.data);
             if(!original.recognized)
                 throw new IllegalArgumentException("couldn't decode skan layer " + i);
-            Map<String, Object> animation = byLayer.get(new SkanKey(original.id, skanLayer++));
+            resourceIndices.add(i);
+            originals.add(original);
+        }
+        if(originals.isEmpty())
+            throw new IllegalArgumentException("the resource contains no skan layers");
+
+        List<SkanEdit> individualEdits = new ArrayList<>();
+        boolean individualChanged = false;
+        for(int layer = 0; layer < originals.size(); layer++) {
+            SkanInfo original = originals.get(layer);
+            Map<String, Object> animation = byLayer.get(new SkanKey(original.id, layer));
             if(animation == null)
                 animation = legacyById.get(original.id);
             if(animation == null) {
-                unchanged++;
+                individualEdits.add(null);
                 continue;
             }
             SkanEdit edit = readSkanTracks(g, animation, original);
-            boolean lengthChanged = Math.abs(edit.length - original.len) > 1e-4f;
-            if(lengthChanged && !original.fxTracks.isEmpty())
-                throw new IllegalArgumentException("cannot change skan_" + original.id
-                        + " duration while it has control/effect tracks");
-            if(!lengthChanged && sameTracks(original.tracks, edit.tracks)) {
-                unchanged++;
-                continue;
-            }
-            SkanInfo edited = new SkanInfo();
-            edited.id = original.id;
-            edited.fmt = original.fmt;
-            edited.mode = original.mode;
-            edited.len = edit.length;
-            edited.nspeed = original.nspeed;
-            edited.tracks.addAll(edit.tracks);
-            edited.fxTracks.addAll(original.fxTracks);
-            res.layers.set(i, new Layer("skan", SkanInfo.encode(edited)));
-            changed++;
+            individualEdits.add(edit);
+            individualChanged |= changed(original, edit);
         }
-        if(layers == 0)
-            throw new IllegalArgumentException("the resource contains no skan layers");
-        return new AnimationRebuildResult(res.serialize(), changed, unchanged);
+
+        CombinedSkan combined = combineForImport(originals);
+        SkanEdit combinedEdit = null;
+        boolean combinedChanged = false;
+        if(combinedAction != null) {
+            if(combined == null)
+                throw new IllegalArgumentException("skan_combined does not match compatible disjoint layers");
+            combinedEdit = readSkanTracks(g, combinedAction, combined.clip);
+            for(SkanInfo.Track track : combinedEdit.tracks)
+                if(!combined.ownerByBone.containsKey(track.bone))
+                    throw new IllegalArgumentException("combined skan action adds bone " + track.bone
+                            + ", which has no owning skan layer");
+            combinedChanged = changed(combined.clip, combinedEdit);
+        }
+        if(combinedChanged && individualChanged)
+            throw new IllegalArgumentException("both skan_combined and an individual skan action were edited");
+
+        int changed = 0;
+        if(combinedChanged) {
+            List<List<SkanInfo.Track>> splitTracks = new ArrayList<>();
+            for(int i = 0; i < originals.size(); i++)
+                splitTracks.add(new ArrayList<>());
+            for(SkanInfo.Track track : combinedEdit.tracks)
+                splitTracks.get(combined.ownerByBone.get(track.bone)).add(track);
+            for(int i = 0; i < originals.size(); i++) {
+                SkanEdit edit = new SkanEdit(splitTracks.get(i), combinedEdit.length);
+                if(applySkanEdit(res, resourceIndices.get(i), originals.get(i), edit))
+                    changed++;
+            }
+        } else {
+            for(int i = 0; i < originals.size(); i++) {
+                SkanEdit edit = individualEdits.get(i);
+                if(edit != null && applySkanEdit(res, resourceIndices.get(i), originals.get(i), edit))
+                    changed++;
+            }
+        }
+        return new AnimationRebuildResult(res.serialize(), changed, originals.size() - changed);
     }
 
     private record SkanKey(int id, int layer) {
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isCombinedSkan(Map<String, Object> animation) {
+        if("skan_combined".equals(animation.get("name")))
+            return true;
+        Object extras = animation.get("extras");
+        return extras instanceof Map
+                && ((Map<String, Object>) extras).get("resforgeCombinedSkanIds") instanceof List;
+    }
+
+    private static boolean changed(SkanInfo original, SkanEdit edit) {
+        return Math.abs(edit.length - original.len) > 1e-4f
+                || !sameTracks(original.tracks, edit.tracks);
+    }
+
+    private static boolean applySkanEdit(ResContainer res, int resourceIndex,
+                                         SkanInfo original, SkanEdit edit) {
+        boolean lengthChanged = Math.abs(edit.length - original.len) > 1e-4f;
+        if(lengthChanged && !original.fxTracks.isEmpty())
+            throw new IllegalArgumentException("cannot change skan_" + original.id
+                    + " duration while it has control/effect tracks");
+        if(!changed(original, edit))
+            return false;
+        SkanInfo edited = new SkanInfo();
+        edited.id = original.id;
+        edited.fmt = original.fmt;
+        edited.mode = original.mode;
+        edited.len = edit.length;
+        edited.nspeed = original.nspeed;
+        edited.tracks.addAll(edit.tracks);
+        edited.fxTracks.addAll(original.fxTracks);
+        res.layers.set(resourceIndex, new Layer("skan", SkanInfo.encode(edited)));
+        return true;
+    }
+
+    private static final class CombinedSkan {
+        final SkanInfo clip;
+        final Map<String, Integer> ownerByBone;
+
+        CombinedSkan(SkanInfo clip, Map<String, Integer> ownerByBone) {
+            this.clip = clip;
+            this.ownerByBone = ownerByBone;
+        }
+    }
+
+    private static CombinedSkan combineForImport(List<SkanInfo> clips) {
+        if(clips.size() < 2)
+            return null;
+        SkanInfo first = clips.get(0);
+        SkanInfo combined = new SkanInfo();
+        combined.mode = first.mode;
+        combined.len = first.len;
+        Map<String, Integer> owners = new LinkedHashMap<>();
+        for(int layer = 0; layer < clips.size(); layer++) {
+            SkanInfo clip = clips.get(layer);
+            if(!clip.mode.equals(first.mode) || Math.abs(clip.len - first.len) > 1e-4f)
+                return null;
+            for(SkanInfo.Track track : clip.tracks) {
+                if(owners.putIfAbsent(track.bone, layer) != null)
+                    return null;
+                combined.tracks.add(track);
+            }
+        }
+        return new CombinedSkan(combined, owners);
     }
 
     @SuppressWarnings("unchecked")
