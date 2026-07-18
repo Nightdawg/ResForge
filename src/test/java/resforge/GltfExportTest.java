@@ -49,6 +49,16 @@ class GltfExportTest {
         return w.toByteArray();
     }
 
+    private static byte[] modernMesh(int matid, int ref) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0x81).int16(-1).int16(0);
+        w.string("mat").uint8(4).uint8(matid);
+        w.string("ref").uint8(4).uint8(ref);
+        w.string("").string("").uint16(1);
+        w.uint16(0).uint16(1).uint16(2);
+        return w.toByteArray();
+    }
+
     private static byte[] tex(int id) {
         byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2};
         MessageWriter w = new MessageWriter();
@@ -276,6 +286,27 @@ class GltfExportTest {
         Map<String, Object> bct = (Map<String, Object>) pbr.get("baseColorTexture");
         assertEquals(1L, ((Number) bct.get("index")).longValue(),
                 "tex id 20 is the 2nd embedded texture (ordinal 1), resolved by id not position");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void modernMeshesGetStableDistinctMaterialIdentities() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("tex", tex(0)));
+        res.layers.add(new Layer("mat2", mat2(2, 0)));
+        res.layers.add(new Layer("vbuf2", vbuf(false)));
+        res.layers.add(new Layer("mesh", modernMesh(2, 0)));
+        res.layers.add(new Layer("mesh", modernMesh(2, 1)));
+
+        Map<String, Object> root = jsonOf(GltfExport.toGlb(res, "modern.res").glb);
+        List<Object> materials = (List<Object>) root.get("materials");
+        assertEquals("rfmat_2_mesh_0", ((Map<String, Object>) materials.get(0)).get("name"));
+        assertEquals("rfmat_2_mesh_1", ((Map<String, Object>) materials.get(1)).get("name"));
+
+        Map<String, Object> mesh = (Map<String, Object>) ((List<Object>) root.get("meshes")).get(0);
+        List<Object> primitives = (List<Object>) mesh.get("primitives");
+        assertEquals(0L, ((Number) ((Map<String, Object>) primitives.get(0)).get("material")).longValue());
+        assertEquals(1L, ((Number) ((Map<String, Object>) primitives.get(1)).get("material")).longValue());
     }
 
     @Test

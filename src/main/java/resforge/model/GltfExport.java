@@ -130,12 +130,29 @@ public final class GltfExport {
         Map<Integer, Integer> texIds = collectTexIds(modelRes);
         Map<Integer, Integer> matToTex = collectMatToTex(modelRes, texIds);
 
-        // One glTF material per distinct submesh matid (named "rfmat_<matid>") so the
-        // rebuild import can recover which part each face belongs to, and so Blender
-        // keeps parts that merely share a texture as separate primitives.
-        Map<Integer, Integer> matidToMat = new LinkedHashMap<>();
-        for(MeshInfo m : meshes)
-            matidToMat.putIfAbsent(m.matid, matidToMat.size());
+        // Modern mesh metadata can distinguish layers that share a matid (notably
+        // alternate "ref" parts). Give each modern layer its own stable material
+        // identity so Blender does not merge those headers away.
+        List<MeshMaterial> gltfMaterials = new ArrayList<>();
+        List<Integer> meshMaterials = new ArrayList<>();
+        Map<Integer, Integer> legacyMaterials = new LinkedHashMap<>();
+        for(int i = 0; i < meshes.size(); i++) {
+            MeshInfo m = meshes.get(i);
+            int material;
+            if(m.modern) {
+                material = gltfMaterials.size();
+                gltfMaterials.add(new MeshMaterial(m.matid, "rfmat_" + m.matid + "_mesh_" + i));
+            } else {
+                Integer existing = legacyMaterials.get(m.matid);
+                if(existing == null) {
+                    existing = gltfMaterials.size();
+                    legacyMaterials.put(m.matid, existing);
+                    gltfMaterials.add(new MeshMaterial(m.matid, "rfmat_" + m.matid));
+                }
+                material = existing;
+            }
+            meshMaterials.add(material);
+        }
 
         // Unified joint list = the union of every bone-bearing vbuf's influence
         // bones (JOINTS_0 is later remapped from a vbuf's local order to this).
@@ -230,7 +247,8 @@ public final class GltfExport {
 
         List<Object> primitives = new ArrayList<>();
         int triangles = 0, submeshes = 0;
-        for(MeshInfo m : meshes) {
+        for(int meshIndex = 0; meshIndex < meshes.size(); meshIndex++) {
+            MeshInfo m = meshes.get(meshIndex);
             Map<String, Object> attribs = vbufAttribs.get(m.vbufid);
             if(attribs == null)
                 continue;
@@ -239,8 +257,7 @@ public final class GltfExport {
             Map<String, Object> prim = new LinkedHashMap<>();
             prim.put("attributes", new LinkedHashMap<>(attribs));
             prim.put("indices", idxAccessor);
-            if(!texMats.isEmpty())
-                prim.put("material", matidToMat.get(m.matid));
+            prim.put("material", meshMaterials.get(meshIndex));
             List<Object> targets = vbufTargets.get(m.vbufid);
             if(targets != null && !targets.isEmpty())
                 prim.put("targets", targets);
@@ -389,28 +406,27 @@ public final class GltfExport {
                 images.add(obj("bufferView", bv, "mimeType", tm.mime));
                 textures.add(obj("source", i, "sampler", 0));
             }
-            // One material per distinct matid, each pointing at that matid's texture.
-            List<Object> materials = new ArrayList<>();
-            for(int matid : matidToMat.keySet()) {
-                Map<String, Object> pbr = new LinkedHashMap<>();
-                Integer texOrd = matToTex.get(matid);
-                if(texOrd != null && texOrd >= 0 && texOrd < texMats.size())
-                    pbr.put("baseColorTexture", obj("index", texOrd, "texCoord", 0));
-                pbr.put("metallicFactor", 0.0);
-                pbr.put("roughnessFactor", 1.0);
-                Map<String, Object> mat = new LinkedHashMap<>();
-                mat.put("name", "rfmat_" + matid);
-                mat.put("doubleSided", Boolean.TRUE);
-                mat.put("alphaMode", "MASK");
-                mat.put("alphaCutoff", 0.5);
-                mat.put("pbrMetallicRoughness", pbr);
-                materials.add(mat);
-            }
-            root.put("materials", materials);
             root.put("textures", textures);
             root.put("images", images);
             root.put("samplers", List.of(obj("wrapS", 10497, "wrapT", 10497)));
         }
+        List<Object> materials = new ArrayList<>();
+        for(MeshMaterial gm : gltfMaterials) {
+            Map<String, Object> pbr = new LinkedHashMap<>();
+            Integer texOrd = matToTex.get(gm.matid);
+            if(texOrd != null && texOrd >= 0 && texOrd < texMats.size())
+                pbr.put("baseColorTexture", obj("index", texOrd, "texCoord", 0));
+            pbr.put("metallicFactor", 0.0);
+            pbr.put("roughnessFactor", 1.0);
+            Map<String, Object> mat = new LinkedHashMap<>();
+            mat.put("name", gm.name);
+            mat.put("doubleSided", Boolean.TRUE);
+            mat.put("alphaMode", "MASK");
+            mat.put("alphaCutoff", 0.5);
+            mat.put("pbrMetallicRoughness", pbr);
+            materials.add(mat);
+        }
+        root.put("materials", materials);
 
         root.put("accessors", accessors);
         root.put("bufferViews", bufferViews);
@@ -418,6 +434,16 @@ public final class GltfExport {
 
         byte[] glb = assembleGlb(Json.write(root), bin.toByteArray());
         return new Result(glb, vertices, triangles, submeshes, texMats.size());
+    }
+
+    private static final class MeshMaterial {
+        final int matid;
+        final String name;
+
+        MeshMaterial(int matid, String name) {
+            this.matid = matid;
+            this.name = name;
+        }
     }
 
     /* ------------------------------------------------------- accessors/buffers */

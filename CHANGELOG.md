@@ -6,6 +6,14 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Rebuilding modern mesh resources no longer drops their materials.** Modern
+  `mesh` layers retain their typed `mat`/`ref` metadata, and glTF exports give each
+  such layer a stable material identity so Blender preserves distinct submeshes.
+  Older ResForge exports that merged those layers can be recovered when their
+  triangle ranges are unchanged.
+
 ## [1.2.1] — 2026-07-13
 
 ### Fixed

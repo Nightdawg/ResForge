@@ -122,6 +122,12 @@ From `haven.FastMesh`: `uint8 fl`; old form (fl & 0x80 == 0): `uint16` numTris,
 `int16` matid, optional id/ref/rdat/vbufid, then indices — raw `uint16`*3*num or
 **delta-stripped** (`unstrip`/`decdelta`). References a vbuf2 by id.
 
+Modern form (`fl & 0x80`, version 1): `int16 id`, `int16 vbufid`, a string-keyed
+tto metadata map, format string (`""` raw or `"strips"`), `uint16 numTris`, then
+indices. The client obtains the material and part reference from integer `mat` and
+`ref` metadata values. Rebuild must preserve the whole metadata map verbatim; writing
+the legacy form with `matid=-1` leaves the mesh without its specified material.
+
 ## obst layer (movement collision)
 From `haven.Resource.Obstacle`: `uint8 ver` (1 or 2); if ver 2 a `string id`;
 then `uint8 n` (polygon count), `n` per-polygon point counts (all counts first),
@@ -325,14 +331,15 @@ morph deltas). No per-vertex id is needed (vertex order = glTF order) and it giv
 byte-exactness, so it leans on in-game testing — exposed as CLI
 `rebuild-gltf` and a GUI "Rebuild from glTF" (with a not-lossless warning).
 
-**Multi-submesh** is supported: each glTF primitive becomes a submesh. To recover
-which part each face belongs to (and to stop Blender merging parts that merely share
-a texture), `GltfExport` now emits **one material per distinct matid**, named
-`rfmat_<matid>`; on rebuild each primitive's matid is parsed back from its material
-name (tolerating Blender's `.001` suffixes). Primitives are concatenated into the one
-shared `vbuf2`, **de-duplicated by POSITION accessor** so our own (shared-buffer)
-export isn't copied per primitive while Blender's per-material split blocks are
-concatenated with their indices offset. The original mesh layers are all replaced by
+**Multi-submesh** is supported: each glTF primitive becomes a submesh. Legacy meshes
+use `rfmat_<matid>`. Modern meshes use one stable material per original layer,
+`rfmat_<matid>_mesh_<ordinal>`, so duplicate matids cannot merge away distinct
+`mat`/`ref` metadata; rebuild restores that layer's original modern metadata bytes.
+Older exports that collapsed modern parts to `rfmat_-1` are split using the original
+triangle counts when the total topology is unchanged, and rejected otherwise.
+Primitives are concatenated into the one shared `vbuf2`, **de-duplicated by POSITION
+accessor** so our own (shared-buffer) export isn't copied per primitive while
+Blender's per-material split blocks are concatenated with their indices offset. The original mesh layers are all replaced by
 the rebuilt submeshes at the first mesh position, every other layer kept. It handles
 positions/normals/UVs/bone-weights **and morph (`manim`) models**: each frame's
 shape is rebuilt from the glTF morph targets (concatenated per part like the

@@ -191,7 +191,9 @@ glTF:
    recomputes tangents, rebuilds the submeshes/morphs, and **re-poses the skeleton** if
    you moved a bone. An application-modal progress dialog prevents other document
    actions while this runs. It isn't byte-lossless, so verify in-game. Multi-part,
-   skinned, morph-animated and normal-mapped models are all supported.
+   skinned, morph-animated and normal-mapped models are all supported. Modern mesh
+   material/reference metadata is preserved per part; ResForge also recovers older
+   merged exports when their original triangle ranges remain unchanged.
 
 Standalone skeletal animations also round-trip: open the animation resource, choose
 its bind-skeleton resource and a compatible skinned preview model in the companion

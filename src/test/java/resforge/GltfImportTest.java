@@ -98,6 +98,16 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    private static byte[] modernMesh(int matid, int ref) {
+        MessageWriter w = new MessageWriter();
+        w.uint8(0x81).int16(-1).int16(0);
+        w.string("mat").uint8(4).uint8(matid);
+        w.string("ref").uint8(4).uint8(ref);
+        w.string("").string("").uint16(1);
+        w.uint16(0).uint16(1).uint16(2);
+        return w.toByteArray();
+    }
+
     /** manim (fmt 3 float16), 2 frames each morphing vertex 0 over the vbuf. */
     private static byte[] manim(int id, float len) {
         MessageWriter w = new MessageWriter();
@@ -786,6 +796,11 @@ class GltfImportTest {
 
     /** Builds a dense glb with POSITION/NORMAL/TEXCOORD_0 + indices (for rebuild tests). */
     private static byte[] geomGlb(float[] pos, float[] nrm, float[] tex, int[] indices) {
+        return geomGlb(pos, nrm, tex, indices, null);
+    }
+
+    private static byte[] geomGlb(float[] pos, float[] nrm, float[] tex, int[] indices,
+                                  String materialName) {
         int m = pos.length / 3;
         int posLen = m * 12, nrmLen = m * 12, texLen = m * 8, idxLen = indices.length * 2;
         MessageWriter bin = new MessageWriter();
@@ -796,6 +811,9 @@ class GltfImportTest {
         if((idxLen & 3) != 0) bin.uint16(0);             // pad to 4
         int po = 0, no = posLen, to = posLen + nrmLen, io = posLen + nrmLen + texLen;
         int total = io + ((idxLen + 3) & ~3);
+        String material = materialName == null ? ""
+                : "\"materials\":[{\"name\":\"" + materialName + "\"}],";
+        String primitiveMaterial = materialName == null ? "" : ",\"material\":0";
         String json = "{\"asset\":{\"version\":\"2.0\"},"
                 + "\"buffers\":[{\"byteLength\":" + total + "}],"
                 + "\"bufferViews\":["
@@ -808,8 +826,9 @@ class GltfImportTest {
                 + "{\"bufferView\":1,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC3\"},"
                 + "{\"bufferView\":2,\"componentType\":5126,\"count\":" + m + ",\"type\":\"VEC2\"},"
                 + "{\"bufferView\":3,\"componentType\":5123,\"count\":" + indices.length + ",\"type\":\"SCALAR\"}],"
+                + material
                 + "\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0,\"NORMAL\":1,\"TEXCOORD_0\":2},"
-                + "\"indices\":3}]}]}";
+                + "\"indices\":3" + primitiveMaterial + "}]}]}";
         byte[] jb = json.getBytes(StandardCharsets.UTF_8);
         byte[] jpad = pad(jb, (byte) 0x20);
         byte[] bb = bin.toByteArray();
@@ -1021,6 +1040,37 @@ class GltfImportTest {
         short minB = Short.MAX_VALUE;
         for(short s : ms.get(1).indices) minB = (short) Math.min(minB, s);
         assertTrue(minB > maxA, "second submesh indices are offset past the first block");
+    }
+
+    @Test
+    void rebuildRecoversModernHeadersFromOlderMergedExport() {
+        ResContainer res = new ResContainer(7);
+        res.layers.add(new Layer("vbuf2", vbufF4(3)));
+        byte[] meshA = modernMesh(2, 0);
+        byte[] meshB = modernMesh(0, 2);
+        res.layers.add(new Layer("mesh", meshA));
+        res.layers.add(new Layer("mesh", meshB));
+
+        float[] pos = {0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0};
+        float[] nrm = {0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1};
+        float[] tex = {0, 0, 1, 0, 0, 1, 1, 1};
+        int[] indices = {0, 1, 2, 1, 3, 2};
+        byte[] oldExport = geomGlb(pos, nrm, tex, indices, "rfmat_-1");
+
+        ResContainer out = ResContainer.parse(GltfImport.rebuild(res.serialize(), oldExport).res);
+        List<MeshInfo> meshes = new java.util.ArrayList<>();
+        for(Layer layer : out.layers)
+            if(layer.name.equals("mesh"))
+                meshes.add(MeshInfo.parse(layer.data));
+
+        assertEquals(2, meshes.size());
+        assertTrue(meshes.get(0).modern);
+        assertEquals(2, meshes.get(0).matid);
+        assertEquals(0, meshes.get(0).ref);
+        assertEquals(0, meshes.get(1).matid);
+        assertEquals(2, meshes.get(1).ref);
+        assertArrayEquals(MeshInfo.parse(meshA).modernInfo, meshes.get(0).modernInfo);
+        assertArrayEquals(MeshInfo.parse(meshB).modernInfo, meshes.get(1).modernInfo);
     }
 
     /** Like {@link #geomGlb} but adds one dense morph target with the given deltas. */

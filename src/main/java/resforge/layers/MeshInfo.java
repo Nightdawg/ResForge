@@ -2,6 +2,8 @@ package resforge.layers;
 
 import resforge.io.MessageReader;
 
+import java.util.Arrays;
+
 /**
  * Read-only decoder for the {@code mesh} (FastMesh) layer: a triangle-index list
  * referencing a {@code vbuf2} by id. It fully parses the header and the index
@@ -19,8 +21,12 @@ public class MeshInfo {
     public boolean reachedEnd;
     public int numTris;
     public int matid = -1;
+    public int ref = -1;
     public int id = -1;
     public int vbufid = 0;
+    public boolean modern;
+    /** Verbatim modern tto metadata, including the terminating empty key. */
+    public byte[] modernInfo;
     public boolean stripped;
     public short[] indices;          // num*3 vertex indices (decoded), or null
 
@@ -33,7 +39,7 @@ public class MeshInfo {
                 int num = in.uint16();
                 mi.matid = in.int16();
                 mi.id = ((fl & 2) != 0) ? in.int16() : -1;
-                if((fl & 4) != 0) in.int16();                 // ref
+                mi.ref = ((fl & 4) != 0) ? in.int16() : -1;
                 if((fl & 8) != 0) {
                     while(true) {
                         String k = in.string();
@@ -52,13 +58,22 @@ public class MeshInfo {
                 int ver = fl & 0x7f;
                 if(ver != 1)
                     return mi;
+                mi.modern = true;
                 mi.id = in.int16();
                 mi.vbufid = in.int16();
+                int infoStart = in.position();
                 while(true) {
                     String k = in.string();
                     if(k.isEmpty()) break;
-                    TtoSkip.skipValue(in);                    // tto value
+                    Integer v = TtoSkip.readIntegerValue(in);
+                    if(v != null) {
+                        if(k.equals("mat"))
+                            mi.matid = v;
+                        else if(k.equals("ref"))
+                            mi.ref = v;
+                    }
                 }
+                mi.modernInfo = Arrays.copyOfRange(payload, infoStart, in.position());
                 String fmt = in.string();
                 if(fmt.equals("")) {
                     mi.stripped = false;

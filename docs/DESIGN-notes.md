@@ -578,11 +578,15 @@ UV sets or skeleton bindings. `GltfExport` writes a static, textured binary glTF
   `f4/f2/f1`, `sn/un/rn`, `sf9995`, and `uvech/uvec1/uvec2` formats), writes a
   fresh raw-index `mesh`, and copies every other layer
   (materials, textures, code). It needs no per-vertex ids and gives up byte-exactness
-  (in-game-validated). **Multi-submesh works**: each glTF primitive becomes a submesh,
-  with each part's matid recovered from its material name — the export emits one
-  material per matid (`rfmat_<matid>`) so the id survives and Blender keeps parts that
-  share a texture separate; primitives are concatenated into the shared `vbuf2`,
-  de-duplicated by POSITION accessor. **Skinning weights** rebuild too: `JOINTS_0`/
+  (in-game-validated). **Multi-submesh works**: each glTF primitive becomes a submesh.
+  Legacy layers recover their matid from `rfmat_<matid>`; each modern mesh layer gets
+  a stable `rfmat_<matid>_mesh_<ordinal>` identity, so duplicate material ids do not
+  let Blender merge distinct typed metadata headers. Rebuild restores the matching
+  original modern header verbatim (including `mat`, `ref`, and unknown tto fields).
+  Older ResForge exports that collapsed all modern parts to `rfmat_-1` are split by
+  their original triangle ranges when topology is unchanged, and rejected clearly
+  otherwise. Primitives are concatenated into the shared `vbuf2`, de-duplicated by
+  POSITION accessor. **Skinning weights** rebuild too: `JOINTS_0`/
   `WEIGHTS_0` are mapped to bone *names* via the skin (Blender reorders joints, so the
   name is the stable key) and the top-4 influences re-encoded via `Vbuf2Codec.setBones2`,
   which handles both the modern `bones2` and the legacy `bones` v0 header (render-

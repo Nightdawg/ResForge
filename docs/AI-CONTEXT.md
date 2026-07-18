@@ -194,7 +194,10 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   edited `.glb` at a new vertex count → re-quantises pos/nrm/both UVs into their original
   on-wire formats, Y-up→Z-up, rebuilds skinning weights via
   `Vbuf2Codec.setBones2` and morph shapes via `MeshAnimInfo.encodeWith`, recomputes
-  tangents and re-poses the `skel` skeleton, keeping all other layers; allows
+  tangents and re-poses the `skel` skeleton, keeping all other layers; modern mesh
+  tto metadata (`mat`/`ref` plus unknown fields verbatim) is retained through a
+  per-layer `rfmat_<matid>_mesh_<ordinal>` glTF identity, with unchanged-triangle
+  recovery for older exports that collapsed those layers; allows
   reshaped/added/removed geometry, not byte-lossless). Rebuild **bakes un-applied
   glTF node transforms** (a Blender object moved/scaled/rotated without "Apply
   Transform") into positions, normals via the inverse-transpose, and morph deltas

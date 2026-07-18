@@ -27,8 +27,8 @@ import java.util.Map;
  * <p>It re-encodes the {@code vbuf2} at the glTF's own vertex count — positions,
  * normals and both UV sets re-quantised into each attribute's original on-wire
  * format, Y-up glTF coordinates converted back to Haven's Z-up — writes a fresh
- * triangle {@code mesh} (one submesh per glTF primitive, its part id recovered from
- * the {@code rfmat_<matid>} material name), rebuilds {@code bones2}/{@code bones}
+ * triangle {@code mesh} (one submesh per glTF primitive, its original header recovered
+ * from the {@code rfmat_<matid>[_mesh_<index>]} material name), rebuilds {@code bones2}/{@code bones}
  * skinning weights and {@code manim} morph shapes, recomputes the tangent basis for
  * normal-mapped models, and re-poses the {@code skel} skeleton if a bone moved. Every
  * other layer (materials, textures, code, …) is carried over unchanged.
@@ -663,12 +663,14 @@ public final class GltfImport {
         boolean hasOtex = codec.attr("otex") != null, hasBones = codec.attr("bones") != null;
         boolean hasTan = codec.attr("tan") != null || codec.attr("bit") != null;
 
-        // matid -> a template original mesh layer (for its id/vbufid).
+        // Original mesh templates provide ids, vbuf ids, and modern tto metadata.
+        List<MeshInfo> meshTemplates = new ArrayList<>();
         Map<Integer, MeshInfo> matidToMesh = new LinkedHashMap<>();
         int vbufId = 0;
         for(int mi : meshIdxs) {
             MeshInfo m = MeshInfo.parse(res.layers.get(mi).data);
             if(m.recognized) {
+                meshTemplates.add(m);
                 matidToMesh.putIfAbsent(m.matid, m);
                 vbufId = m.vbufid;
             }
@@ -684,11 +686,13 @@ public final class GltfImport {
         int total = 0;
         List<int[]> meshTris = new ArrayList<>();
         List<Integer> meshMatids = new ArrayList<>();
+        List<MeshInfo> outputTemplates = new ArrayList<>();
         List<List<float[]>> tChunks = new ArrayList<>();     // morph target deltas, per target -> chunks
         int[] targetN = {-1};
 
         IdentityHashMap<Map<String, Object>, double[]> primMatrix = primitiveMatrices(g.root);
-        for(Map<String, Object> prim : allPrimitives(g.root)) {
+        List<Map<String, Object>> primitives = allPrimitives(g.root);
+        for(Map<String, Object> prim : primitives) {
             Map<String, Object> a = attributesOf(prim);
             if(a == null || !a.containsKey("POSITION"))
                 continue;
@@ -724,8 +728,28 @@ public final class GltfImport {
             int[] tris = readIndices(g, prim);
             for(int i = 0; i < tris.length; i++)
                 tris[i] += offset;
-            meshTris.add(tris);
-            meshMatids.add(recoverMatid(prim, materials, matidToMesh));
+            MeshInfo template = recoverMeshTemplate(prim, materials, meshTemplates, matidToMesh);
+            if(template == null && isLostModernIdentity(prim, materials, primitives, meshTemplates)) {
+                int expected = 0;
+                for(MeshInfo m : meshTemplates)
+                    expected += m.indices.length;
+                if(tris.length != expected)
+                    throw new IllegalArgumentException("this glTF was exported by an older ResForge version "
+                            + "that lost modern mesh metadata, and its topology changed; re-export it before editing.");
+                int from = 0;
+                for(MeshInfo m : meshTemplates) {
+                    int to = from + m.indices.length;
+                    meshTris.add(java.util.Arrays.copyOfRange(tris, from, to));
+                    meshMatids.add(m.matid);
+                    outputTemplates.add(m);
+                    from = to;
+                }
+            } else {
+                int matid = template != null ? template.matid : recoverMatid(prim, materials, matidToMesh);
+                meshTris.add(tris);
+                meshMatids.add(matid);
+                outputTemplates.add(template);
+            }
         }
         if(total == 0)
             throw new IllegalArgumentException("the glTF has no mesh positions to rebuild from.");
@@ -788,9 +812,8 @@ public final class GltfImport {
                 if(!meshEmitted) {
                     for(int s = 0; s < meshTris.size(); s++) {
                         int matid = meshMatids.get(s);
-                        MeshInfo tmpl = matidToMesh.get(matid);
-                        outLayers.add(new Layer("mesh", encodeMeshRaw(matid,
-                                tmpl != null ? tmpl.id : -1, vbufId, meshTris.get(s))));
+                        MeshInfo tmpl = outputTemplates.get(s);
+                        outLayers.add(new Layer("mesh", encodeMeshRaw(matid, tmpl, vbufId, meshTris.get(s))));
                         totalTris += meshTris.get(s).length / 3;
                     }
                     meshEmitted = true;
@@ -828,18 +851,52 @@ public final class GltfImport {
     @SuppressWarnings("unchecked")
     private static int recoverMatid(Map<String, Object> prim, List<Object> materials,
                                     Map<Integer, MeshInfo> matidToMesh) {
-        Object mo = prim.get("material");
-        if(mo != null && materials != null) {
-            int mIdx = ((Number) mo).intValue();
-            if(mIdx >= 0 && mIdx < materials.size()) {
-                Object nm = ((Map<String, Object>) materials.get(mIdx)).get("name");
-                Integer matid = parseMatid(nm == null ? null : nm.toString());
-                if(matid != null)
-                    return matid;
-            }
-        }
+        Integer matid = parseMatid(materialName(prim, materials));
+        if(matid != null)
+            return matid;
         // fall back to the only original matid if there's just one
         return matidToMesh.size() == 1 ? matidToMesh.keySet().iterator().next() : -1;
+    }
+
+    private static MeshInfo recoverMeshTemplate(Map<String, Object> prim, List<Object> materials,
+                                                List<MeshInfo> templates,
+                                                Map<Integer, MeshInfo> matidToMesh) {
+        String name = materialName(prim, materials);
+        Integer meshIndex = parseMeshIndex(name);
+        if(meshIndex != null && meshIndex >= 0 && meshIndex < templates.size())
+            return templates.get(meshIndex);
+        Integer matid = parseMatid(name);
+        if(matid != null) {
+            MeshInfo template = matidToMesh.get(matid);
+            if(template != null)
+                return template;
+        }
+        return templates.size() == 1 ? templates.get(0) : null;
+    }
+
+    private static boolean isLostModernIdentity(Map<String, Object> prim, List<Object> materials,
+                                                List<Map<String, Object>> primitives,
+                                                List<MeshInfo> templates) {
+        if(primitives.size() != 1 || templates.size() <= 1
+                || parseMeshIndex(materialName(prim, materials)) != null
+                || !Integer.valueOf(-1).equals(parseMatid(materialName(prim, materials))))
+            return false;
+        for(MeshInfo template : templates)
+            if(!template.modern)
+                return false;
+        return true;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String materialName(Map<String, Object> prim, List<Object> materials) {
+        Object mo = prim.get("material");
+        if(mo == null || materials == null)
+            return null;
+        int mIdx = ((Number) mo).intValue();
+        if(mIdx < 0 || mIdx >= materials.size())
+            return null;
+        Object name = ((Map<String, Object>) materials.get(mIdx)).get("name");
+        return name == null ? null : name.toString();
     }
 
     /** Parses the matid out of a "rfmat_<int>" material name (tolerating Blender's ".001" suffixes). */
@@ -857,6 +914,25 @@ public final class GltfImport {
             return null;
         try {
             return Integer.parseInt(name.substring(start, i));
+        } catch(NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Parses the original mesh-layer ordinal from "rfmat_<matid>_mesh_<index>". */
+    private static Integer parseMeshIndex(String name) {
+        if(name == null)
+            return null;
+        int p = name.indexOf("_mesh_");
+        if(p < 0)
+            return null;
+        int start = p + 6, end = start;
+        while(end < name.length() && Character.isDigit(name.charAt(end)))
+            end++;
+        if(end == start)
+            return null;
+        try {
+            return Integer.parseInt(name.substring(start, end));
         } catch(NumberFormatException e) {
             return null;
         }
@@ -1026,8 +1102,16 @@ public final class GltfImport {
         return ((Number) acc.get("count")).intValue();
     }
 
-    private static byte[] encodeMeshRaw(int matid, int id, int vbufid, int[] tris) {
+    private static byte[] encodeMeshRaw(int matid, MeshInfo template, int vbufid, int[] tris) {
         MessageWriter w = new MessageWriter();
+        if(template != null && template.modern && template.modernInfo != null) {
+            w.uint8(0x81).int16(template.id).int16(template.vbufid)
+                    .bytes(template.modernInfo).string("").uint16(tris.length / 3);
+            for(int t : tris)
+                w.uint16(t);
+            return w.toByteArray();
+        }
+        int id = template != null ? template.id : -1;
         boolean hasId = id != -1;
         int fl = 16 | (hasId ? 2 : 0);
         w.uint8(fl).uint16(tris.length / 3).int16(matid);

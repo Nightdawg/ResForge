@@ -30,6 +30,25 @@ public final class TtoSkip {
         skipTagged(in, in.uint8(), 1);
     }
 
+    /**
+     * Reads an integer-valued tto value, or skips a non-integer value and returns
+     * {@code null}. Mesh metadata uses these scalar forms for {@code mat}/{@code ref}.
+     */
+    public static Integer readIntegerValue(MessageReader in) {
+        int t = in.uint8();
+        switch(t) {
+            case T_INT:    return in.int32();
+            case T_UINT8:  return in.uint8();
+            case T_UINT16: return in.uint16();
+            case T_INT8:   return in.int8();
+            case T_INT16:  return in.int16();
+            case T_LONG:   return (int) in.int64();
+            default:
+                skipTagged(in, t, 1);
+                return null;
+        }
+    }
+
     /** Skips a {@code tto} value list ({@code Message.list}) read until a
      *  {@code T_END} (0) tag or end of message. */
     public static void skipList(MessageReader in) {
