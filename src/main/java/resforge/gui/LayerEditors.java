@@ -14,6 +14,8 @@ import javax.swing.JSpinner;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -32,6 +34,7 @@ final class LayerEditors {
     private final EditorHost host;
     private final AnimationPreviewLoader animationLoader;
     private final ImagePreviewLoader imageLoader;
+    private long panelGeneration;
 
     LayerEditors(EditorHost host) {
         this(host, new AnimationPreviewLoader(), new ImagePreviewLoader());
@@ -243,10 +246,49 @@ final class LayerEditors {
     }
 
     void buildBoneOffPanel(JPanel content, int idx, Layer l) {
+        BoneOffDraft draft = host.boneOffDraft(idx);
         content.add(buttonRow(new JButton(act("Preview equipped\u2026",
                 () -> host.previewBoneOff(idx)))));
         content.add(Box.createVerticalStrut(8));
-        addJsonEditor(content, idx, l, 280);
+        if(!draft.editable()) {
+            addJsonEditor(content, idx, l, 280);
+            return;
+        }
+        long generation = panelGeneration;
+        JTextArea area = new JTextArea(draft.json());
+        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, UiScaling.scale(12)));
+        JScrollPane scroll = new JScrollPane(area);
+        scroll.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scroll.setPreferredSize(new Dimension(UiScaling.scale(420), UiScaling.scale(250)));
+        content.add(scroll);
+        content.add(Box.createVerticalStrut(6));
+        JLabel state = labeled("Live preview: ready");
+        Theme.muted(state);
+        content.add(state);
+        content.add(Box.createVerticalStrut(6));
+        javax.swing.Timer debounce = new javax.swing.Timer(180, event -> {
+            if(generation != panelGeneration)
+                return;
+            BoneOffDraft.Validation validation = draft.update(area.getText());
+            if(validation.valid()) {
+                state.setText("Live preview: updated");
+                Theme.muted(state);
+            } else {
+                state.setText("Live preview: " + validation.error());
+                state.setForeground(new java.awt.Color(190, 70, 70));
+            }
+        });
+        debounce.setRepeats(false);
+        area.getDocument().addDocumentListener(new DocumentListener() {
+            public void insertUpdate(DocumentEvent event) { debounce.restart(); }
+            public void removeUpdate(DocumentEvent event) { debounce.restart(); }
+            public void changedUpdate(DocumentEvent event) { debounce.restart(); }
+        });
+        content.add(buttonRow(new JButton(act("Apply JSON", () -> {
+            draft.update(area.getText());
+            if(host.applyBytes(idx, area.getText().getBytes(StandardCharsets.UTF_8)))
+                host.setStatus("Updated " + l.name + " in layer " + idx);
+        })), new JButton(act("Export JSON", () -> host.exportLayer(idx)))));
     }
 
     private void addJsonEditor(JPanel content, int idx, Layer l, int height) {
@@ -325,6 +367,7 @@ final class LayerEditors {
     }
 
     void invalidateAnimationPreview() {
+        panelGeneration++;
         animationLoader.invalidate();
         imageLoader.invalidate();
     }

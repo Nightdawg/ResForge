@@ -228,7 +228,11 @@ model (for example `gfx/borka/male`), its bind skeleton (`gfx/borka/body`), and 
 arms animation (for example `gfx/borka/arms-b12axe`) from disk or the resource server.
 ResForge CPU-skins the player and evaluates the selected equip-point program against
 every animated pose, rendering the open resource's weapon geometry in the same
-depth-buffered view. The three companion selections are remembered across restarts.
+depth-buffered view. Keep that modeless window open while editing the layer's JSON:
+valid drafts update the weapon placement automatically after a short debounce, while
+incomplete JSON keeps the last valid preview. Draft previews do not modify the
+resource or undo history; **Apply JSON** remains required to save the edit. The three
+companion selections are remembered across restarts.
 
 ## Building / testing
 

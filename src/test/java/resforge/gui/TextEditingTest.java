@@ -110,5 +110,6 @@ class TextEditingTest {
         public void exportGltf() { }
         public void rebuildGltf() { }
         public void previewBoneOff(int layerIndex) { }
+        public BoneOffDraft boneOffDraft(int layerIndex) { throw new UnsupportedOperationException(); }
     }
 }

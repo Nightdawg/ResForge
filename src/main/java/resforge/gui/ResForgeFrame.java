@@ -72,7 +72,9 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** A small Swing GUI for browsing and editing a Haven &amp; Hearth {@code .res}
  *  file: a layer table on the left, a preview/edit panel on the right, and the
@@ -92,8 +94,10 @@ public class ResForgeFrame extends JFrame {
     private final JSpinner versionSpinner =
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
+    private boolean restoringSelection;
     private JButton addBtn, delBtn, upBtn, downBtn;
     private CompanionResource lastAnimationSkeleton, lastAnimationModel, lastBoneOffAnimation;
+    private final Map<Layer, BoneOffDraft> boneOffDrafts = new IdentityHashMap<>();
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final ThumbnailCache thumbCache = new ThumbnailCache();
@@ -117,6 +121,7 @@ public class ResForgeFrame extends JFrame {
         public void exportGltf() { doExportGltf(); }
         public void rebuildGltf() { doRebuildGltf(); }
         public void previewBoneOff(int idx) { doPreviewBoneOff(idx); }
+        public BoneOffDraft boneOffDraft(int idx) { return ResForgeFrame.this.boneOffDraft(idx); }
     });
 
     private static final int UNDO_LIMIT = 100;
@@ -283,7 +288,7 @@ public class ResForgeFrame extends JFrame {
         table.getColumnModel().getColumn(1).setMaxWidth(UiScaling.scale(44));
         table.getColumnModel().getColumn(1).setMinWidth(UiScaling.scale(44));
         table.getSelectionModel().addListSelectionListener(e -> {
-            if(!e.getValueIsAdjusting()) {
+            if(!e.getValueIsAdjusting() && !restoringSelection) {
                 showSelected();
                 updateLayerButtons();
             }
@@ -394,6 +399,7 @@ public class ResForgeFrame extends JFrame {
         res.version = s.version;
         res.layers.clear();
         res.layers.addAll(s.layers);
+        syncBoneOffDrafts();
         thumbnailLoader.invalidate();
         thumbCache.retainOnly(res.layers);
         dirty = s.dirty;
@@ -402,13 +408,30 @@ public class ResForgeFrame extends JFrame {
         versionSpinner.setValue(res.version);
         updatingVersion = false;
         model.fireTableDataChanged();
-        if(!res.layers.isEmpty() && s.selectedRow >= 0 && s.selectedRow < res.layers.size())
-            table.setRowSelectionInterval(s.selectedRow, s.selectedRow);
-        else if(res.layers.isEmpty())
-            showPlaceholder("This file has no layers.");
+        restoringSelection = true;
+        try {
+            if(!res.layers.isEmpty() && s.selectedRow >= 0 && s.selectedRow < res.layers.size())
+                table.setRowSelectionInterval(s.selectedRow, s.selectedRow);
+            else
+                table.clearSelection();
+        } finally {
+            restoringSelection = false;
+        }
+        if(table.getSelectedRow() >= 0)
+            showSelected();
+        else
+            showPlaceholder(res.layers.isEmpty() ? "This file has no layers." : "Select a layer.");
         updateTitle();
         updateLayerButtons();
         updateUndoState();
+    }
+
+    private void syncBoneOffDrafts() {
+        for(Layer layer : res.layers) {
+            BoneOffDraft draft = boneOffDrafts.get(layer);
+            if(draft != null)
+                draft.reset(layer.data);
+        }
     }
 
     private void updateUndoState() {
@@ -690,6 +713,7 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void applyDocument(ResContainer parsed, Path f, String pathText, String status) {
+        boneOffDrafts.clear();
         this.res = parsed;
         this.file = f;
         this.suggestedName = null;
@@ -1022,11 +1046,12 @@ public class ResForgeFrame extends JFrame {
             error("The selected layer is not a boneoff layer.");
             return;
         }
+        BoneOffDraft draft = boneOffDraft(layerIndex);
         BoneOffPreviewFiles companions = chooseBoneOffCompanionFiles();
         if(companions == null)
             return;
         byte[] weaponBytes = res.serialize();
-        byte[] boneOff = layer.data.clone();
+        byte[] boneOff = draft.payload();
         String title = (file != null ? file.getFileName().toString() : "weapon")
                 + " \u2014 " + resforge.layers.BoneOffInfo.parse(layer.data).name;
         setStatus("Building equipped preview \u2026");
@@ -1065,7 +1090,7 @@ public class ResForgeFrame extends JFrame {
                     info("Could not build the equipped preview: " + error);
                     return;
                 }
-                showBoneOffDialog(title, completed, decoded);
+                showBoneOffDialog(title, completed, decoded, draft);
             });
         }, "boneoff-preview");
         thread.setDaemon(true);
@@ -1073,7 +1098,7 @@ public class ResForgeFrame extends JFrame {
     }
 
     private void showBoneOffDialog(String title, BoneOffPlayback playback,
-                                   Model3DView.DecodedPalette palette) {
+                                   Model3DView.DecodedPalette palette, BoneOffDraft draft) {
         JDialog dialog = new JDialog(this, "Equipped preview \u2014 " + title, false);
         dialog.setLayout(new BorderLayout());
         dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
@@ -1094,9 +1119,30 @@ public class ResForgeFrame extends JFrame {
                 + " \u2014 weapon placement follows the animated skeleton");
         Theme.muted(hint);
         hint.setBorder(UiScaling.emptyBorder(2, 4, 2, 4));
-        dialog.add(hint, BorderLayout.SOUTH);
+        JLabel liveState = new JLabel(" Live preview linked to the boneoff JSON editor");
+        Theme.muted(liveState);
+        liveState.setBorder(UiScaling.emptyBorder(0, 4, 2, 4));
+        JPanel south = new JPanel();
+        south.setLayout(new BoxLayout(south, BoxLayout.Y_AXIS));
+        hint.setAlignmentX(Component.LEFT_ALIGNMENT);
+        liveState.setAlignmentX(Component.LEFT_ALIGNMENT);
+        south.add(hint);
+        south.add(liveState);
+        dialog.add(south, BorderLayout.SOUTH);
+        Runnable unsubscribe = draft.listen(payload -> {
+            try {
+                playback.updateBoneOff(payload);
+                liveState.setText(" Live preview updated from draft JSON");
+                Theme.muted(liveState);
+                player.refreshPose();
+            } catch(RuntimeException failure) {
+                liveState.setText(" Live preview kept last valid transform: " + failure.getMessage());
+                liveState.setForeground(new java.awt.Color(190, 70, 70));
+            }
+        });
         dialog.addWindowListener(new WindowAdapter() {
             @Override public void windowClosed(WindowEvent e) {
+                unsubscribe.run();
                 player.close();
                 view.dispose();
             }
@@ -1938,6 +1984,9 @@ public class ResForgeFrame extends JFrame {
             error(e.getMessage());
             return false;
         }
+        BoneOffDraft draft = boneOffDrafts.get(old);
+        if(draft != null)
+            boneOffDrafts.put(res.layers.get(idx), draft);
         thumbCache.remove(old);
         commit(before);
         markDirty();
@@ -1946,6 +1995,15 @@ public class ResForgeFrame extends JFrame {
         if(sel == idx)
             showSelected();
         return true;
+    }
+
+    private BoneOffDraft boneOffDraft(int idx) {
+        if(res == null || idx < 0 || idx >= res.layers.size())
+            throw new IllegalArgumentException("boneoff layer index is out of range");
+        Layer layer = res.layers.get(idx);
+        if(!layer.name.equals("boneoff"))
+            throw new IllegalArgumentException("layer " + idx + " is not a boneoff layer");
+        return boneOffDrafts.computeIfAbsent(layer, key -> new BoneOffDraft(key.data));
     }
 
     private void exportLayer(int idx) {

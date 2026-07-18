@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **Open equipped-item previews now update live while `boneoff` JSON is edited.**
+  Valid drafts are debounced into the modeless preview without changing the resource
+  or undo history; incomplete/invalid JSON keeps the last valid rendered transform
+  until editing resumes. **Apply JSON** remains the explicit save point.
 - **`boneoff` layers can now be previewed on an animated player.** The layer editor's
   **Preview equipped…** action selects a visible player model, bind skeleton, and
   arms animation from disk or the resource server, then renders the open weapon

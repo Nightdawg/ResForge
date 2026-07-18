@@ -71,6 +71,25 @@ class BoneOffPlaybackTest {
         assertEquals(-1f, pose.positions()[12], 1e-5f);
     }
 
+    @Test
+    void livePayloadUpdateIsAtomicAndRejectedUpdatesKeepLastTransform() {
+        BoneOffPlayback playback = playback(new MessageWriter().string("h")
+                .uint8(2).string("root").toByteArray());
+        byte[] moved = new MessageWriter().string("h")
+                .uint8(2).string("root")
+                .uint8(16).float32(0).float32(4).float32(0).toByteArray();
+        playback.updateBoneOff(moved);
+
+        BoneOffPlayback.Pose updated = playback.pose(playback.clips().get(0), 0);
+        assertEquals(4f, updated.positions()[10], 1e-6f);
+
+        byte[] invalid = new MessageWriter().string("h")
+                .uint8(2).string("missing").toByteArray();
+        assertThrows(IllegalArgumentException.class, () -> playback.updateBoneOff(invalid));
+        BoneOffPlayback.Pose retained = playback.pose(playback.clips().get(0), 0);
+        assertEquals(4f, retained.positions()[10], 1e-6f);
+    }
+
     private static BoneOffPlayback playback(byte[] boneOff) {
         ModelGeometry player = ModelGeometry.forAnimation(playerModel(), Integer.MAX_VALUE);
         ModelGeometry weapon = ModelGeometry.from(weaponModel());

@@ -3,12 +3,14 @@ package resforge.gui;
 import org.junit.jupiter.api.Test;
 import resforge.io.MessageWriter;
 import resforge.layers.ActionCodec;
+import resforge.layers.BoneOffCodec;
 import resforge.res.Layer;
 import resforge.res.Replacer;
 import resforge.res.ResContainer;
 
 import javax.swing.JButton;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import javax.swing.JTextArea;
 import java.awt.Component;
 import java.awt.Container;
@@ -67,6 +69,37 @@ class JsonEditStatusTest {
         button(content, "Preview equipped\u2026").doClick();
 
         assertEquals(0, host.previewedBoneOff);
+    }
+
+    @Test
+    void unsupportedBoneOffKeepsRawFallbackAndPreviewAction() {
+        RecordingHost host = host(new Layer("boneoff",
+                new MessageWriter().string("h").uint8(255).toByteArray()));
+        JPanel content = new JPanel();
+
+        new LayerEditors(host).buildBoneOffPanel(content, 0, host.res.layers.get(0));
+
+        assertTrue(components(content, JTextArea.class).isEmpty());
+        button(content, "Preview equipped\u2026");
+        button(content, "Export raw");
+    }
+
+    @Test
+    void removedBoneOffEditorCannotPublishItsPendingDebounce() throws Exception {
+        RecordingHost host = host(new Layer("boneoff",
+                new MessageWriter().string("h").uint8(2).string("hand").toByteArray()));
+        LayerEditors editors = new LayerEditors(host);
+        JPanel content = new JPanel();
+        editors.buildBoneOffPanel(content, 0, host.res.layers.get(0));
+        JTextArea area = component(content, JTextArea.class);
+
+        area.setText(area.getText().replace("\"hand\"", "\"root\""));
+        editors.invalidateAnimationPreview();
+        Thread.sleep(250);
+        SwingUtilities.invokeAndWait(() -> { });
+
+        List<?> ops = (List<?>) BoneOffCodec.decode(host.boneOffDraft.payload()).get("ops");
+        assertEquals("hand", ((java.util.Map<?, ?>) ops.get(0)).get("bone"));
     }
 
     private static void assertRejectedEdit(Layer layer, String editedJson) {
@@ -148,6 +181,7 @@ class JsonEditStatusTest {
         int undoPoints;
         String status;
         int previewedBoneOff = -1;
+        BoneOffDraft boneOffDraft;
 
         RecordingHost(ResContainer res) {
             this.res = res;
@@ -179,5 +213,10 @@ class JsonEditStatusTest {
         public void exportGltf() { }
         public void rebuildGltf() { }
         public void previewBoneOff(int layerIndex) { previewedBoneOff = layerIndex; }
+        public BoneOffDraft boneOffDraft(int layerIndex) {
+            if(boneOffDraft == null)
+                boneOffDraft = new BoneOffDraft(res.layers.get(layerIndex).data);
+            return boneOffDraft;
+        }
     }
 }

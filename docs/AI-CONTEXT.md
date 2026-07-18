@@ -111,7 +111,9 @@ built-in **3D viewer** (whole-model, software-rendered — see below; with a
 leaves, plus CPU-skinned `skan` playback with composed/individual clip selection,
 play/pause/stop, speed and timeline scrub; selected `boneoff` layers expose
 **Preview equipped…**, selecting a player model + bind skeleton + animation and
-rendering the open resource rigidly attached to the animated pose), 3D →
+rendering the open resource rigidly attached to the animated pose; debounced valid
+JSON drafts update every open preview without touching the document/undo history,
+while invalid drafts retain the last valid transform), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 For standalone `skan` export, one companion-resource dialog shows both required
@@ -236,7 +238,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   file/fetch/save orchestration + background threading), `LayerEditors` (builds the
   right-hand per-layer detail/editor panel, one `build*Panel` per kind; calls back
   through the small `EditorHost` interface so it owns no document/dialog/threading
-  state), `FetchDialog` / `CachePickerDialog` (the "Fetch from server" and "Open from
+  state), `BoneOffDraft` (retains editor text plus the last structurally valid encoded
+  payload and publishes it to modeless equipped previews; invalid text never mutates
+  the resource or active transform), `FetchDialog` / `CachePickerDialog` (the "Fetch from server" and "Open from
   game cache" modal dialogs, extracted as self-contained pickers that return the chosen
   path+base — the frame still does the actual fetch via `fetchFromServer`),
   `WinFileDialogs` (Windows-only JNA helper that shows the modern Explorer file

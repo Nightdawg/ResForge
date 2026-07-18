@@ -13,7 +13,8 @@ public final class BoneOffPlayback {
 
     private final SkanPlayback player;
     private final ModelGeometry geometry;
-    private final byte[] boneOff;
+    private volatile byte[] boneOff;
+    private volatile SkanPlayback.Pose latestPlayerPose;
     private final int weaponOffset;
 
     private BoneOffPlayback(SkanPlayback player, ModelGeometry geometry,
@@ -56,9 +57,11 @@ public final class BoneOffPlayback {
 
     public Pose pose(List<SkanInfo> clips, float time) {
         SkanPlayback.Pose playerPose = player.pose(clips, time);
+        latestPlayerPose = playerPose;
         float[] positions = playerPose.positions();
         float[] normals = playerPose.normals();
-        float[] transform = evaluate(boneOff, playerPose);
+        byte[] currentBoneOff = boneOff;
+        float[] transform = evaluate(currentBoneOff, playerPose);
         for(int i = weaponOffset; i < positions.length; i += 3) {
             float x = positions[i], y = positions[i + 1], z = positions[i + 2];
             positions[i] = transform[0] * x + transform[4] * y + transform[8] * z + transform[12];
@@ -78,6 +81,19 @@ public final class BoneOffPlayback {
             }
         }
         return new Pose(positions, normals);
+    }
+
+    /**
+     * Validates and installs a new preview-only boneoff payload. A rejected payload
+     * leaves the previous transform active.
+     */
+    public void updateBoneOff(byte[] payload) {
+        SkanPlayback.Pose pose = latestPlayerPose;
+        if(pose == null)
+            throw new IllegalStateException("boneoff preview pose is not initialized");
+        byte[] replacement = payload.clone();
+        evaluate(replacement, pose);
+        boneOff = replacement;
     }
 
     static float[] evaluate(byte[] payload, SkanPlayback.Pose pose) {

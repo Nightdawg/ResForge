@@ -203,6 +203,10 @@ final class SkanPlayerPanel extends JPanel implements AutoCloseable {
         });
     }
 
+    void refreshPose() {
+        submitPose();
+    }
+
     @Override public void close() {
         closed = true;
         timer.stop();

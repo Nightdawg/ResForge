@@ -53,4 +53,7 @@ interface EditorHost {
 
     /** Opens the selected boneoff layer as an animated equipped-item preview. */
     void previewBoneOff(int layerIndex);
+
+    /** Returns the live JSON draft shared by this layer's editor and previews. */
+    BoneOffDraft boneOffDraft(int layerIndex);
 }
