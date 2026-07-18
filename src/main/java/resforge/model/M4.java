@@ -39,6 +39,29 @@ final class M4 {
         return m;
     }
 
+    static float[] rotate(float x, float y, float z, float angle) {
+        float length = (float) Math.sqrt(x * x + y * y + z * z);
+        if(length < 1e-12f)
+            return identity();
+        return fromQuat((float) Math.cos(angle / 2.0),
+                (float) Math.sin(angle / 2.0) * x / length,
+                (float) Math.sin(angle / 2.0) * y / length,
+                (float) Math.sin(angle / 2.0) * z / length);
+    }
+
+    static float[] scale(float value) {
+        float[] m = identity();
+        m[0] = m[5] = m[10] = value;
+        return m;
+    }
+
+    static float[] nullRotation(float[] source) {
+        float[] result = source.clone();
+        result[0] = result[5] = result[10] = 1;
+        result[1] = result[2] = result[4] = result[6] = result[8] = result[9] = 0;
+        return result;
+    }
+
     /** Rotation matrix from a quaternion given as {@code [w, x, y, z]}. */
     static float[] fromQuat(float w, float x, float y, float z) {
         float[] m = identity();

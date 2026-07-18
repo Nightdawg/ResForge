@@ -6,6 +6,14 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- **`boneoff` layers can now be previewed on an animated player.** The layer editor's
+  **Preview equipped…** action selects a visible player model, bind skeleton, and
+  arms animation from disk or the resource server, then renders the open weapon
+  attached to the live skeletal pose. All supported translate, rotate, equip-point,
+  bone-align, null-rotation, and scale operations are evaluated in client order.
+
 ### Fixed
 
 - **Combined Blender actions can now rebuild multi-layer skeletal animations.**

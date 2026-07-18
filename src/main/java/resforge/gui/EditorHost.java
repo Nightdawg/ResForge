@@ -50,4 +50,7 @@ interface EditorHost {
 
     /** Rebuilds the open resource's geometry from an edited glTF. */
     void rebuildGltf();
+
+    /** Opens the selected boneoff layer as an animated equipped-item preview. */
+    void previewBoneOff(int layerIndex);
 }

@@ -15,7 +15,28 @@ public final class SkanPlayback {
     private static final int MAX_BONES = 512;
     private static final int MAX_SOUP_VERTICES = 500_000;
 
-    public record Pose(float[] positions, float[] normals) {
+    public static final class Pose {
+        private final float[] positions;
+        private final float[] normals;
+        private final Map<String, float[]> boneWorld;
+
+        private Pose(float[] positions, float[] normals, Map<String, float[]> boneWorld) {
+            this.positions = positions;
+            this.normals = normals;
+            this.boneWorld = boneWorld;
+        }
+
+        public float[] positions() {
+            return positions;
+        }
+
+        public float[] normals() {
+            return normals;
+        }
+
+        float[] boneWorld(String name) {
+            return boneWorld.get(name);
+        }
     }
 
     public record TimeState(float time, boolean backward, boolean done) {
@@ -161,7 +182,10 @@ public final class SkanPlayback {
                 normals[p + 2] = nz / length;
             }
         }
-        return new Pose(positions, normals);
+        Map<String, float[]> boneWorld = new LinkedHashMap<>();
+        for(int i = 0; i < bones.size(); i++)
+            boneWorld.put(bones.get(i).name, world[i]);
+        return new Pose(positions, normals, boneWorld);
     }
 
     public boolean canCombineAll() {

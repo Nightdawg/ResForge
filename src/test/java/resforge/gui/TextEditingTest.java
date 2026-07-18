@@ -109,5 +109,6 @@ class TextEditingTest {
         public void setAnimTimer(javax.swing.Timer timer) { }
         public void exportGltf() { }
         public void rebuildGltf() { }
+        public void previewBoneOff(int layerIndex) { }
     }
 }

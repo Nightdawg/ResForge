@@ -1,6 +1,7 @@
 package resforge.gui;
 
 import resforge.layers.SkanInfo;
+import resforge.model.BoneOffPlayback;
 import resforge.model.SkanPlayback;
 
 import javax.swing.JButton;
@@ -20,7 +21,16 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** Playback controls and worker lifecycle for a skinned {@link Model3DView}. */
 final class SkanPlayerPanel extends JPanel implements AutoCloseable {
-    private final SkanPlayback playback;
+    private interface Playback {
+        List<SkanInfo> clips();
+        boolean canCombineAll();
+        GeometryPose pose(List<SkanInfo> clips, float time);
+    }
+
+    private record GeometryPose(float[] positions, float[] normals) {
+    }
+
+    private final Playback playback;
     private final Model3DView view;
     private final JComboBox<ClipItem> clips;
     private final JButton play = new JButton("Play");
@@ -44,6 +54,28 @@ final class SkanPlayerPanel extends JPanel implements AutoCloseable {
     private long lastTick;
 
     SkanPlayerPanel(SkanPlayback playback, Model3DView view) {
+        this(new Playback() {
+            public List<SkanInfo> clips() { return playback.clips(); }
+            public boolean canCombineAll() { return playback.canCombineAll(); }
+            public GeometryPose pose(List<SkanInfo> clips, float time) {
+                SkanPlayback.Pose pose = playback.pose(clips, time);
+                return new GeometryPose(pose.positions(), pose.normals());
+            }
+        }, view);
+    }
+
+    SkanPlayerPanel(BoneOffPlayback playback, Model3DView view) {
+        this(new Playback() {
+            public List<SkanInfo> clips() { return playback.clips(); }
+            public boolean canCombineAll() { return playback.canCombineAll(); }
+            public GeometryPose pose(List<SkanInfo> clips, float time) {
+                BoneOffPlayback.Pose pose = playback.pose(clips, time);
+                return new GeometryPose(pose.positions(), pose.normals());
+            }
+        }, view);
+    }
+
+    private SkanPlayerPanel(Playback playback, Model3DView view) {
         super(new FlowLayout(FlowLayout.LEFT, 6, 2));
         this.playback = playback;
         this.view = view;
@@ -150,7 +182,7 @@ final class SkanPlayerPanel extends JPanel implements AutoCloseable {
         worker.execute(() -> {
             if(closed || request != generation.get())
                 return;
-            SkanPlayback.Pose pose;
+            GeometryPose pose;
             try {
                 pose = playback.pose(clip.clips, requestedTime);
             } catch(RuntimeException failure) {

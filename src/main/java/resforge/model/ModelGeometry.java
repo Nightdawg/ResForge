@@ -19,6 +19,9 @@ import java.util.Map;
  * {@code null} from {@link #from} when the resource has no usable geometry.
  */
 public final class ModelGeometry {
+    public record Combination(ModelGeometry geometry, int secondPositionOffset) {
+    }
+
     /** 9 floats per triangle (3 vertices × xyz), Haven Z-up. */
     public final float[] positions;
     /** 9 floats per triangle (3 vertices × xyz), unit normals. */
@@ -128,6 +131,77 @@ public final class ModelGeometry {
     /** True if at least one material has a resolvable local texture. */
     public boolean hasTextures() {
         return !materials.isEmpty();
+    }
+
+    /**
+     * Combines two independently decoded resources into one viewer geometry.
+     * Palette and material indices are remapped, while skinning is retained from
+     * the first model; the second model remains rigid for equipped-item playback.
+     */
+    public static Combination combine(ModelGeometry first, ModelGeometry second) {
+        int firstPalette = first.localTextures.size() + first.externalTextures.size();
+        int firstMaterials = first.materials.size();
+
+        float[] positions = concat(first.positions, second.positions);
+        float[] normals = concat(first.normals, second.normals);
+        float[] uv = concat(first.uv, second.uv);
+        int[] triMat = java.util.Arrays.copyOf(first.triMat,
+                first.triMat.length + second.triMat.length);
+        for(int i = 0; i < second.triMat.length; i++)
+            triMat[first.triMat.length + i] = second.triMat[i] < 0
+                    ? -1 : second.triMat[i] + firstMaterials;
+
+        java.util.List<Material> materials = new java.util.ArrayList<>();
+        for(Material material : first.materials)
+            materials.add(new Material(material.matid, material.defaultTex, material.localBase));
+        for(Material material : second.materials)
+            materials.add(new Material(material.matid, material.defaultTex + firstPalette,
+                    material.localBase));
+
+        java.util.List<byte[]> textures = new java.util.ArrayList<>();
+        textures.addAll(first.localTextures);
+        textures.addAll(first.externalTextures);
+        textures.addAll(second.localTextures);
+        textures.addAll(second.externalTextures);
+        java.util.List<byte[]> masks = new java.util.ArrayList<>();
+        masks.addAll(first.localMasks);
+        masks.addAll(first.externalMasks);
+        masks.addAll(second.localMasks);
+        masks.addAll(second.externalMasks);
+        java.util.List<Integer> textureIds = new java.util.ArrayList<>();
+        textureIds.addAll(first.localTexIds);
+        for(int i = first.localTexIds.size(); i < firstPalette; i++)
+            textureIds.add(-1);
+        textureIds.addAll(second.localTexIds);
+        int secondPalette = second.localTextures.size() + second.externalTextures.size();
+        for(int i = second.localTexIds.size(); i < secondPalette; i++)
+            textureIds.add(-1);
+
+        int[] joints;
+        float[] weights;
+        if(first.boneNames.isEmpty()) {
+            joints = new int[0];
+            weights = new float[0];
+        } else {
+            int vertices = positions.length / 3;
+            joints = new int[vertices * 4];
+            weights = new float[vertices * 4];
+            System.arraycopy(first.joints, 0, joints, 0, first.joints.length);
+            System.arraycopy(first.weights, 0, weights, 0, first.weights.length);
+        }
+        ModelGeometry combined = new ModelGeometry(positions, normals, uv, triMat, materials,
+                textures, masks, textureIds, java.util.List.of(), java.util.List.of(),
+                first.boneNames, joints, weights,
+                first.triangleCount + second.triangleCount,
+                first.vertexCount + second.vertexCount,
+                first.submeshCount + second.submeshCount);
+        return new Combination(combined, first.positions.length);
+    }
+
+    private static float[] concat(float[] first, float[] second) {
+        float[] result = java.util.Arrays.copyOf(first, first.length + second.length);
+        System.arraycopy(second, 0, result, first.length, second.length);
+        return result;
     }
 
     /** Build the geometry for a resource (local textures only), or {@code null} if it

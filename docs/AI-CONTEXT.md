@@ -109,7 +109,9 @@ export), **dependency/reference view** for `deps`/`rlink`/`src` (read-only;
 built-in **3D viewer** (whole-model, software-rendered — see below; with a
 **per-material texture picker** to swap each part's local `tex`, e.g. seasonal
 leaves, plus CPU-skinned `skan` playback with composed/individual clip selection,
-play/pause/stop, speed and timeline scrub), 3D →
+play/pause/stop, speed and timeline scrub; selected `boneoff` layers expose
+**Preview equipped…**, selecting a player model + bind skeleton + animation and
+rendering the open resource rigidly attached to the animated pose), 3D →
 **Export/Rebuild glTF**. Layer
 ops: **Add / Delete / Move up·down** (layer type/name is read-only).
 For standalone `skan` export, one companion-resource dialog shows both required
@@ -187,7 +189,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   toggle can texture those parts; `hasExternalStatic(res)` is an offline (no-fetch) check
   the viewer uses to show that toggle only when a model has such materials; runtime
   varmat / `Dyntex` stay shaded),
-  `M4` (column-major 4×4 maths), `GltfExport` (geometry → Blender-ready binary
+  `M4` (column-major 4×4 maths), `SkanPlayback` (client-equivalent skeletal pose +
+  CPU skinning), `BoneOffPlayback` (combines player/item viewer geometry and evaluates
+  all `boneoff` transforms against each animated bone pose), `GltfExport` (geometry → Blender-ready binary
   glTF `.glb`, with both UV sets,
   embedded textures **and skinning** — skel→skin, bone weights→`JOINTS_0`/
   `WEIGHTS_0` — plus per-layer/composed skeletal actions with explicit loop-closing

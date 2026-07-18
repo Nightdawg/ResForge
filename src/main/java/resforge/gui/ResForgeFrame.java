@@ -1,6 +1,7 @@
 package resforge.gui;
 
 import resforge.model.ExternalTextures;
+import resforge.model.BoneOffPlayback;
 import resforge.model.GltfExport;
 import resforge.model.GltfImport;
 import resforge.model.ModelGeometry;
@@ -92,7 +93,7 @@ public class ResForgeFrame extends JFrame {
             new JSpinner(new SpinnerNumberModel(0, 0, 65535, 1));
     private boolean updatingVersion;
     private JButton addBtn, delBtn, upBtn, downBtn;
-    private CompanionResource lastAnimationSkeleton, lastAnimationModel;
+    private CompanionResource lastAnimationSkeleton, lastAnimationModel, lastBoneOffAnimation;
     private AudioPlayerPanel currentPlayer;
     private javax.swing.Timer animTimer;
     private final ThumbnailCache thumbCache = new ThumbnailCache();
@@ -115,6 +116,7 @@ public class ResForgeFrame extends JFrame {
         public void setAnimTimer(javax.swing.Timer t) { animTimer = t; }
         public void exportGltf() { doExportGltf(); }
         public void rebuildGltf() { doRebuildGltf(); }
+        public void previewBoneOff(int idx) { doPreviewBoneOff(idx); }
     });
 
     private static final int UNDO_LIMIT = 100;
@@ -145,6 +147,17 @@ public class ResForgeFrame extends JFrame {
         AnimationExportFiles(CompanionResource skeleton, CompanionResource model) {
             this.skeleton = skeleton;
             this.model = model;
+        }
+    }
+
+    private static final class BoneOffPreviewFiles {
+        final CompanionResource skeleton, model, animation;
+
+        BoneOffPreviewFiles(CompanionResource skeleton, CompanionResource model,
+                            CompanionResource animation) {
+            this.skeleton = skeleton;
+            this.model = model;
+            this.animation = animation;
         }
     }
 
@@ -205,6 +218,10 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
+    private enum CompanionKind {
+        SKELETON, MODEL, ANIMATION
+    }
+
     private static final class BusyProgress {
         private final JDialog dialog;
 
@@ -240,6 +257,7 @@ public class ResForgeFrame extends JFrame {
                     java.util.prefs.Preferences.userNodeForPackage(ResForgeFrame.class);
             lastAnimationSkeleton = loadCompanionPreset(prefs, "companionSkeleton");
             lastAnimationModel = loadCompanionPreset(prefs, "companionModel");
+            lastBoneOffAnimation = loadCompanionPreset(prefs, "boneOffAnimation");
         } catch(SecurityException ignored) {
         }
         setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -996,6 +1014,98 @@ public class ResForgeFrame extends JFrame {
         t.start();
     }
 
+    private void doPreviewBoneOff(int layerIndex) {
+        if(res == null || layerIndex < 0 || layerIndex >= res.layers.size())
+            return;
+        Layer layer = res.layers.get(layerIndex);
+        if(!layer.name.equals("boneoff")) {
+            error("The selected layer is not a boneoff layer.");
+            return;
+        }
+        BoneOffPreviewFiles companions = chooseBoneOffCompanionFiles();
+        if(companions == null)
+            return;
+        byte[] weaponBytes = res.serialize();
+        byte[] boneOff = layer.data.clone();
+        String title = (file != null ? file.getFileName().toString() : "weapon")
+                + " \u2014 " + resforge.layers.BoneOffInfo.parse(layer.data).name;
+        setStatus("Building equipped preview \u2026");
+        Thread thread = new Thread(() -> {
+            BoneOffPlayback playback = null;
+            Model3DView.DecodedPalette palette = null;
+            String failure = null;
+            try {
+                ResContainer weapon = ResContainer.parse(weaponBytes);
+                ResContainer model = ResContainer.parse(companions.model.bytes());
+                ResContainer skeleton = ResContainer.parse(companions.skeleton.bytes());
+                ResContainer animation = ResContainer.parse(companions.animation.bytes());
+                ModelGeometry playerGeometry =
+                        ModelGeometry.forAnimation(model, PreviewBudget.MAX_RENDER_TRIANGLES);
+                ModelGeometry weaponGeometry =
+                        ModelGeometry.from(weapon, null, PreviewBudget.MAX_RENDER_TRIANGLES);
+                if(playerGeometry == null)
+                    throw new IllegalArgumentException("The selected player model has no usable geometry.");
+                if(weaponGeometry == null)
+                    throw new IllegalArgumentException("The open resource has no usable weapon geometry.");
+                playback = BoneOffPlayback.from(playerGeometry, weaponGeometry,
+                        skeleton, animation, boneOff);
+                if(playback == null)
+                    throw new IllegalArgumentException(
+                            "The selected model, skeleton, and animation are not compatible.");
+                palette = Model3DView.preparePalette(playback.geometry());
+            } catch(Exception e) {
+                failure = e.getMessage();
+            }
+            BoneOffPlayback completed = playback;
+            Model3DView.DecodedPalette decoded = palette;
+            String error = failure;
+            SwingUtilities.invokeLater(() -> {
+                setStatus("Ready");
+                if(completed == null || decoded == null) {
+                    info("Could not build the equipped preview: " + error);
+                    return;
+                }
+                showBoneOffDialog(title, completed, decoded);
+            });
+        }, "boneoff-preview");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private void showBoneOffDialog(String title, BoneOffPlayback playback,
+                                   Model3DView.DecodedPalette palette) {
+        JDialog dialog = new JDialog(this, "Equipped preview \u2014 " + title, false);
+        dialog.setLayout(new BorderLayout());
+        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+        Model3DView view;
+        try {
+            view = new Model3DView(playback.geometry(), palette);
+        } catch(PreviewFailure e) {
+            info("Could not preview the equipped item: " + e.getMessage());
+            return;
+        }
+        SkanPlayerPanel player = new SkanPlayerPanel(playback, view);
+        JPanel controls = build3DControls(playback.geometry(), view, null);
+        player.setAlignmentX(Component.LEFT_ALIGNMENT);
+        controls.add(player);
+        dialog.add(controls, BorderLayout.NORTH);
+        dialog.add(view, BorderLayout.CENTER);
+        JLabel hint = new JLabel(" Drag: orbit \u00b7 Shift/Right-drag: pan \u00b7 Wheel: zoom"
+                + " \u2014 weapon placement follows the animated skeleton");
+        Theme.muted(hint);
+        hint.setBorder(UiScaling.emptyBorder(2, 4, 2, 4));
+        dialog.add(hint, BorderLayout.SOUTH);
+        dialog.addWindowListener(new WindowAdapter() {
+            @Override public void windowClosed(WindowEvent e) {
+                player.close();
+                view.dispose();
+            }
+        });
+        dialog.pack();
+        dialog.setLocationRelativeTo(this);
+        dialog.setVisible(true);
+    }
+
     private void show3DDialog(String title, byte[] snapshot, ModelGeometry geoPlain,
                               Model3DView.DecodedPalette palettePlain, boolean hasExternal,
                               SkanPlayback playback) {
@@ -1324,63 +1434,14 @@ public class ResForgeFrame extends JFrame {
     }
 
     private AnimationExportFiles chooseAnimationCompanionFiles(CompanionAction action) {
-        CompanionResource[] skeleton = {companionDefault(lastAnimationSkeleton, "body.res")};
-        CompanionResource[] model = {companionDefault(lastAnimationModel, "male.res")};
-        JTextField skeletonPath = new JTextField(
-                skeleton[0] == null ? "" : skeleton[0].display, 42);
-        JTextField modelPath = new JTextField(model[0] == null ? "" : model[0].display, 42);
-        skeletonPath.setEditable(false);
-        modelPath.setEditable(false);
-        FileNameExtensionFilter filter = new FileNameExtensionFilter("Haven resource (*.res)", "res");
-
-        JButton browseSkeleton = new JButton("Browse\u2026");
-        browseSkeleton.addActionListener(e -> {
-            Path selected = openDialog("Select bind-skeleton resource", filter);
-            if(selected != null) {
-                skeleton[0] = CompanionResource.local(selected);
-                skeletonPath.setText(skeleton[0].display);
-            }
-        });
-        JButton fetchSkeleton = new JButton("Fetch from server\u2026");
-        fetchSkeleton.addActionListener(e -> {
-            CompanionResource selected =
-                    fetchCompanion(fetchSkeleton, "gfx/borka/body", "bind skeleton", true);
-            if(selected != null) {
-                skeleton[0] = selected;
-                skeletonPath.setText(selected.display);
-            }
-        });
-        JButton browseModel = new JButton("Browse\u2026");
-        browseModel.addActionListener(e -> {
-            Path selected = openDialog("Select preview-model resource", filter);
-            if(selected != null) {
-                model[0] = CompanionResource.local(selected);
-                modelPath.setText(model[0].display);
-            }
-        });
-        JButton fetchModel = new JButton("Fetch from server\u2026");
-        fetchModel.addActionListener(e -> {
-            CompanionResource selected =
-                    fetchCompanion(fetchModel, "gfx/borka/male", "preview model", false);
-            if(selected != null) {
-                model[0] = selected;
-                modelPath.setText(selected.display);
-            }
-        });
-
-        JPanel skeletonButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        skeletonButtons.add(browseSkeleton);
-        skeletonButtons.add(fetchSkeleton);
-        JPanel skeletonRow = new JPanel(new BorderLayout(6, 0));
-        skeletonRow.add(skeletonPath, BorderLayout.CENTER);
-        skeletonRow.add(skeletonButtons, BorderLayout.EAST);
-        JPanel modelButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
-        modelButtons.add(browseModel);
-        modelButtons.add(fetchModel);
-        JPanel modelRow = new JPanel(new BorderLayout(6, 0));
-        modelRow.add(modelPath, BorderLayout.CENTER);
-        modelRow.add(modelButtons, BorderLayout.EAST);
-
+        CompanionSelector skeleton = new CompanionSelector(
+                companionDefault(lastAnimationSkeleton, "body.res"),
+                "Select bind-skeleton resource", "gfx/borka/body", "bind skeleton",
+                CompanionKind.SKELETON);
+        CompanionSelector model = new CompanionSelector(
+                companionDefault(lastAnimationModel, "male.res"),
+                "Select preview-model resource", "gfx/borka/male", "preview model",
+                CompanionKind.MODEL);
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
         JLabel help = new JLabel("<html>This animation resource has no rig or visible mesh. "
@@ -1388,19 +1449,9 @@ public class ResForgeFrame extends JFrame {
         help.setAlignmentX(Component.LEFT_ALIGNMENT);
         panel.add(help);
         panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
-        JLabel skeletonLabel = new JLabel("Bind skeleton (.res) \u2014 bone hierarchy and rest pose:");
-        skeletonLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        skeletonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(skeletonLabel);
-        panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
-        panel.add(skeletonRow);
-        panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
-        JLabel modelLabel = new JLabel("Preview model (.res) \u2014 visible skinned mesh:");
-        modelLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        modelRow.setAlignmentX(Component.LEFT_ALIGNMENT);
-        panel.add(modelLabel);
-        panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
-        panel.add(modelRow);
+        addCompanionSelector(panel, "Bind skeleton (.res) \u2014 bone hierarchy and rest pose:",
+                skeleton);
+        addCompanionSelector(panel, "Preview model (.res) \u2014 visible skinned mesh:", model);
 
         Object[] options = {action.button, "Cancel"};
         while(true) {
@@ -1409,12 +1460,10 @@ public class ResForgeFrame extends JFrame {
                     JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
             if(result != 0)
                 return null;
-            CompanionResource selectedSkeleton =
-                    resolveCompanion(skeletonPath.getText(), skeleton[0], "Bind skeleton");
+            CompanionResource selectedSkeleton = skeleton.resolve();
             if(selectedSkeleton == null)
                 continue;
-            CompanionResource selectedModel =
-                    resolveCompanion(modelPath.getText(), model[0], "Preview model");
+            CompanionResource selectedModel = model.resolve();
             if(selectedModel == null)
                 continue;
             lastAnimationSkeleton = selectedSkeleton;
@@ -1425,8 +1474,111 @@ public class ResForgeFrame extends JFrame {
         }
     }
 
+    private BoneOffPreviewFiles chooseBoneOffCompanionFiles() {
+        CompanionSelector skeleton = new CompanionSelector(
+                companionDefault(lastAnimationSkeleton, "body.res"),
+                "Select bind-skeleton resource", "gfx/borka/body", "bind skeleton",
+                CompanionKind.SKELETON);
+        CompanionSelector model = new CompanionSelector(
+                companionDefault(lastAnimationModel, "male.res"),
+                "Select player-model resource", "gfx/borka/male", "player model",
+                CompanionKind.MODEL);
+        CompanionSelector animation = new CompanionSelector(lastBoneOffAnimation,
+                "Select arms-animation resource", "gfx/borka/arms-b12axe", "arms animation",
+                CompanionKind.ANIMATION);
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JLabel help = new JLabel("<html>Select the visible player, its bind skeleton, and the "
+                + "pose animation used to evaluate this boneoff layer.</html>");
+        help.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(help);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
+        addCompanionSelector(panel, "Bind skeleton (.res) \u2014 usually gfx/borka/body:", skeleton);
+        addCompanionSelector(panel, "Player model (.res) \u2014 e.g. gfx/borka/male:", model);
+        addCompanionSelector(panel, "Animation (.res) \u2014 e.g. gfx/borka/arms-b12axe:", animation);
+
+        Object[] options = {"Preview", "Cancel"};
+        while(true) {
+            int result = JOptionPane.showOptionDialog(this, panel,
+                    "Equipped-item preview resources", JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+            if(result != 0)
+                return null;
+            CompanionResource selectedSkeleton = skeleton.resolve();
+            if(selectedSkeleton == null)
+                continue;
+            CompanionResource selectedModel = model.resolve();
+            if(selectedModel == null)
+                continue;
+            CompanionResource selectedAnimation = animation.resolve();
+            if(selectedAnimation == null)
+                continue;
+            lastAnimationSkeleton = selectedSkeleton;
+            lastAnimationModel = selectedModel;
+            lastBoneOffAnimation = selectedAnimation;
+            saveCompanionPreset("companionSkeleton", selectedSkeleton);
+            saveCompanionPreset("companionModel", selectedModel);
+            saveCompanionPreset("boneOffAnimation", selectedAnimation);
+            return new BoneOffPreviewFiles(selectedSkeleton, selectedModel, selectedAnimation);
+        }
+    }
+
+    private void addCompanionSelector(JPanel panel, String label, CompanionSelector selector) {
+        JLabel component = new JLabel(label);
+        component.setAlignmentX(Component.LEFT_ALIGNMENT);
+        selector.row.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.add(component);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(3)));
+        panel.add(selector.row);
+        panel.add(Box.createVerticalStrut(UiScaling.scale(10)));
+    }
+
+    private final class CompanionSelector {
+        final CompanionResource[] selected;
+        final JTextField path;
+        final JPanel row;
+        final String role;
+
+        CompanionSelector(CompanionResource initial, String browseTitle, String suggestedPath,
+                          String role, CompanionKind kind) {
+            this.selected = new CompanionResource[]{initial};
+            this.path = new JTextField(initial == null ? "" : initial.display, 42);
+            this.path.setEditable(false);
+            this.role = role;
+            FileNameExtensionFilter filter =
+                    new FileNameExtensionFilter("Haven resource (*.res)", "res");
+            JButton browse = new JButton("Browse\u2026");
+            browse.addActionListener(e -> {
+                Path file = openDialog(browseTitle, filter);
+                if(file != null) {
+                    selected[0] = CompanionResource.local(file);
+                    path.setText(selected[0].display);
+                }
+            });
+            JButton fetch = new JButton("Fetch from server\u2026");
+            fetch.addActionListener(e -> {
+                CompanionResource resource =
+                        fetchCompanion(fetch, suggestedPath, role, kind);
+                if(resource != null) {
+                    selected[0] = resource;
+                    path.setText(resource.display);
+                }
+            });
+            JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+            buttons.add(browse);
+            buttons.add(fetch);
+            this.row = new JPanel(new BorderLayout(6, 0));
+            this.row.add(path, BorderLayout.CENTER);
+            this.row.add(buttons, BorderLayout.EAST);
+        }
+
+        CompanionResource resolve() {
+            return resolveCompanion(path.getText(), selected[0], role);
+        }
+    }
+
     private CompanionResource fetchCompanion(Component parent, String suggestedPath,
-                                                 String role, boolean skeletonRole) {
+                                                 String role, CompanionKind kind) {
         FetchDialog.Selection selection = FetchDialog.show(parent, suggestedPath);
         if(selection == null)
             return null;
@@ -1458,10 +1610,15 @@ public class ResForgeFrame extends JFrame {
             try {
                 byte[] data = resforge.net.ResourceFetcher.fetch(selection.base, selection.path);
                 ResContainer parsed = ResContainer.parse(data);
-                boolean valid = skeletonRole
-                        ? parsed.layers.stream().anyMatch(layer -> layer.name.equals("skel"))
-                        : parsed.layers.stream().anyMatch(layer -> layer.name.equals("vbuf2"))
-                                && parsed.layers.stream().anyMatch(layer -> layer.name.equals("mesh"));
+                boolean valid = switch(kind) {
+                    case SKELETON ->
+                            parsed.layers.stream().anyMatch(layer -> layer.name.equals("skel"));
+                    case MODEL ->
+                            parsed.layers.stream().anyMatch(layer -> layer.name.equals("vbuf2"))
+                                    && parsed.layers.stream().anyMatch(layer -> layer.name.equals("mesh"));
+                    case ANIMATION ->
+                            parsed.layers.stream().anyMatch(layer -> layer.name.equals("skan"));
+                };
                 if(!valid)
                     throw new IllegalArgumentException("Fetched resource is not a compatible " + role + ".");
                 result[0] = CompanionResource.server(selection.path, selection.base, data);
@@ -1647,9 +1804,11 @@ public class ResForgeFrame extends JFrame {
             case "material":
             case "hitbox":
             case "collision":
-            case "equip point":
             case "light":
                 editors.buildJsonPanel(content, idx, l);
+                break;
+            case "equip point":
+                editors.buildBoneOffPanel(content, idx, l);
                 break;
             case "animation":
                 editors.buildAnimPanel(content, idx, l);

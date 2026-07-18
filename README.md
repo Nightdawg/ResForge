@@ -60,7 +60,9 @@ Replace/Export for icons and 3D textures; a built-in **sound player** (Play /
 Stop / draggable seek) for audio; a live **animation preview** that plays sprite
 animations; an editable **text box** for valid UTF-8 tooltips/pagina (invalid
 payloads stay raw);
-an editable **JSON box** for properties and keybinds; Replace/Export for sounds
+an editable **JSON box** for properties and keybinds; `boneoff` layers also provide
+**Preview equipped…**, which renders the open item on a selected player model,
+skeleton, and animation; Replace/Export for sounds
 and fonts; a built-in **3D viewer** (**View 3D** — a dependency-free software
 renderer that shows the model **textured** and shaded, with an optional wireframe
 and mouse orbit/zoom/pan, in its bind pose; a **per-material texture picker** lets
@@ -220,6 +222,13 @@ play/pause, stop, speed and timeline scrubbing. Multi-layer resources default to
 components remain selectable for diagnosis. The selected local files or server
 paths are remembered across restarts; remembered server companions download lazily
 and remain cached for the current session.
+
+Selecting a `boneoff` layer exposes **Preview equipped…**. Choose a visible player
+model (for example `gfx/borka/male`), its bind skeleton (`gfx/borka/body`), and an
+arms animation (for example `gfx/borka/arms-b12axe`) from disk or the resource server.
+ResForge CPU-skins the player and evaluates the selected equip-point program against
+every animated pose, rendering the open resource's weapon geometry in the same
+depth-buffered view. The three companion selections are remembered across restarts.
 
 ## Building / testing
 

@@ -242,6 +242,13 @@ final class LayerEditors {
         addJsonEditor(content, idx, l, 320);
     }
 
+    void buildBoneOffPanel(JPanel content, int idx, Layer l) {
+        content.add(buttonRow(new JButton(act("Preview equipped\u2026",
+                () -> host.previewBoneOff(idx)))));
+        content.add(Box.createVerticalStrut(8));
+        addJsonEditor(content, idx, l, 280);
+    }
+
     private void addJsonEditor(JPanel content, int idx, Layer l, int height) {
         String json = GuiSupport.editableJson(l);
         if(json == null) {

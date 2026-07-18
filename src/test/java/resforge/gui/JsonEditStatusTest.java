@@ -57,6 +57,18 @@ class JsonEditStatusTest {
         assertEquals("New", ActionCodec.decode(host.res.layers.get(0).data).get("name"));
     }
 
+    @Test
+    void boneOffEditorOffersEquippedPreviewForSelectedLayer() {
+        RecordingHost host = host(new Layer("boneoff",
+                new MessageWriter().string("h").uint8(2).string("hand").toByteArray()));
+        JPanel content = new JPanel();
+        new LayerEditors(host).buildBoneOffPanel(content, 0, host.res.layers.get(0));
+
+        button(content, "Preview equipped\u2026").doClick();
+
+        assertEquals(0, host.previewedBoneOff);
+    }
+
     private static void assertRejectedEdit(Layer layer, String editedJson) {
         RecordingHost host = host(layer);
         byte[] original = Arrays.copyOf(layer.data, layer.data.length);
@@ -135,6 +147,7 @@ class JsonEditStatusTest {
         boolean dirty;
         int undoPoints;
         String status;
+        int previewedBoneOff = -1;
 
         RecordingHost(ResContainer res) {
             this.res = res;
@@ -165,5 +178,6 @@ class JsonEditStatusTest {
         public void setAnimTimer(javax.swing.Timer timer) { }
         public void exportGltf() { }
         public void rebuildGltf() { }
+        public void previewBoneOff(int layerIndex) { previewedBoneOff = layerIndex; }
     }
 }

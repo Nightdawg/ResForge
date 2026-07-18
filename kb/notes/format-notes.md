@@ -449,6 +449,12 @@ Formats:
   because oct2uvec→uvec2oct is **not** byte-exact (drifts ±1 on 4/20 sample instances) —
   storing the raw components keeps all 28 sample boneoffs losslessly editable, while the
   mnorm16 angle (exact) is exposed as a friendly turn-fraction `angleTurns`.
+  Preview evaluation mirrors the render-state composition: opcodes are applied in
+  payload order and each ordinary transform is post-multiplied onto the accumulated
+  matrix. `eqpoint` contributes the named bone's current animated world transform;
+  `bonealign` contributes `translate(origin) * rotate(ref onto target-origin)`;
+  `nullrot` replaces the accumulated upper 3x3 with identity while preserving its
+  translation, exactly like the client's `Transform.nullrot`.
 Confirmed decoding every sample to EOM: light 2, skel 3, skan 5, boneoff 28 (all 28
 boneoffs + both lights round-trip byte-exact, `verify` BoneOff histogram = `json 28`,
 Light histogram = `json 2`). e.g.
