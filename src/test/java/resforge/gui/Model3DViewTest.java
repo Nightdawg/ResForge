@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.Graphics2D;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayDeque;
@@ -16,6 +17,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -29,6 +31,26 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * leaf" feature). Two solid-colour textures stand in for the variants.
  */
 class Model3DViewTest {
+
+    @Test
+    void cameraRightPointsToScreenRightWithoutMirroring() {
+        assertArrayEquals(new double[]{0, 1, 0},
+                Model3DView.cameraRight(new double[]{1, 0, 0}), 1e-12);
+    }
+
+    @Test
+    void horizontalOrbitDragFollowsThePointer() throws Exception {
+        ModelGeometry geo = texturedGeometry();
+        Model3DView view = new Model3DView(geo, Model3DView.preparePalette(geo));
+        double initialYaw = view.yawForTest();
+        view.dispatchEvent(new MouseEvent(view, MouseEvent.MOUSE_PRESSED, 0,
+                MouseEvent.BUTTON1_DOWN_MASK, 20, 20, 1, false, MouseEvent.BUTTON1));
+        view.dispatchEvent(new MouseEvent(view, MouseEvent.MOUSE_DRAGGED, 1,
+                MouseEvent.BUTTON1_DOWN_MASK, 40, 20, 0, false, MouseEvent.NOBUTTON));
+
+        assertEquals(initialYaw - 0.2, view.yawForTest(), 1e-12);
+        view.dispose();
+    }
 
     private static byte[] solidPng(Color c) throws Exception {
         BufferedImage bi = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);

@@ -62,7 +62,8 @@ animations; an editable **text box** for valid UTF-8 tooltips/pagina (invalid
 payloads stay raw);
 an editable **JSON box** for properties and keybinds; `boneoff` layers also provide
 **Preview equipped…**, which renders the open item on a selected player model,
-skeleton, and animation; Replace/Export for sounds
+skeleton, and animation while preserving its authored left/right orientation;
+Replace/Export for sounds
 and fonts; a built-in **3D viewer** (**View 3D** — a dependency-free software
 renderer that shows the model **textured** and shaded, with an optional wireframe
 and mouse orbit/zoom/pan, in its bind pose; a **per-material texture picker** lets

@@ -182,7 +182,7 @@ final class Model3DView extends JPanel {
                     panX -= dx * dist / Math.max(1, getHeight());
                     panY += dy * dist / Math.max(1, getHeight());
                 } else {
-                    yaw += dx * 0.01;
+                    yaw -= dx * 0.01;
                     pitch += dy * 0.01;
                     double limit = Math.toRadians(89);
                     pitch = Math.max(-limit, Math.min(limit, pitch));
@@ -341,6 +341,10 @@ final class Model3DView extends JPanel {
         return renderGeneration.get();
     }
 
+    double yawForTest() {
+        return yaw;
+    }
+
     void dispose() {
         disposed = true;
         renderGeneration.incrementAndGet();
@@ -440,8 +444,8 @@ final class Model3DView extends JPanel {
             double cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
             double cy = Math.cos(state.yaw), sinYaw = Math.sin(state.yaw);
             double[] dir = {cp * cy, cp * sinYaw, sp};
-            double[] right = norm(cross(dir, new double[]{0, 0, 1}));
-            double[] up = norm(cross(right, dir));
+            double[] right = cameraRight(dir);
+            double[] up = norm(cross(dir, right));
             double[] center = {geo.center[0], geo.center[1], geo.center[2]};
             double[] pan = {
                     right[0] * state.panX + up[0] * state.panY,
@@ -635,6 +639,10 @@ final class Model3DView extends JPanel {
 
     private static int clamp(int value) {
         return value < 0 ? 0 : Math.min(value, 255);
+    }
+
+    static double[] cameraRight(double[] eyeDirection) {
+        return norm(cross(new double[]{0, 0, 1}, eyeDirection));
     }
 
     private static double[] cross(double[] a, double[] b) {

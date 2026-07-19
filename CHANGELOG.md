@@ -20,6 +20,9 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **The 3D viewer no longer mirrors models horizontally.** Its camera now preserves
+  authored left/right orientation, including animated player models in equipped-item
+  `boneoff` previews, while horizontal orbit dragging continues to follow the pointer.
 - **Combined Blender actions can now rebuild multi-layer skeletal animations.**
   Editing `skan_combined` routes each bone track back to its original disjoint
   `skan` layer, while untouched combined actions continue to allow individual-action

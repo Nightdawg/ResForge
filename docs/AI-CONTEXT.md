@@ -111,7 +111,8 @@ built-in **3D viewer** (whole-model, software-rendered — see below; with a
 leaves, plus CPU-skinned `skan` playback with composed/individual clip selection,
 play/pause/stop, speed and timeline scrub; selected `boneoff` layers expose
 **Preview equipped…**, selecting a player model + bind skeleton + animation and
-rendering the open resource rigidly attached to the animated pose; debounced valid
+rendering the open resource rigidly attached to the animated pose without mirroring
+the model's authored left/right orientation; debounced valid
 JSON drafts update every open preview without touching the document/undo history,
 while invalid drafts retain the last valid transform), 3D →
 **Export/Rebuild glTF**. Layer
