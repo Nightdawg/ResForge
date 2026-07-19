@@ -83,6 +83,9 @@ ids are qualified by SKAN layer occurrence so each action rebuilds independently
 animation bytes and raw control tracks. An edited `skan_combined` action is split back
 into its original disjoint layers by bone ownership; an untouched combined action
 still allows individual edits, while conflicting combined+individual edits are rejected.
+Because Blender bakes inactive actions against its active pose when re-exporting all
+actions, Blender-generated GLBs import only their first (active) SKAN action; native
+ResForge GLBs retain multi-action conflict checking.
 `cache-list` scans the local game cache and prints the resource names found there,
 ready to `fetch`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).

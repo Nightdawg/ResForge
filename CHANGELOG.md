@@ -89,10 +89,15 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Fixed
 
+- **Blender no longer makes inactive skeletal actions look simultaneously edited.**
+  Blender re-exports bake inactive actions against the active pose, which can flatten
+  their motion and corrupt several `skan` layers at once. Rebuild now imports only
+  Blender's first (active) skeletal action and leaves every inactive layer byte-identical.
 - **Blender-exported constant skeletal channels now import correctly.** Constant
   `STEP` translation/rotation channels and sampled identity-scale channels are
-  accepted because they do not change motion; nonconstant STEP motion and real
-  scale edits remain rejected because `skan` cannot represent them faithfully.
+  accepted because they do not change motion, including tiny translation drift
+  introduced when snapping Blender keyframes; nonconstant STEP motion and real scale
+  edits remain rejected because `skan` cannot represent them faithfully.
 - **The layer table once again shows clear row and column boundaries.** Grid lines
   use the original Windows-theme grey and inter-cell spacing for clear contrast,
   including on selected rows, instead of depending on look-and-feel defaults.

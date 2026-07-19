@@ -635,6 +635,13 @@ bytes; `{ctl}` event payloads and every non-`skan` layer are copied exactly. Rea
 validation used `gfx/borka/animaltease` (six clips), `gfx/borka/body` (41-bone
 skeleton), and `gfx/borka/male` (preview mesh): export produced a 221,104-byte GLB,
 and a no-edit rebuild kept all six layers and the complete resource SHA-256 identical.
+Blender 4.x/5.x multi-action export bakes each inactive action against the current
+active pose. On `gfx/borka/spear-throw`, this preserved the first `skan_0` action but
+flattened the other five actions and produced a hybrid `skan_combined`; importing all
+seven would rewrite every animation layer. Blender identifies its output through
+`asset.generator` and orders the active action first, so rebuild imports only that first
+SKAN action from Blender-generated GLBs. Native ResForge GLBs still support deliberate
+multi-action edits and reject conflicting combined plus individual changes.
 Blender may expand edited actions with two-key constant `STEP` channels for every
 bone and sampled identity `scale` channels. Import accepts those only when all values
 are constant/identity (interpolation is then mathematically irrelevant); nonconstant

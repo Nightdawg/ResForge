@@ -412,6 +412,32 @@ class GltfImportTest {
         return w.toByteArray();
     }
 
+    @SuppressWarnings("unchecked")
+    private static byte[] markBlenderActiveAction(byte[] glb, String activeAction) {
+        int jsonLen = le32(glb, 12);
+        Map<String, Object> root = (Map<String, Object>) Json.parse(
+                new String(glb, 20, jsonLen, StandardCharsets.UTF_8));
+        ((Map<String, Object>) root.get("asset")).put("generator", "Khronos glTF Blender I/O v5.1.20");
+        List<Object> animations = (List<Object>) root.get("animations");
+        Object active = null;
+        for(Object value : animations)
+            if(activeAction.equals(((Map<String, Object>) value).get("name")))
+                active = value;
+        assertTrue(active != null);
+        animations.remove(active);
+        animations.add(0, active);
+
+        byte[] json = pad(Json.write(root).getBytes(StandardCharsets.UTF_8), (byte) 0x20);
+        int binHeader = 20 + jsonLen;
+        int binLen = le32(glb, binHeader);
+        byte[] bin = java.util.Arrays.copyOfRange(glb, binHeader + 8, binHeader + 8 + binLen);
+        MessageWriter w = new MessageWriter();
+        w.int32(0x46546C67).int32(2).int32(12 + 8 + json.length + 8 + bin.length);
+        w.int32(json.length).int32(0x4E4F534A).bytes(json);
+        w.int32(bin.length).int32(0x004E4942).bytes(bin);
+        return w.toByteArray();
+    }
+
     /* ---------------------------------------------------------------- tests */
 
     @Test
@@ -589,6 +615,32 @@ class GltfImportTest {
     }
 
     @Test
+    void blenderReexportImportsOnlyActiveSkanAction() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(0, "root", 1)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_combined", "root", 1);
+        glb = moveAnimationTranslation(glb, "skan_1", "tip", 1.25f);
+        glb = markBlenderActiveAction(glb, "skan_1");
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(animation.serialize(), glb);
+        ResContainer rebuilt = ResContainer.parse(result.res);
+        SkanInfo root = SkanInfo.parse(rebuilt.layers.get(0).data);
+        SkanInfo tip = SkanInfo.parse(rebuilt.layers.get(1).data);
+
+        assertEquals(1, result.changed);
+        assertEquals(0f, root.tracks.get(0).trans[0][0], 1e-4);
+        assertEquals(1.25f, tip.tracks.get(0).trans[0][0], 1e-3);
+    }
+
+    @Test
     void combinedDurationEditWithAnyEffectTrackIsRejected() {
         ResContainer model = new ResContainer(1);
         model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
@@ -621,6 +673,26 @@ class GltfImportTest {
 
         GltfImport.AnimationRebuildResult result =
                 GltfImport.rebuildSkan(original, stepAnimation(glb, 1f));
+
+        assertEquals(0, result.changed);
+        assertArrayEquals(original, result.res);
+    }
+
+    @Test
+    void blenderNoiseInConstantStepTranslationIsAccepted() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanRootTwoFrames(3, 0)));
+        byte[] original = animation.serialize();
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_3", "root", 2e-6f);
+
+        GltfImport.AnimationRebuildResult result =
+                GltfImport.rebuildSkan(original, stepAnimation(glb, null));
 
         assertEquals(0, result.changed);
         assertArrayEquals(original, result.res);

@@ -38,6 +38,7 @@ import java.util.Map;
  */
 public final class GltfImport {
     private static final float DURATION_EDIT_TOLERANCE = 0.02f;
+    private static final float CONSTANT_TRANSLATION_TOLERANCE = 1e-5f;
     private static final float STATIC_EDIT_DURATION = 1f;
 
     private GltfImport() {
@@ -93,6 +94,15 @@ public final class GltfImport {
         List<Object> animations = (List<Object>) g.root.get("animations");
         if(animations == null || animations.isEmpty())
             throw new IllegalArgumentException("the glTF contains no animation actions");
+        if(isBlenderExport(g.root)) {
+            for(Object value : animations) {
+                Map<String, Object> animation = (Map<String, Object>) value;
+                if(isCombinedSkan(animation) || skanId(animation) != null) {
+                    animations = List.of(animation);
+                    break;
+                }
+            }
+        }
 
         Map<SkanKey, Map<String, Object>> byLayer = new LinkedHashMap<>();
         Map<Integer, Map<String, Object>> legacyById = new LinkedHashMap<>();
@@ -192,6 +202,16 @@ public final class GltfImport {
     }
 
     private record SkanKey(int id, int layer) {
+    }
+
+    @SuppressWarnings("unchecked")
+    private static boolean isBlenderExport(Map<String, Object> root) {
+        Object assetValue = root.get("asset");
+        if(!(assetValue instanceof Map))
+            return false;
+        Object generator = ((Map<String, Object>) assetValue).get("generator");
+        return generator instanceof String
+                && ((String) generator).startsWith("Khronos glTF Blender I/O");
     }
 
     @SuppressWarnings("unchecked")
@@ -498,7 +518,8 @@ public final class GltfImport {
         }
         for(int offset = components; offset < values.length; offset += components)
             for(int component = 0; component < components; component++)
-                if(Math.abs(values[offset + component] - values[component]) > 1e-6f)
+                if(Math.abs(values[offset + component] - values[component])
+                        > CONSTANT_TRANSLATION_TOLERANCE)
                     return false;
         return true;
     }
