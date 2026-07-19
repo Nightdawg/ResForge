@@ -219,7 +219,9 @@ the same skeleton/model companion dialog. Each companion can be browsed from dis
 fetched directly from the resource server and retained in memory, then ResForge
 CPU-skins the model with controls for
 play/pause, stop, speed and timeline scrubbing. Multi-layer resources default to
-**All clips**, matching the game's combined body-part pose; individual numbered
+**All clips**, matching the game's combined body-part pose, even when the layers use
+different durations or playback modes. Mixed layers share a repeating preview
+timeline while each follows its own once/loop/pong behavior; individual numbered
 components remain selectable for diagnosis. The selected local files or server
 paths are remembered across restarts; remembered server companions download lazily
 and remain cached for the current session.

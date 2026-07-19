@@ -8,6 +8,10 @@ All notable changes to ResForge are documented here. The format is based on
 
 ### Added
 
+- **Animation previews now combine every `skan` layer.** **All clips** is the
+  default even when layers have different durations or playback modes; mixed layers
+  share a repeating viewer timeline while each independently follows its authored
+  once, loop, pong, or pong-loop timing.
 - **Open equipped-item previews now update live while `boneoff` JSON is edited.**
   Valid drafts are debounced into the modeless preview without changing the resource
   or undo history; incomplete/invalid JSON keeps the last valid rendered transform

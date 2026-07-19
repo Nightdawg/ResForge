@@ -135,7 +135,9 @@ public final class SkanPlayback {
         float maxLength = 0;
         for(SkanInfo clip : selected)
             maxLength = Math.max(maxLength, clip.len);
-        float[][] world = worldMatrices(selected, Math.max(0, Math.min(maxLength, time)));
+        boolean mixedTiming = selected.size() > 1 && !hasCommonTiming(selected);
+        float timelineLength = mixedTiming ? combinedLength(selected) : maxLength;
+        float[][] world = worldMatrices(selected, Math.max(0, Math.min(timelineLength, time)));
         float[][] skin = new float[bones.size()][];
         for(int i = 0; i < skin.length; i++)
             skin[i] = M4.mul(world[i], inverseBind[i]);
@@ -189,7 +191,11 @@ public final class SkanPlayback {
     }
 
     public boolean canCombineAll() {
-        if(clips.size() < 2)
+        return clips.size() > 1;
+    }
+
+    public static boolean hasCommonTiming(List<SkanInfo> clips) {
+        if(clips.isEmpty())
             return false;
         SkanInfo first = clips.get(0);
         for(int i = 1; i < clips.size(); i++) {
@@ -198,6 +204,15 @@ public final class SkanPlayback {
                 return false;
         }
         return true;
+    }
+
+    /** Length of the repeating viewer timeline needed to show every selected clip. */
+    public static float combinedLength(List<SkanInfo> clips) {
+        float length = 0;
+        for(SkanInfo clip : clips)
+            length = Math.max(length, (clip.mode.equals("pong") || clip.mode.equals("pong-loop"))
+                    ? clip.len * 2 : clip.len);
+        return length;
     }
 
     public static TimeState advance(float time, boolean backward, float delta,
@@ -263,12 +278,15 @@ public final class SkanPlayback {
         float[][] rotations = new float[bones.size()][4];
         for(float[] rotation : rotations)
             rotation[0] = 1;
+        boolean mixedTiming = selected.size() > 1 && !hasCommonTiming(selected);
         for(SkanInfo clip : selected)
             for(SkanInfo.Track track : clip.tracks) {
                 int index = boneIndex.get(track.bone);
                 float[] translation = new float[3];
                 float[] rotation = {1, 0, 0, 0};
-                sample(track, clip.len, Math.min(clip.len, time), translation, rotation);
+                float clipTime = mixedTiming ? clipTime(time, clip.len, clip.mode)
+                        : Math.min(clip.len, time);
+                sample(track, clip.len, clipTime, translation, rotation);
                 for(int i = 0; i < 3; i++)
                     translations[index][i] += translation[i];
                 rotations[index] = normalize(M4.qmul(rotations[index], rotation));
@@ -287,6 +305,28 @@ public final class SkanPlayback {
         for(int i = 0; i < bones.size(); i++)
             resolveWorld(i, local, world, state);
         return world;
+    }
+
+    public static float clipTime(float time, float length, String mode) {
+        if(length <= 0)
+            return 0;
+        float value = Math.max(0, time);
+        switch(mode) {
+            case "once":
+                return Math.min(value, length);
+            case "loop":
+                return value % length;
+            case "pong":
+                if(value >= length * 2)
+                    return 0;
+                return value <= length ? value : length * 2 - value;
+            case "pong-loop": {
+                float phase = value % (length * 2);
+                return phase <= length ? phase : length * 2 - phase;
+            }
+            default:
+                throw new IllegalArgumentException("unknown skan mode " + mode);
+        }
     }
 
     private void resolveWorld(int index, float[][] local, float[][] world, byte[] state) {

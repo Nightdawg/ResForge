@@ -281,7 +281,9 @@ Open Ctrl+L, Fetch Ctrl+R, **Open from game cache Ctrl+O**, Save As Ctrl+S.
   animation views, evaluates client-equivalent bind+delta poses and wrap modes, and
   CPU-skins positions/normals on a generation-gated daemon worker. Multi-layer player
   poses default to an **All clips** composite (the game applies those body-part mods
-  together), while each numbered `skan` remains inspectable.
+  together), including mixed lengths/modes: a repeating composite viewer timeline
+  maps each layer through its own once/loop/pong/pong-loop timing, while each numbered
+  `skan` remains inspectable.
   Closing/replacing a view invalidates late renders and external-resolution callbacks.
   Heavy work (open/parse, glTF export, glTF rebuild, 3D-geometry build) runs on a
   background thread and marshals the result back via `invokeLater`, so large files

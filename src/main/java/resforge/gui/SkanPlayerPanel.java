@@ -229,7 +229,10 @@ final class SkanPlayerPanel extends JPanel implements AutoCloseable {
 
         static ClipItem all(List<SkanInfo> clips) {
             SkanInfo first = clips.get(0);
-            return new ClipItem(List.copyOf(clips), "All clips", first.len, first.mode);
+            boolean commonTiming = SkanPlayback.hasCommonTiming(clips);
+            return new ClipItem(List.copyOf(clips), "All clips",
+                    commonTiming ? first.len : SkanPlayback.combinedLength(clips),
+                    commonTiming ? first.mode : "loop");
         }
 
         static ClipItem single(SkanInfo clip) {
@@ -237,7 +240,9 @@ final class SkanPlayerPanel extends JPanel implements AutoCloseable {
         }
 
         @Override public String toString() {
-            return label + " \u00b7 " + mode + " \u00b7 " + String.format("%.2f s", length);
+            String timing = clips.size() > 1 && !SkanPlayback.hasCommonTiming(clips)
+                    ? "mixed timing" : mode;
+            return label + " \u00b7 " + timing + " \u00b7 " + String.format("%.2f s", length);
         }
     }
 }

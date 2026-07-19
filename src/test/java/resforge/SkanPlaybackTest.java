@@ -124,6 +124,43 @@ class SkanPlaybackTest {
     }
 
     @Test
+    void mixedTimingLayersStillCombineAndUseTheirOwnPlaybackModes() {
+        SkanPlayback playback = playback(true);
+        SkanInfo second = playback.clips().get(1);
+        second.len = 1;
+        second.mode = "pong-loop";
+
+        assertTrue(playback.canCombineAll());
+        assertFalse(SkanPlayback.hasCommonTiming(playback.clips()));
+        assertEquals(2f, SkanPlayback.combinedLength(playback.clips()), 1e-6f);
+        assertEquals(1.5f, SkanPlayback.clipTime(1.5f, 2, "once"), 1e-6f);
+        assertEquals(0.5f, SkanPlayback.clipTime(1.5f, 1, "pong-loop"), 1e-6f);
+
+        SkanPlayback.Pose pose = playback.pose(playback.clips(), 1.5f);
+
+        assertEquals(1f, pose.positions()[0], 2e-3f,
+                "the two-second once clip samples at 1.5 seconds");
+        assertEquals(1f, pose.positions()[1], 2e-3f,
+                "the one-second pong-loop clip evaluates on its return leg");
+    }
+
+    @Test
+    void combinedTimelineIncludesTheReturnLegOfTheLongestPingPongClip() {
+        SkanPlayback playback = playback(true);
+        SkanInfo first = playback.clips().get(0);
+        first.len = 0.5f;
+        SkanInfo second = playback.clips().get(1);
+        second.len = 1;
+        second.mode = "pong-loop";
+
+        assertEquals(2f, SkanPlayback.combinedLength(playback.clips()), 1e-6f);
+        SkanPlayback.Pose pose = playback.pose(playback.clips(), 1.5f);
+
+        assertEquals(1f, pose.positions()[1], 2e-3f,
+                "pose evaluation must not clamp the shared timeline to the raw one-second length");
+    }
+
+    @Test
     void onceStopsAtClipEnd() {
         SkanPlayback.TimeState state = SkanPlayback.advance(0.75f, false, 1, 1, "once");
         assertEquals(1f, state.time(), 1e-6f);
