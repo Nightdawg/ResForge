@@ -275,13 +275,14 @@ at time zero. SKAN ids are not unique per resource (`gfx/terobjs/arch/sawmill` h
 two `id=0` layers), so glTF actions also carry their SKAN layer ordinal. Quaternion
 equivalence checks must normalize both values: fmt-0 decoded axes can leave norms a
 few parts per million from one, enough to look like >0.1 degrees if raw dot products
-are passed to `acos`. `rebuild-skan` inverts the bind
-composition, supports LINEAR translation/rotation keyframe edits, and writes the
-original skan wire format. If the edited latest key differs from
-the original track range, it becomes the new effect-free clip duration; an unchanged
-range preserves the original `len` (including trailing time) and bytes. A <=20 ms
-difference is ignored as Blender frame-grid rounding (`wave` 1.2667 s -> 1.25 s).
-Duration
+are passed to `acos`. `rebuild-skan` inverts the bind composition and writes the original skan wire format.
+Its selected action is authoritative: omitted tracks are removed and a missing T/R
+component uses the bind value. LINEAR channels pass through, STEP jumps gain a
+pre-jump hold key separated by at least one fmt-1 timestamp quantum, and glTF
+CUBICSPLINE Hermite curves are baked at 60 Hz. For one layer or a combined action,
+the latest key becomes the new effect-free duration; individual fragments keep a
+multi-layer animation's shared duration. Unchanged motion preserves the original
+`len` (including trailing time) and bytes. Duration
 changes are rejected when `{ctl}` tracks exist because fmt-1 event times scale with
 `len` while fmt-0 event times are absolute. Raw `{ctl}` payloads remain exact when
 other tracks change.
@@ -296,7 +297,9 @@ the first SKAN action when `asset.generator` identifies Blender.
 Snapping sub-frame keys can perturb otherwise constant translation samples by about
 `1.1e-6`; a `1e-5` component tolerance accepts that Blender float noise without
 treating meaningful stepped motion as linear.
-Nonconstant STEP cannot map faithfully to skan's interpolation and stays rejected.
+Nonconstant STEP cannot be exact in SKAN's linear interpolation, but a hold key one
+encoded time quantum before each jump confines the approximation to that smallest
+representable interval.
 The software 3D viewer also plays `skan`: bind-local transforms are composed as
 `bindPos + frameTrans` and `bindRot * frameRot`, world matrices follow the `skel`
 parents, and each soup vertex uses the same normalized top-four linear blend as the

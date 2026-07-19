@@ -627,11 +627,16 @@ older unique-id GLBs. No-edit quaternion comparison normalizes both operands bef
 computing angular distance, avoiding false edits from tiny norm error in decoded
 fmt-0 axes (`ent` and `anteggs`). The sample-wide no-edit audit passes 143/143
 self-contained animated models and 117/117 borka animations byte-identically.
-`rebuild-skan` reads LINEAR translation/rotation channels by bone name, unions
-independent channel times, inverts the bind composition (`frameRot = bindRot^-1 *
-animatedRot`, `frameTrans = animatedTrans - bindTrans`), and writes edited tracks in
-their original fmt-0/fmt-1 encoding. Unchanged actions retain the original layer
-bytes; `{ctl}` event payloads and every non-`skan` layer are copied exactly. Real
+`rebuild-skan` treats the selected action as an authoritative replacement. It reads
+translation/rotation channels by bone name, removes omitted tracks, supplies the bind
+component when only translation or rotation is present, unions independent channel
+times, inverts the bind composition (`frameRot = bindRot^-1 * animatedRot`,
+`frameTrans = animatedTrans - bindTrans`), and writes replacement tracks in the
+original fmt-0/fmt-1 encoding. LINEAR keys pass through; nonconstant STEP transitions
+gain a hold key at least one encoded timestamp before each jump, and CUBICSPLINE uses
+the glTF Hermite equation (including tangent × segment-duration) baked at 60 Hz.
+Unchanged actions retain the original layer bytes; `{ctl}` event payloads and every
+non-`skan` layer are copied exactly. Real
 validation used `gfx/borka/animaltease` (six clips), `gfx/borka/body` (41-bone
 skeleton), and `gfx/borka/male` (preview mesh): export produced a 221,104-byte GLB,
 and a no-edit rebuild kept all six layers and the complete resource SHA-256 identical.
@@ -643,15 +648,14 @@ seven would rewrite every animation layer. Blender identifies its output through
 SKAN action from Blender-generated GLBs. Native ResForge GLBs still support deliberate
 multi-action edits and reject conflicting combined plus individual changes.
 Blender may expand edited actions with two-key constant `STEP` channels for every
-bone and sampled identity `scale` channels. Import accepts those only when all values
-are constant/identity (interpolation is then mathematically irrelevant); nonconstant
-STEP translation/rotation and non-identity scale remain hard errors rather than being
-silently approximated.
-Clip duration is inferred from the edited action's latest sampler key. It changes
-only when that range differs from the original track range, which preserves an
-untouched clip's intentional trailing duration and byte-identical no-op behavior.
-Differences up to 20 ms are treated as Blender frame-grid rounding (observed when
-`wave` 1.2667 s re-exported as 1.25 s), not an intentional duration edit.
+bone and sampled identity `scale` channels. Constant channels remain harmless;
+nonconstant STEP is baked as above, while non-identity scale remains a hard error.
+For a single layer or `skan_combined`, the latest sampler key is the authoritative
+duration. An individual fragment in a compatible multi-layer resource retains the
+shared original duration, preventing one snapped fragment (`spear-throw` 0.6667 s)
+from looping before the other five 0.7-second layers; extending beyond the shared
+duration requires editing `skan_combined`. An unchanged action still compares equal
+and preserves its original bytes and trailing duration.
 Both fmt 0 (absolute cpfloat times) and fmt 1 (times normalized by `len`) re-encode
 the new duration. A duration change is rejected when the layer has `{ctl}` tracks:
 fmt-1 event times are normalized by `len`, while fmt-0 event times are absolute, so

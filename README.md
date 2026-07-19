@@ -201,17 +201,16 @@ glTF:
 Standalone skeletal animations also round-trip: open the animation resource, choose
 its bind-skeleton resource and a compatible skinned preview model in the companion
 resource dialog, then edit the named `skan_<id>` actions in Blender.
-Translation/rotation keyframes can be added,
-removed and re-timed. The latest keyframe becomes the new clip duration, allowing
-clips without control/effect tracks to be shortened or extended; unchanged key
-ranges preserve any original trailing duration. Playback mode, bone scale and
-control/effect events are preserved rather than edited, and duration changes are
-rejected when effect timing would become ambiguous. Sub-20 ms end-time drift is
-treated as Blender frame-grid rounding rather than an intentional duration edit.
-For compatible multi-layer animations, editing only the initially active
-`skan_combined` action is also supported: ResForge routes each edited bone track
-back to its original layer. Editing both the combined and an individual action is
-rejected rather than choosing one ambiguously.
+The selected action is an authoritative replacement: tracks and keyframes can be
+added, removed, re-timed, or completely remade. Missing translation or rotation
+channels use the bone's bind pose, nonconstant `STEP` transitions get quantization-safe
+hold keys, and `CUBICSPLINE` curves are baked to linear keys at 60 Hz. For one-layer
+animations, the latest key becomes the new duration. Individual fragments in a
+compatible multi-layer animation retain their shared duration; edit `skan_combined`
+to change the complete animation duration, with tracks routed back to their owning
+layers. Playback mode, bone scale, and control/effect events remain preserved rather
+than edited, and duration changes are rejected when preserved effect timing would
+become ambiguous. Unchanged actions still retain their original bytes.
 Adding/removing morph (`manim`) frames remains unsupported.
 
 **View 3D** also previews `skan` directly. For standalone player animations it uses

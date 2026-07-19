@@ -80,9 +80,13 @@ through the declared clip duration; zero-duration static poses get a synthetic
 one-second edit window that import collapses back to one zero-time frame; duplicate
 ids are qualified by SKAN layer occurrence so each action rebuilds independently;
 `rebuild-skan` imports edited translation/rotation actions while preserving unchanged
-animation bytes and raw control tracks. An edited `skan_combined` action is split back
-into its original disjoint layers by bone ownership; an untouched combined action
-still allows individual edits, while conflicting combined+individual edits are rejected.
+animation bytes and raw control tracks. The selected action is authoritative: omitted
+tracks are removed, partial translation/rotation channels use the bind component, and
+nonconstant STEP/CUBICSPLINE motion is baked to linear keys. An edited `skan_combined`
+action is split back into its original disjoint layers by bone ownership (new bones go
+to the first layer); individual fragments retain their shared duration, while combined
+actions can replace the whole timeline. Conflicting combined+individual native edits
+are rejected.
 Because Blender bakes inactive actions against its active pose when re-exporting all
 actions, Blender-generated GLBs import only their first (active) SKAN action; native
 ResForge GLBs retain multi-action conflict checking.

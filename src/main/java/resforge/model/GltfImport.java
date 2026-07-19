@@ -37,8 +37,8 @@ import java.util.Map;
  * not byte-lossless, so edits are validated in-game.
  */
 public final class GltfImport {
-    private static final float DURATION_EDIT_TOLERANCE = 0.02f;
     private static final float CONSTANT_TRANSLATION_TOLERANCE = 1e-5f;
+    private static final float CURVE_BAKE_STEP = 1f / 60f;
     private static final float STATIC_EDIT_DURATION = 1f;
 
     private GltfImport() {
@@ -159,6 +159,8 @@ public final class GltfImport {
                 continue;
             }
             SkanEdit edit = readSkanTracks(g, animation, original);
+            if(originals.size() > 1)
+                edit = preserveSharedDuration(edit, original);
             individualEdits.add(edit);
             individualChanged |= changed(original, edit);
         }
@@ -172,8 +174,7 @@ public final class GltfImport {
             combinedEdit = readSkanTracks(g, combinedAction, combined.clip);
             for(SkanInfo.Track track : combinedEdit.tracks)
                 if(!combined.ownerByBone.containsKey(track.bone))
-                    throw new IllegalArgumentException("combined skan action adds bone " + track.bone
-                            + ", which has no owning skan layer");
+                    combined.ownerByBone.put(track.bone, 0);
             combinedChanged = changed(combined.clip, combinedEdit);
         }
         if(combinedChanged && individualChanged)
@@ -199,6 +200,14 @@ public final class GltfImport {
             }
         }
         return new AnimationRebuildResult(res.serialize(), changed, originals.size() - changed);
+    }
+
+    private static SkanEdit preserveSharedDuration(SkanEdit edit, SkanInfo original) {
+        for(SkanInfo.Track track : edit.tracks)
+            if(track.frames > 0 && track.times[track.frames - 1] > original.len + 1e-4f)
+                throw new IllegalArgumentException("individual skan action exceeds shared duration "
+                        + original.len + "; edit skan_combined to change the complete animation duration");
+        return new SkanEdit(edit.tracks, original.len);
     }
 
     private record SkanKey(int id, int layer) {
@@ -387,29 +396,41 @@ public final class GltfImport {
                 throw new IllegalArgumentException("skan action references missing sampler " + samplerIndex);
             Map<String, Object> sampler = (Map<String, Object>) samplers.get(samplerIndex);
             String interpolation = String.valueOf(sampler.getOrDefault("interpolation", "LINEAR"));
-            if(!interpolation.equals("LINEAR") && !interpolation.equals("STEP"))
-                throw new IllegalArgumentException("skan import supports only LINEAR or constant STEP "
-                        + "interpolation, not " + interpolation);
+            if(!interpolation.equals("LINEAR") && !interpolation.equals("STEP")
+                    && !interpolation.equals("CUBICSPLINE"))
+                throw new IllegalArgumentException("unsupported skan interpolation " + interpolation);
             int components = path.equals("rotation") ? 4 : 3;
             float[] times = readAccessor(g, idx(sampler.get("input")), 1);
             float[] values = readAccessor(g, idx(sampler.get("output")), components);
-            validateKeyframes(times, values, components, Float.POSITIVE_INFINITY, (String) nameValue);
+            validateTimes(times, Float.POSITIVE_INFINITY, (String) nameValue);
+            if(interpolation.equals("CUBICSPLINE")) {
+                validateCubicValues(times, values, components, (String) nameValue);
+            } else {
+                validateValues(times, values, components, (String) nameValue);
+            }
             if(path.equals("scale")) {
-                if(!identityScale(values))
+                float[] scaleValues = interpolation.equals("CUBICSPLINE")
+                        ? cubicControlValues(times, values, components) : values;
+                if(!identityScale(scaleValues))
                     throw new IllegalArgumentException("skan does not support bone scale edits ("
                             + nameValue + ")");
                 continue;
             }
             editedMax = Math.max(editedMax, times[times.length - 1]);
-            if(interpolation.equals("STEP") && !constantChannel(values, components,
-                    path.equals("rotation")))
-                throw new IllegalArgumentException("skan cannot represent nonconstant STEP "
-                        + path + " for bone " + nameValue);
             BoneChannels pair = byBone.computeIfAbsent((String) nameValue,
                     key -> new BoneChannels(nodeIndex));
             if(pair.node != nodeIndex)
                 throw new IllegalArgumentException("multiple nodes are named " + nameValue);
-            AnimChannel decoded = new AnimChannel(times, values, components);
+            AnimChannel decoded;
+            if(interpolation.equals("CUBICSPLINE")) {
+                decoded = bakeCubic(times, values, components, path.equals("rotation"));
+            } else if(interpolation.equals("STEP")
+                    && !constantChannel(values, components, path.equals("rotation"))) {
+                decoded = bakeStep(times, values, components, path.equals("rotation"),
+                        Math.max(original.len, times[times.length - 1]));
+            } else {
+                decoded = new AnimChannel(times, values, components);
+            }
             if(path.equals("translation")) {
                 if(pair.translation != null)
                     throw new IllegalArgumentException("duplicate translation channel for " + nameValue);
@@ -421,22 +442,18 @@ public final class GltfImport {
             }
         }
 
-        java.util.Set<String> editedBones = new java.util.HashSet<>(byBone.keySet());
         List<SkanInfo.Track> out = new ArrayList<>();
-        for(SkanInfo.Track track : original.tracks) {
-            BoneChannels pair = byBone.remove(track.bone);
-            SkanInfo.Track decoded = pair == null ? track : decodeTrack(nodes, track.bone, pair);
-            out.add(collapseLoopClose(track, decoded, original.len));
-        }
-        for(Map.Entry<String, BoneChannels> entry : byBone.entrySet()) {
-            SkanInfo.Track added = decodeTrack(nodes, entry.getKey(), entry.getValue());
-            if(!identityTrack(added))
-                out.add(added);
-        }
-        float originalMax = 0;
+        Map<String, SkanInfo.Track> originalsByBone = new LinkedHashMap<>();
         for(SkanInfo.Track track : original.tracks)
-            if(editedBones.contains(track.bone) && track.frames > 0)
-                originalMax = Math.max(originalMax, track.times[track.frames - 1]);
+            originalsByBone.put(track.bone, track);
+        for(Map.Entry<String, BoneChannels> entry : byBone.entrySet()) {
+            SkanInfo.Track decoded = decodeTrack(nodes, entry.getKey(), entry.getValue());
+            SkanInfo.Track originalTrack = originalsByBone.get(entry.getKey());
+            if(originalTrack != null)
+                decoded = collapseLoopClose(originalTrack, decoded, original.len);
+            if(originalTrack != null || !identityTrack(decoded))
+                out.add(decoded);
+        }
         float length;
         if(original.len == 0) {
             length = 0;
@@ -444,9 +461,7 @@ public final class GltfImport {
                 if(track.frames > 0)
                     length = Math.max(length, track.times[track.frames - 1]);
         } else {
-            length = (editedMax > 1e-6f
-                    && Math.abs(editedMax - originalMax) > DURATION_EDIT_TOLERANCE)
-                    ? editedMax : original.len;
+            length = editedMax;
         }
         return new SkanEdit(out, length);
     }
@@ -524,9 +539,134 @@ public final class GltfImport {
         return true;
     }
 
-    private static void validateKeyframes(float[] times, float[] values, int components,
-                                          float length, String bone) {
-        if(times.length == 0 || values.length != times.length * components)
+    private static AnimChannel bakeStep(float[] times, float[] values, int components,
+                                        boolean quaternion, float encodingLength) {
+        List<Float> bakedTimes = new ArrayList<>();
+        List<Float> bakedValues = new ArrayList<>();
+        float tick = Math.max(1e-5f, encodingLength / 0xffff * 1.5f);
+        for(int frame = 0; frame < times.length; frame++) {
+            if(frame > 0 && !sameValue(values, frame - 1, frame, components, quaternion)) {
+                float gap = times[frame] - times[frame - 1];
+                float before = times[frame] - Math.min(tick, gap * 0.25f);
+                appendFrame(bakedTimes, bakedValues, before, values, frame - 1, components);
+            }
+            appendFrame(bakedTimes, bakedValues, times[frame], values, frame, components);
+        }
+        return channel(bakedTimes, bakedValues, components);
+    }
+
+    private static boolean sameValue(float[] values, int a, int b, int components,
+                                     boolean quaternion) {
+        if(quaternion) {
+            double[] qa = new double[4], qb = new double[4];
+            for(int component = 0; component < 4; component++) {
+                qa[component] = values[a * components + component];
+                qb[component] = values[b * components + component];
+            }
+            normalizeQuat(qa);
+            normalizeQuat(qb);
+            double dot = 0;
+            for(int component = 0; component < 4; component++)
+                dot += qa[component] * qb[component];
+            return Math.abs(dot) > 1 - 1e-10;
+        }
+        for(int component = 0; component < components; component++)
+            if(Math.abs(values[a * components + component]
+                    - values[b * components + component]) > CONSTANT_TRANSLATION_TOLERANCE)
+                return false;
+        return true;
+    }
+
+    private static AnimChannel bakeCubic(float[] times, float[] values, int components,
+                                         boolean quaternion) {
+        List<Float> bakedTimes = new ArrayList<>();
+        for(float time : times)
+            bakedTimes.add(time);
+        float first = times[0], last = times[times.length - 1];
+        for(float time = first + CURVE_BAKE_STEP; time < last - 1e-6f; time += CURVE_BAKE_STEP)
+            bakedTimes.add(time);
+        bakedTimes.sort(Float::compare);
+        List<Float> uniqueTimes = new ArrayList<>();
+        for(float time : bakedTimes)
+            if(uniqueTimes.isEmpty()
+                    || time - uniqueTimes.get(uniqueTimes.size() - 1) > 1e-6f)
+                uniqueTimes.add(time);
+
+        List<Float> bakedValues = new ArrayList<>();
+        for(float time : uniqueTimes) {
+            float[] frame = sampleCubic(times, values, components, time, quaternion);
+            for(float value : frame)
+                bakedValues.add(value);
+        }
+        return channel(uniqueTimes, bakedValues, components);
+    }
+
+    private static float[] sampleCubic(float[] times, float[] values, int components,
+                                       float time, boolean quaternion) {
+        int frame = 0;
+        while(frame + 1 < times.length && times[frame + 1] < time)
+            frame++;
+        float[] out = new float[components];
+        if(frame + 1 >= times.length || time <= times[frame] + 1e-7f) {
+            int offset = (frame * 3 + 1) * components;
+            System.arraycopy(values, offset, out, 0, components);
+        } else {
+            float duration = times[frame + 1] - times[frame];
+            float t = (time - times[frame]) / duration;
+            float t2 = t * t, t3 = t2 * t;
+            float h00 = 2 * t3 - 3 * t2 + 1;
+            float h10 = t3 - 2 * t2 + t;
+            float h01 = -2 * t3 + 3 * t2;
+            float h11 = t3 - t2;
+            int value0 = (frame * 3 + 1) * components;
+            int tangent0 = (frame * 3 + 2) * components;
+            int value1 = ((frame + 1) * 3 + 1) * components;
+            int tangent1 = ((frame + 1) * 3) * components;
+            for(int component = 0; component < components; component++)
+                out[component] = h00 * values[value0 + component]
+                        + h10 * duration * values[tangent0 + component]
+                        + h01 * values[value1 + component]
+                        + h11 * duration * values[tangent1 + component];
+        }
+        if(quaternion) {
+            double[] normalized = {out[0], out[1], out[2], out[3]};
+            normalizeQuat(normalized);
+            for(int component = 0; component < 4; component++)
+                out[component] = (float) normalized[component];
+        }
+        return out;
+    }
+
+    private static float[] cubicControlValues(float[] times, float[] values, int components) {
+        float[] out = new float[times.length * components];
+        for(int frame = 0; frame < times.length; frame++)
+            System.arraycopy(values, (frame * 3 + 1) * components,
+                    out, frame * components, components);
+        return out;
+    }
+
+    private static void appendFrame(List<Float> times, List<Float> values, float time,
+                                    float[] source, int frame, int components) {
+        times.add(time);
+        for(int component = 0; component < components; component++)
+            values.add(source[frame * components + component]);
+    }
+
+    private static AnimChannel channel(List<Float> times, List<Float> values, int components) {
+        if(times.size() > 0xffff)
+            throw new IllegalArgumentException("baked skan channel has too many keyframes: "
+                    + times.size());
+        float[] timeArray = new float[times.size()];
+        float[] valueArray = new float[values.size()];
+        for(int i = 0; i < timeArray.length; i++)
+            timeArray[i] = times.get(i);
+        for(int i = 0; i < valueArray.length; i++)
+            valueArray[i] = values.get(i);
+        return new AnimChannel(timeArray, valueArray, components);
+    }
+
+    private static void validateTimes(float[] times, float length, String bone) {
+        if(times.length == 0)
             throw new IllegalArgumentException("invalid animation keyframes for bone " + bone);
         float previous = -Float.MAX_VALUE;
         for(float time : times) {
@@ -538,6 +678,21 @@ public final class GltfImport {
                         + " are not strictly increasing");
             previous = time;
         }
+    }
+
+    private static void validateValues(float[] times, float[] values, int components,
+                                       String bone) {
+        if(values.length != times.length * components)
+            throw new IllegalArgumentException("invalid animation keyframes for bone " + bone);
+        for(float value : values)
+            if(!Float.isFinite(value))
+                throw new IllegalArgumentException("animation for " + bone + " contains a non-finite value");
+    }
+
+    private static void validateCubicValues(float[] times, float[] values, int components,
+                                            String bone) {
+        if(values.length != times.length * components * 3)
+            throw new IllegalArgumentException("invalid CUBICSPLINE keyframes for bone " + bone);
         for(float value : values)
             if(!Float.isFinite(value))
                 throw new IllegalArgumentException("animation for " + bone + " contains a non-finite value");
@@ -545,9 +700,6 @@ public final class GltfImport {
 
     @SuppressWarnings("unchecked")
     private static SkanInfo.Track decodeTrack(List<Object> nodes, String bone, BoneChannels pair) {
-        if(pair.translation == null || pair.rotation == null)
-            throw new IllegalArgumentException("bone " + bone
-                    + " must have both translation and rotation channels");
         Map<String, Object> node = (Map<String, Object>) nodes.get(pair.node);
         if(node.containsKey("matrix"))
             throw new IllegalArgumentException("animated bone " + bone + " uses a matrix instead of TRS");
@@ -561,14 +713,28 @@ public final class GltfImport {
             bindQ = new double[]{0, 0, 0, 1};
         normalizeQuat(bindQ);
 
-        float[] times = unionTimes(pair.translation.times, pair.rotation.times);
+        float[] times;
+        if(pair.translation == null)
+            times = pair.rotation.times.clone();
+        else if(pair.rotation == null)
+            times = pair.translation.times.clone();
+        else
+            times = unionTimes(pair.translation.times, pair.rotation.times);
+        if(times.length > 0xffff)
+            throw new IllegalArgumentException("skan track for " + bone
+                    + " has too many keyframes: " + times.length);
         float[][] trans = new float[times.length][3];
         float[][] rot = new float[times.length][4];
         for(int i = 0; i < times.length; i++) {
-            float[] tv = sample(pair.translation, times[i], false);
+            float[] tv = pair.translation == null
+                    ? new float[]{(float) bindT[0], (float) bindT[1], (float) bindT[2]}
+                    : sample(pair.translation, times[i], false);
             for(int c = 0; c < 3; c++)
                 trans[i][c] = (float) (tv[c] - bindT[c]);
-            float[] rv = sample(pair.rotation, times[i], true);
+            float[] rv = pair.rotation == null
+                    ? new float[]{(float) bindQ[0], (float) bindQ[1],
+                    (float) bindQ[2], (float) bindQ[3]}
+                    : sample(pair.rotation, times[i], true);
             double[] absolute = {rv[0], rv[1], rv[2], rv[3]};
             normalizeQuat(absolute);
             double[] delta = quatMul(quatConjugate(bindQ), absolute);
