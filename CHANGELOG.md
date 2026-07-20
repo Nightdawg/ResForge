@@ -6,6 +6,8 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-07-20
+
 ### Fixed
 
 - **Blender skeletal rebuilds now import the action the user actually edited.**
@@ -401,7 +403,8 @@ In short: `skan` playback mode, bone scale, control/effect events, and adding/re
 not byte-lossless (verify in-game); the 3D viewer shows `varmat`-textured parts shaded;
 and a few unusual typed instances stay raw by design (lossless-or-raw).
 
-[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Nightdawg/ResForge/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/Nightdawg/ResForge/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Nightdawg/ResForge/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Nightdawg/ResForge/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Nightdawg/ResForge/compare/v1.1.0...v1.2.0
