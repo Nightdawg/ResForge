@@ -67,7 +67,7 @@ a sibling project at `../hafen-client`).
 `gltf <file> [out.glb]` ·
 `gltf-skan <animation.res> <skeleton.res> <model.res> [out.glb]` ·
 `rebuild-gltf <orig.res> <edited.glb> [out.res]` ·
-`rebuild-skan <orig.res> <edited.glb> [out.res]` ·
+`rebuild-skan <orig.res> <edited.glb> [out.res] [--action name]` ·
 `catalog <file|dir>` · `cache-list [cacheDir]` · `verify <file|dir>`.
 No args (with a display) → launches the GUI. (`refs` lists every resource a
 `.res` references, aggregated across `deps`/`rlink`/`codeentry`/`mat2`. `gltf`
@@ -88,8 +88,10 @@ to the first layer); individual fragments retain their shared duration, while co
 actions can replace the whole timeline. Conflicting combined+individual native edits
 are rejected.
 Because Blender bakes inactive actions against its active pose when re-exporting all
-actions, Blender-generated GLBs import only their first (active) SKAN action; native
-ResForge GLBs retain multi-action conflict checking.
+actions but does not reliably order the active action first, Blender-generated GLBs
+with multiple SKAN actions require an explicit GUI choice or CLI `--action`; native
+ResForge GLBs retain multi-action conflict checking. The GUI supports multi-selection
+and the CLI accepts repeated `--action` options for edits split across individual actions.
 `cache-list` scans the local game cache and prints the resource names found there,
 ready to `fetch`.)
 `replace` selector: layer name (`image`), name+occurrence (`tex#2`), or index (`#5`).

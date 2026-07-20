@@ -87,21 +87,40 @@ public final class GltfImport {
      * leave their original layer untouched; actions that are present must provide
      * paired translation/rotation channels for every edited bone.
      */
-    @SuppressWarnings("unchecked")
     public static AnimationRebuildResult rebuildSkan(byte[] origRes, byte[] glb) {
+        return rebuildSkan(origRes, glb, (List<String>) null);
+    }
+
+    /**
+     * Rebuilds one explicitly selected Blender action, or all actions from a native
+     * ResForge export when {@code selectedAction} is {@code null}.
+     */
+    public static AnimationRebuildResult rebuildSkan(byte[] origRes, byte[] glb,
+                                                     String selectedAction) {
+        return rebuildSkan(origRes, glb,
+                selectedAction == null ? null : List.of(selectedAction));
+    }
+
+    /**
+     * Rebuilds explicitly selected Blender actions, or all actions from a native
+     * ResForge export when {@code selectedActions} is {@code null}.
+     */
+    @SuppressWarnings("unchecked")
+    public static AnimationRebuildResult rebuildSkan(byte[] origRes, byte[] glb,
+                                                     List<String> selectedActions) {
         Glb g = parseGlb(glb);
         ResContainer res = ResContainer.parse(origRes);
         List<Object> animations = (List<Object>) g.root.get("animations");
         if(animations == null || animations.isEmpty())
             throw new IllegalArgumentException("the glTF contains no animation actions");
-        if(isBlenderExport(g.root)) {
-            for(Object value : animations) {
-                Map<String, Object> animation = (Map<String, Object>) value;
-                if(isCombinedSkan(animation) || skanId(animation) != null) {
-                    animations = List.of(animation);
-                    break;
-                }
-            }
+        List<Object> skanAnimations = skanAnimations(animations);
+        if(selectedActions != null) {
+            if(selectedActions.isEmpty())
+                throw new IllegalArgumentException("no skeletal actions were selected");
+            animations = findSkanActions(skanAnimations, selectedActions);
+        } else if(isBlenderExport(g.root) && skanAnimations.size() > 1) {
+            throw new IllegalArgumentException("the Blender glTF contains multiple skeletal actions; "
+                    + "select the action you edited: " + String.join(", ", actionNames(skanAnimations)));
         }
 
         Map<SkanKey, Map<String, Object>> byLayer = new LinkedHashMap<>();
@@ -200,6 +219,71 @@ public final class GltfImport {
             }
         }
         return new AnimationRebuildResult(res.serialize(), changed, originals.size() - changed);
+    }
+
+    /**
+     * Returns the selectable SKAN action names when a Blender export is ambiguous.
+     * Native ResForge exports return an empty list because their actions are imported together.
+     */
+    @SuppressWarnings("unchecked")
+    public static List<String> blenderSkanActions(byte[] glb) {
+        Glb g = parseGlb(glb);
+        if(!isBlenderExport(g.root))
+            return List.of();
+        List<Object> animations = (List<Object>) g.root.get("animations");
+        if(animations == null)
+            return List.of();
+        List<Object> candidates = skanAnimations(animations);
+        return candidates.size() > 1 ? List.copyOf(actionNames(candidates)) : List.of();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> skanAnimations(List<Object> animations) {
+        List<Object> candidates = new ArrayList<>();
+        for(Object value : animations) {
+            Map<String, Object> animation = (Map<String, Object>) value;
+            if(isCombinedSkan(animation) || skanId(animation) != null)
+                candidates.add(animation);
+        }
+        return candidates;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<String> actionNames(List<Object> animations) {
+        List<String> names = new ArrayList<>();
+        for(Object value : animations) {
+            Object name = ((Map<String, Object>) value).get("name");
+            if(!(name instanceof String) || ((String) name).isEmpty())
+                throw new IllegalArgumentException("a skeletal action has no selectable name");
+            if(names.contains(name))
+                throw new IllegalArgumentException("multiple skeletal actions are named " + name);
+            names.add((String) name);
+        }
+        return names;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> findSkanActions(List<Object> animations,
+                                                List<String> selectedActions) {
+        Map<String, Map<String, Object>> byName = new LinkedHashMap<>();
+        for(Object value : animations) {
+            Map<String, Object> animation = (Map<String, Object>) value;
+            Object name = animation.get("name");
+            if(!(name instanceof String) || ((String) name).isEmpty())
+                throw new IllegalArgumentException("a skeletal action has no selectable name");
+            if(byName.putIfAbsent((String) name, animation) != null)
+                throw new IllegalArgumentException("multiple skeletal actions are named " + name);
+        }
+        List<Object> selected = new ArrayList<>();
+        for(String name : selectedActions) {
+            Map<String, Object> animation = byName.get(name);
+            if(animation == null)
+                throw new IllegalArgumentException("the glTF contains no skeletal action named " + name);
+            if(selected.contains(animation))
+                throw new IllegalArgumentException("skeletal action selected more than once: " + name);
+            selected.add(animation);
+        }
+        return selected;
     }
 
     private static SkanEdit preserveSharedDuration(SkanEdit edit, SkanInfo original) {

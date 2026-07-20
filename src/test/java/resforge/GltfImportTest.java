@@ -702,7 +702,7 @@ class GltfImportTest {
         glb = moveAnimationEndTime(glb, 0.75f);
 
         GltfImport.AnimationRebuildResult result =
-                GltfImport.rebuildSkan(animation.serialize(), glb);
+                GltfImport.rebuildSkan(animation.serialize(), glb, "skan_0");
         ResContainer rebuilt = ResContainer.parse(result.res);
 
         assertEquals(1, result.changed);
@@ -731,7 +731,7 @@ class GltfImportTest {
     }
 
     @Test
-    void blenderReexportImportsOnlyActiveSkanAction() {
+    void blenderActionSelectionDoesNotDependOnExportOrder() {
         ResContainer model = new ResContainer(1);
         model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
         model.layers.add(new Layer("mesh", mesh(-1)));
@@ -743,10 +743,17 @@ class GltfImportTest {
         byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
         glb = moveAnimationTranslation(glb, "skan_combined", "root", 1);
         glb = moveAnimationTranslation(glb, "skan_1", "tip", 1.25f);
-        glb = markBlenderActiveAction(glb, "skan_1");
+        glb = markBlenderActiveAction(glb, "skan_0");
+        byte[] blenderGlb = glb;
+
+        assertEquals(List.of("skan_0", "skan_combined", "skan_1"),
+                GltfImport.blenderSkanActions(blenderGlb));
+        IllegalArgumentException ambiguous = assertThrows(IllegalArgumentException.class,
+                () -> GltfImport.rebuildSkan(animation.serialize(), blenderGlb));
+        assertTrue(ambiguous.getMessage().contains("select the action you edited"));
 
         GltfImport.AnimationRebuildResult result =
-                GltfImport.rebuildSkan(animation.serialize(), glb);
+                GltfImport.rebuildSkan(animation.serialize(), blenderGlb, "skan_1");
         ResContainer rebuilt = ResContainer.parse(result.res);
         SkanInfo root = SkanInfo.parse(rebuilt.layers.get(0).data);
         SkanInfo tip = SkanInfo.parse(rebuilt.layers.get(1).data);
@@ -754,6 +761,33 @@ class GltfImportTest {
         assertEquals(1, result.changed);
         assertEquals(0f, root.tracks.get(0).trans[0][0], 1e-4);
         assertEquals(1.25f, tip.tracks.get(0).trans[0][0], 1e-3);
+    }
+
+    @Test
+    void blenderCanImportSeveralExplicitlySelectedIndividualActions() {
+        ResContainer model = new ResContainer(1);
+        model.layers.add(new Layer("vbuf2", vbufBones2("f4")));
+        model.layers.add(new Layer("mesh", mesh(-1)));
+        ResContainer skeleton = new ResContainer(1);
+        skeleton.layers.add(new Layer("skel", skel2()));
+        ResContainer animation = new ResContainer(1);
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(0, "root", 1)));
+        animation.layers.add(new Layer("skan", skanBoneTwoFrames(1, "tip", 2)));
+        byte[] glb = GltfExport.toGlb(model, skeleton, animation, "anim.res").glb;
+        glb = moveAnimationTranslation(glb, "skan_combined", "root", 9);
+        glb = moveAnimationTranslation(glb, "skan_0", "root", 1.5f);
+        glb = moveAnimationTranslation(glb, "skan_1", "tip", 2.5f);
+        glb = markBlenderActiveAction(glb, "skan_combined");
+
+        GltfImport.AnimationRebuildResult result = GltfImport.rebuildSkan(
+                animation.serialize(), glb, List.of("skan_0", "skan_1"));
+        ResContainer rebuilt = ResContainer.parse(result.res);
+
+        assertEquals(2, result.changed);
+        assertEquals(1.5f, SkanInfo.parse(rebuilt.layers.get(0).data)
+                .tracks.get(0).trans[0][0], 1e-3);
+        assertEquals(2.5f, SkanInfo.parse(rebuilt.layers.get(1).data)
+                .tracks.get(0).trans[0][0], 1e-3);
     }
 
     @Test
@@ -870,7 +904,7 @@ class GltfImportTest {
         glb = markBlenderActiveAction(glb, "skan_0");
 
         GltfImport.AnimationRebuildResult result =
-                GltfImport.rebuildSkan(animation.serialize(), stepAnimation(glb, null));
+                GltfImport.rebuildSkan(animation.serialize(), stepAnimation(glb, null), "skan_0");
         SkanInfo.Track track = SkanInfo.parse(
                 ResContainer.parse(result.res).layers.get(0).data).tracks.get(0);
 

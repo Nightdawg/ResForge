@@ -915,6 +915,64 @@ public class ResForgeFrame extends JFrame {
         if(chosen == null)
             return;
         final java.io.File sel = chosen.toFile();
+        final BusyProgress loading = new BusyProgress(this, "Reading glTF",
+                "Reading " + sel.getName() + "\u2026");
+        Thread load = new Thread(() -> {
+            byte[] glb = null;
+            java.util.List<String> actions = null;
+            String err = null;
+            try {
+                glb = Files.readAllBytes(sel.toPath());
+                actions = animationOnly
+                        ? GltfImport.blenderSkanActions(glb) : java.util.List.of();
+            } catch(Exception e) {
+                err = e.getMessage();
+            }
+            final byte[] selectedGlb = glb;
+            final java.util.List<String> availableActions = actions;
+            final String error = err;
+            SwingUtilities.invokeLater(() -> {
+                loading.close();
+                if(error != null) {
+                    error("Could not read glTF: " + error);
+                    return;
+                }
+                java.util.List<String> selectedActions = null;
+                if(availableActions.size() > 1) {
+                    javax.swing.JList<String> actionList =
+                            new javax.swing.JList<>(availableActions.toArray(new String[0]));
+                    actionList.setSelectionMode(
+                            javax.swing.ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+                    actionList.setVisibleRowCount(Math.min(availableActions.size(), 10));
+                    int preferred = availableActions.indexOf("skan_combined");
+                    actionList.setSelectedIndex(preferred >= 0 ? preferred : 0);
+                    int actionOk = JOptionPane.showConfirmDialog(this,
+                            new Object[]{
+                                    "Blender does not identify which skeletal actions were active.",
+                                    "Select every action you intentionally edited (Ctrl-click for several).",
+                                    "Unselected baked actions will remain byte-identical:",
+                                    new javax.swing.JScrollPane(actionList)
+                            },
+                            "Choose skeletal actions", JOptionPane.OK_CANCEL_OPTION,
+                            JOptionPane.QUESTION_MESSAGE);
+                    if(actionOk != JOptionPane.OK_OPTION)
+                        return;
+                    selectedActions = actionList.getSelectedValuesList();
+                    if(selectedActions.isEmpty()) {
+                        error("Select at least one skeletal action.");
+                        return;
+                    }
+                }
+                startGltfRebuild(sel, animationOnly, selectedGlb, selectedActions);
+            });
+        }, "gltf-read");
+        load.setDaemon(true);
+        load.start();
+        loading.showModal();
+    }
+
+    private void startGltfRebuild(java.io.File sel, boolean animationOnly, byte[] selectedGlb,
+                                  java.util.List<String> selectedActions) {
         final byte[] orig = res.serialize();
         final Path curFile = file;
         final String curPath = pathField.getText();
@@ -927,15 +985,15 @@ public class ResForgeFrame extends JFrame {
             String summary = null;
             String err = null;
             try {
-                byte[] glb = Files.readAllBytes(sel.toPath());
                 if(animationOnly) {
-                    GltfImport.AnimationRebuildResult r = GltfImport.rebuildSkan(orig, glb);
+                    GltfImport.AnimationRebuildResult r =
+                            GltfImport.rebuildSkan(orig, selectedGlb, selectedActions);
                     rebuilt = r.res;
                     summary = "Rebuilt skeletal animations: " + r.changed + " changed, "
                             + r.unchanged + " unchanged from " + sel.getName()
                             + " \u2014 Save to keep changes";
                 } else {
-                    GltfImport.RebuildResult r = GltfImport.rebuild(orig, glb);
+                    GltfImport.RebuildResult r = GltfImport.rebuild(orig, selectedGlb);
                     rebuilt = r.res;
                     summary = "Rebuilt " + r.vertices + " vertices, " + r.triangles + " triangles"
                             + (r.skinned ? " (with skinning)" : "")

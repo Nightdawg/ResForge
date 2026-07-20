@@ -607,10 +607,10 @@ UV sets or skeleton bindings. `GltfExport` writes a static, textured binary glTF
 runtime-composed resources into one Blender file: a preview mesh, its bind `skel`,
 and the animation resource. Each `skan` layer becomes a named `skan_<id>` action.
 When two or more compatible layers animate disjoint bones, export also adds a
-preview-only `skan_combined` action matching the client's `CombinedMod`; rebuild
-ignores that action and continues to map edits through the individual ids. It is
-ordered first because Blender restores the first imported glTF animation as the
-armature's active action. Every
+preview-only `skan_combined` action matching the client's `CombinedMod`; rebuild can
+route edits from that action back through the individual layers by bone ownership.
+It is ordered first because Blender normally restores the first imported glTF animation
+as the armature's active action. Every
 track whose last stored frame precedes `len` gets an explicit glTF closing key at
 `len` carrying frame 0, preserving the client's implicit final-to-first interpolation
 and making static one-key poses span their declared duration in Blender. Import
@@ -644,9 +644,13 @@ Blender 4.x/5.x multi-action export bakes each inactive action against the curre
 active pose. On `gfx/borka/spear-throw`, this preserved the first `skan_0` action but
 flattened the other five actions and produced a hybrid `skan_combined`; importing all
 seven would rewrite every animation layer. Blender identifies its output through
-`asset.generator` and orders the active action first, so rebuild imports only that first
-SKAN action from Blender-generated GLBs. Native ResForge GLBs still support deliberate
-multi-action edits and reject conflicting combined plus individual changes.
+`asset.generator`, but Blender 5.1.20 exports observed on `gfx/borka/beatchest` kept
+`skan_0` first even when another action was edited. A Blender GLB with multiple SKAN
+actions therefore requires explicit selection by action name; the GUI prompts and the
+CLI uses repeatable `--action` options. Selecting several individual actions supports
+manually split edits while leaving every unselected baked action byte-identical. Native
+ResForge GLBs still support deliberate multi-action edits and reject conflicting combined
+plus individual changes.
 Blender may expand edited actions with two-key constant `STEP` channels for every
 bone and sampled identity `scale` channels. Constant channels remain harmless;
 nonconstant STEP is baked as above, while non-identity scale remains a hard error.

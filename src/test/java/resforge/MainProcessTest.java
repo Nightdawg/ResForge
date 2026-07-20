@@ -30,6 +30,7 @@ class MainProcessTest {
         assertEquals(0, r.exit);
         assertTrue(r.out.contains("Usage:"));
         assertTrue(r.out.contains("verify <file.res | dir>"));
+        assertTrue(r.out.contains("[--action name]"));
         assertEquals("", r.err);
     }
 

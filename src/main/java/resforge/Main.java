@@ -29,7 +29,7 @@ import java.nio.file.Path;
  *   gltf    <file.res> [out.glb]
  *   gltf-skan <animation.res> <skeleton.res> <model.res> [out.glb]
  *   rebuild-gltf <orig.res> <edited.glb> [out.res]
- *   rebuild-skan <orig.res> <edited.glb> [out.res]
+ *   rebuild-skan <orig.res> <edited.glb> [out.res] [--action name]
  *   catalog <file.res | dir>
  *   cache-list [cacheDir]
  *   verify  <file.res | dir>
@@ -416,12 +416,28 @@ public class Main {
 
     private static void rebuildSkan(String[] args) throws IOException {
         if(args.length < 3)
-            throw new UsageException("rebuild-skan requires <original.res> <edited.glb> [out.res]");
+            throw new UsageException(
+                    "rebuild-skan requires <original.res> <edited.glb> [out.res] [--action name]");
         Path resFile = Path.of(args[1]);
         Path glbFile = Path.of(args[2]);
-        Path out = (args.length >= 4) ? Path.of(args[3]) : resFile;
+        Path out = resFile;
+        java.util.List<String> actions = new java.util.ArrayList<>();
+        boolean hasOut = false;
+        for(int i = 3; i < args.length; i++) {
+            if(args[i].equals("--action")) {
+                if(++i >= args.length)
+                    throw new UsageException("--action requires one action name");
+                actions.add(args[i]);
+            } else if(!hasOut) {
+                out = Path.of(args[i]);
+                hasOut = true;
+            } else {
+                throw new UsageException("unexpected rebuild-skan argument: " + args[i]);
+            }
+        }
         GltfImport.AnimationRebuildResult r = GltfImport.rebuildSkan(
-                Files.readAllBytes(resFile), Files.readAllBytes(glbFile));
+                Files.readAllBytes(resFile), Files.readAllBytes(glbFile),
+                actions.isEmpty() ? null : actions);
         SafeFiles.write(out, r.res);
         System.out.printf("Rebuilt skeletal animations: %d changed, %d unchanged from %s -> %s%n",
                 r.changed, r.unchanged, glbFile, out);
@@ -460,8 +476,8 @@ public class Main {
         System.out.println("                               Export skeletal actions with a rigged preview model");
         System.out.println("  rebuild-gltf <orig.res> <edited.glb> [out.res]");
         System.out.println("                               Rebuild geometry from a glTF (allows added/removed vertices)");
-        System.out.println("  rebuild-skan <orig.res> <edited.glb> [out.res]");
-        System.out.println("                               Import edited skeletal actions from Blender");
+        System.out.println("  rebuild-skan <orig.res> <edited.glb> [out.res] [--action name]");
+        System.out.println("                               Import selected Blender actions (repeat --action)");
         System.out.println("  catalog <file.res | dir>     List editable assets per file");
         System.out.println("  cache-list [cacheDir]        List resource names in the local game cache");
         System.out.println("                               (default: %APPDATA%\\Haven and Hearth\\data)");

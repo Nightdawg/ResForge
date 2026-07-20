@@ -290,10 +290,14 @@ Blender re-export can add constant two-key `STEP` T/R channels and identity-scal
 channels for otherwise static bones (observed on an edited `gfx/borka/wave` GLB:
 up to 98 STEP channels/action). These are safe to accept only when every T/R sample
 is equal (quaternion sign-equivalence included) and every scale component is 1.
-Blender multi-action GLBs list the active action first but bake inactive actions against
-the active pose. A snapped `gfx/borka/spear-throw` export kept `skan_0`, flattened
-`skan_1` through `skan_5`, and made `skan_combined` a hybrid; rebuild must use only
-the first SKAN action when `asset.generator` identifies Blender.
+Blender multi-action GLBs bake inactive actions against the active pose. A snapped
+`gfx/borka/spear-throw` export kept `skan_0`, flattened `skan_1` through `skan_5`,
+and made `skan_combined` a hybrid. Blender 5.1.20 exports of `gfx/borka/beatchest`
+kept `skan_0` first even when another action was edited, and contained no active-action
+marker. When `asset.generator` identifies Blender and several SKAN actions exist,
+rebuild must require explicit action-name selection rather than infer it from order.
+Several individual actions may be selected for a deliberately split edit; every
+unselected action must leave its corresponding resource layer byte-identical.
 Snapping sub-frame keys can perturb otherwise constant translation samples by about
 `1.1e-6`; a `1e-5` component tolerance accepts that Blender float noise without
 treating meaningful stepped motion as linear.

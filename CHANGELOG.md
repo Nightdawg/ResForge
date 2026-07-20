@@ -6,6 +6,14 @@ All notable changes to ResForge are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Blender skeletal rebuilds now import the action the user actually edited.**
+  Blender 5.1 may export `skan_0` first even when `skan_combined` or another action
+  was active, so the GUI now asks which action or actions to rebuild instead of silently
+  trusting file order. The CLI accepts the same choices through repeatable
+  `--action <name>` options.
+
 ## [1.3.0] — 2026-07-19
 
 ### Added

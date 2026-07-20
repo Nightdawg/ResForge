@@ -201,6 +201,9 @@ glTF:
 Standalone skeletal animations also round-trip: open the animation resource, choose
 its bind-skeleton resource and a compatible skinned preview model in the companion
 resource dialog, then edit the named `skan_<id>` actions in Blender.
+When a Blender file contains several actions, rebuild asks which action or actions you
+intentionally edited because Blender bakes inactive actions against the active pose but
+does not reliably preserve the active action first in the exported file.
 The selected action is an authoritative replacement: tracks and keyframes can be
 added, removed, re-timed, or completely remade. Missing translation or rotation
 channels use the bone's bind pose, nonconstant `STEP` transitions get quantization-safe
@@ -321,8 +324,10 @@ resforge rebuild-gltf horse.res horse.glb horse-edited.res
 # Export standalone skeletal actions with their bind skeleton and a preview mesh:
 resforge gltf-skan animaltease.res body.res male.res animaltease.glb
 
-# Import edited Blender actions into the original animation resource:
-resforge rebuild-skan animaltease.res animaltease.glb animaltease-edited.res
+# Import the edited Blender action into the original animation resource:
+resforge rebuild-skan animaltease.res animaltease.glb animaltease-edited.res --action skan_combined
+# Repeat --action when an edit was manually split across individual actions:
+resforge rebuild-skan animaltease.res animaltease.glb animaltease-edited.res --action skan_0 --action skan_1
 
 # Validate round-trip + image splitting for one file or a whole folder:
 resforge verify path/to/folder-of-res
